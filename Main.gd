@@ -1101,11 +1101,9 @@ func _draw_menu() -> void:
 			var pos := Vector2(cx + cos(ang) * 200.0, 450.0 + sin(ang) * 80.0)
 			var otex = tex_items[o[0]]
 			_blit_centered(otex, pos, 1.8)
-		# the star: drake centered; hen a smaller companion to the side (front-facing hero shots)
-		var hen_hero = ducks["hen"].get("hero")
-		var drake_hero = ducks["mallard"].get("hero")
-		_blit_centered(hen_hero if hen_hero != null else ducks["hen"]["idle"][0], Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
-		_blit_centered(drake_hero if drake_hero != null else ducks["mallard"]["idle"][0], Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
+		# the stars, slowly turning on their turntables (out of phase, like showing off)
+		_blit_centered(_spin_frame("hen", anim_t * 0.55 + 2.6), Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
+		_blit_centered(_spin_frame("mallard", anim_t * 0.55), Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
 
 	# wallet + best run
 	if feathers > 0 or best_m > 0:
@@ -1136,6 +1134,15 @@ func _blit_centered(tex, pos: Vector2, scale: float) -> void:
 	var sz: Vector2 = tex.get_size() * scale
 	draw_texture_rect(tex, Rect2(pos - sz * 0.5, sz), false)
 
+# pick the turntable frame for a yaw (radians); falls back to the static hero
+func _spin_frame(sp: String, yaw: float):
+	var cur = ducks.get(sp, ducks["mallard"])
+	var spin: Array = cur.get("spin", [])
+	if spin.is_empty():
+		var hero = cur.get("hero")
+		return hero if hero != null else cur["idle"][0]
+	return spin[int(floor(fposmod(yaw, TAU) / TAU * spin.size())) % spin.size()]
+
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
 	var n := ROSTER.size()
@@ -1159,15 +1166,7 @@ func _draw_select() -> void:
 	var sp: String = duck.species
 	var bob := sin(anim_t * 2.5) * 8.0
 	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise
-	var cur = ducks.get(sp, ducks["mallard"])
-	var spin: Array = cur.get("spin", [])
-	var fr = null
-	if not spin.is_empty():
-		fr = spin[int(floor(fposmod(select_yaw, TAU) / TAU * spin.size())) % spin.size()]
-	else:
-		fr = cur.get("hero")
-		if fr == null:
-			fr = cur["idle"][0]
+	var fr = _spin_frame(sp, select_yaw)
 	if unlocked:
 		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
 	else:
