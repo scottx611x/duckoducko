@@ -1,0 +1,14 @@
+# Godot 4+ generated import cache (regenerated on open / --import)
+.godot/
+
+# Godot export artifacts
+/build/
+*.translation
+
+# Python tooling
+tools/__pycache__/
+__pycache__/
+*.pyc
+
+# OS cruft
+.DS_Store
