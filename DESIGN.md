@@ -249,6 +249,10 @@ after that is content and polish.
 - ✅ Two inputs: **drag-to-steer + tap-to-hop** (§2)
 - ✅ **Pick-a-duck** with a roster of real species + light stats (§5b)
 - ✅ **MEGA HOP** loft mechanic (§2b)
+- ✅ **Roguelike-lite drafts** (from §12): every 400m the river pauses and deals a
+  pick-1-of-3 upgrade (spring legs / double hop / magnet / shield / loft engine /
+  lazy river / snack radar / tuck & trim). Stackable, run-scoped; permadeath +
+  feather meta-progression between runs already in.
 
 **Still open:**
 - Endless only, or also short hand-crafted levels?

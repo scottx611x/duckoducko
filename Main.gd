@@ -23,6 +23,19 @@ const LASER_W := 78.0
 
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.", "a HERON!"]
 
+# roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades
+const DRAFT_EVERY := 4000.0     # distance units (10 = 1m)
+const UPGRADES := [
+	{"id": "spring", "name": "SPRING LEGS", "desc": "+15% hop height & hang time"},
+	{"id": "double", "name": "DOUBLE HOP", "desc": "hop again in mid-air"},
+	{"id": "magnet", "name": "CRUMB MAGNET", "desc": "+45% collect reach"},
+	{"id": "shield", "name": "THICK FEATHERS", "desc": "shrug off one bonk"},
+	{"id": "loft", "name": "LOFT ENGINE", "desc": "LOFT fills 30% faster"},
+	{"id": "zen", "name": "LAZY RIVER", "desc": "the river ramps up 25% slower"},
+	{"id": "snacks", "name": "SNACK RADAR", "desc": "+35% more snacks float by"},
+	{"id": "tiny", "name": "TUCK & TRIM", "desc": "10% smaller duck"},
+]
+
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
 const THEME_LEN := 5000.0       # distance units (10 units = 1m)
 const THEMES := [
@@ -92,6 +105,14 @@ var dead_msg := ""
 var theme_idx := 0
 var theme_prev := 0
 var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
+
+# roguelike run state
+var drafting := false
+var draft_choices: Array = []
+var next_draft := DRAFT_EVERY
+var picked := {}                # upgrade id -> stacks taken this run
+var shield_charges := 0
+var air_hops := 0               # double-hops spent since last landing
 
 var loft := 0.0
 var loft_ready := false
@@ -226,6 +247,11 @@ func _smoke() -> void:
 	await get_tree().create_timer(0.4).timeout
 	hop()
 	await get_tree().create_timer(0.7).timeout
+	distance = next_draft - 5.0                        # cross the 400m draft mark
+	await get_tree().create_timer(0.4).timeout
+	print("SMOKE drafting=", drafting, " choices=", draft_choices.size())
+	_on_press(_draft_rect(1).get_center())             # take the middle card
+	print("SMOKE picked=", picked, " drafting=", drafting)
 	distance = 4990.0                                  # cross a theme boundary
 	await get_tree().create_timer(0.6).timeout
 	print("SMOKE theme=", THEMES[theme_idx].name, " sweep=", theme_sweep)
@@ -287,6 +313,13 @@ func _load_duck(sp: String) -> Dictionary:
 	d["face"] = load("res://art/%s_face.png" % sp)
 	var hp := "res://art/%s_hero.png" % sp                 # front 3/4 for menu (gameplay is back view)
 	d["hero"] = load(hp) if ResourceLoader.exists(hp) else null
+	var spin := []                                         # 24-angle turntable (duck-select)
+	for si in range(24):
+		var sf := "res://art/%s_spin_%02d.png" % [sp, si]
+		if not ResourceLoader.exists(sf):
+			break
+		spin.append(load(sf))
+	d["spin"] = spin
 	var st := []
 	for zi in range(64):
 		var p := "res://art/%s_stack_%02d.png" % [sp, zi]
@@ -324,6 +357,12 @@ func _dbg() -> void:
 	fancy = false
 	theme_sweep = 1.0
 	state = St.GROUNDED
+	# the upgrade draft overlay
+	_open_draft()
+	await get_tree().create_timer(0.05).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_draft.png")
+	_pick_upgrade(draft_choices[0])
 	loft = 1.0
 	loft_ready = true
 	mega_hop()
@@ -370,10 +409,40 @@ func start_game() -> void:
 
 # per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
 func cur_hop_dur() -> float:
-	return HOP_DUR * duck_hop_mul
+	return HOP_DUR * duck_hop_mul * _hop_boost()
 
 func cur_mega_dur() -> float:
 	return MEGA_DUR * (0.9 + 0.2 * duck_hop_mul)
+
+# ---- roguelike upgrades ---------------------------------------------------------
+func _up(id: String) -> int:
+	return picked.get(id, 0)
+
+func _hop_boost() -> float:
+	return pow(1.15, float(_up("spring")))
+
+func _size_mul() -> float:
+	return duck_size_mul * pow(0.9, float(_up("tiny")))
+
+func _open_draft() -> void:
+	drafting = true
+	next_draft += DRAFT_EVERY
+	var pool := UPGRADES.duplicate()
+	pool.shuffle()
+	draft_choices = pool.slice(0, 3)
+	center_label.visible = false
+	_sfx("chime", 1.25)
+
+func _draft_rect(i: int) -> Rect2:
+	return Rect2(70.0, 310.0 + i * 150.0, 400.0, 130.0)
+
+func _pick_upgrade(u: Dictionary) -> void:
+	picked[u.id] = picked.get(u.id, 0) + 1
+	if u.id == "shield":
+		shield_charges += 1
+	drafting = false
+	_sfx("unlock")
+	_flash(u.name + "!")
 
 func reset_game() -> void:
 	state = St.GROUNDED
@@ -411,6 +480,12 @@ func reset_game() -> void:
 	theme_idx = 0
 	theme_prev = 0
 	theme_sweep = 1.0
+	drafting = false
+	draft_choices.clear()
+	next_draft = DRAFT_EVERY
+	picked.clear()
+	shield_charges = 0
+	air_hops = 0
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 	center_label.visible = false
@@ -450,6 +525,12 @@ func _on_press(pos: Vector2) -> void:
 	if not alive:
 		_sfx("click")
 		reset_game()
+		return
+	if drafting:
+		for i in draft_choices.size():
+			if _draft_rect(i).has_point(pos):
+				_pick_upgrade(draft_choices[i])
+				return
 		return
 	# tapping the (ready) LOFT bar: left half = MEGA, right half = LASER
 	if loft_ready and Rect2(loft_bar.position, loft_bar.size).has_point(pos):
@@ -510,7 +591,7 @@ func _on_release() -> void:
 # ---- actions -----------------------------------------------------------------
 func hop() -> void:
 	idle_timer = 0.0
-	if not alive or in_menu:
+	if not alive or in_menu or drafting:
 		return
 	if state == St.GROUNDED:
 		state = St.HOPPING
@@ -522,6 +603,10 @@ func hop() -> void:
 			_sfx("hop", 1.3)                       # the fancy one sounds fancier
 		else:
 			_sfx("hop", randf_range(0.95, 1.1))
+	elif state == St.HOPPING and air_hops < _up("double"):
+		air_hops += 1                              # DOUBLE HOP: relaunch mid-air
+		hop_t = 0.0
+		_sfx("hop", 1.2)
 
 func mega_hop() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0:
@@ -552,7 +637,14 @@ func die(msg: String) -> void:
 	best_m = maxi(best_m, m)
 	_save()
 	var sub := "NEW BEST!" if record else "best: %d m" % best_m
-	center_label.text = "%s\n\n%d m · %s\n+%d 🪶\n\ntap to retry" % [msg, m, sub, run_feathers]
+	var build := ""                     # the run's draft picks, eulogized
+	for u in UPGRADES:
+		var n: int = picked.get(u.id, 0)
+		if n > 0:
+			build += ("" if build == "" else " · ") + u.name + ("" if n == 1 else " ×%d" % n)
+	if build != "":
+		build = "\n" + build
+	center_label.text = "%s\n\n%d m · %s\n+%d 🪶%s\n\ntap to retry" % [msg, m, sub, run_feathers, build]
 	center_label.visible = true
 
 # ---- per-frame ---------------------------------------------------------------
@@ -560,13 +652,13 @@ func _process(delta: float) -> void:
 	anim_t += delta
 	if in_select:
 		select_yaw += delta * 0.7
-	if not in_menu and not in_select and alive:
+	if not in_menu and not in_select and alive and not drafting:
 		_update_play(delta)
 	_update_ripples(delta)
 	queue_redraw()
 
 func _update_play(delta: float) -> void:
-	speed = BASE_SPEED + SPEED_RAMP * (distance / 200.0)
+	speed = BASE_SPEED + SPEED_RAMP * (distance / 200.0) * pow(0.75, _up("zen"))
 	distance += speed * delta
 	idle_timer += delta
 
@@ -575,6 +667,10 @@ func _update_play(delta: float) -> void:
 		_sfx("chime", pow(2.0, PENTA[milestone_step % PENTA.size()] / 12.0), -4.0)
 		milestone_step += 1
 		next_milestone += 100
+
+	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck)
+	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0:
+		_open_draft()
 
 	# themed stretches: new palette washes down the screen, the duck approves
 	var ti := int(distance / THEME_LEN) % THEMES.size()
@@ -626,7 +722,7 @@ func _update_hop(delta: float) -> void:
 			var z := 1.0 - 0.26 * hop_height()
 			cam.zoom = Vector2(z, z)
 			for it in items:
-				if not it.got and absf(it.x - duck_x) < 70.0:
+				if not it.got and absf(it.x - duck_x) < 70.0 * (1.0 + 0.45 * _up("magnet")):
 					_collect(it)
 			if mega_t / cur_mega_dur() >= 1.0:
 				state = St.GROUNDED
@@ -649,6 +745,7 @@ func is_invincible() -> bool:
 	return state == St.MEGA or laser_t > 0.0
 
 func _land(mega: bool) -> void:
+	air_hops = 0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
 		_sfx("splash_big")
@@ -686,7 +783,7 @@ func _spawn(delta: float) -> void:
 	item_timer -= delta
 	if item_timer <= 0.0:
 		items.append({"x": randf_range(40.0, VIEW.x - 40.0), "y": -40.0, "got": false, "kind": _pick_kind()})
-		item_timer = randf_range(0.55, 1.2)
+		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks"))
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START:
@@ -732,11 +829,13 @@ func _laser_burn() -> void:
 	enemies = e_survivors
 
 func _collide() -> void:
-	var r := DUCK_R * duck_size_mul
+	var r := DUCK_R * _size_mul()
+	var reach := (r + 18.0) * (1.0 + 0.45 * _up("magnet"))
 	for it in items:
-		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < r + 18.0:
+		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < reach:
 			_collect(it)
 
+	var smashed = null
 	for l in logs:
 		if absf(l.x - duck_x) < l.w * 0.5 + r * 0.52 and absf(l.y - BASE_Y) < l.h * 0.5 + r * 0.52:
 			if is_airborne() or is_invincible():
@@ -747,14 +846,32 @@ func _collide() -> void:
 					if l.frog and not l.frog_gone:
 						l.frog_gone = true
 						ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
+			elif shield_charges > 0:
+				shield_charges -= 1              # THICK FEATHERS soaks the bonk
+				smashed = l
+				duck_shake = 0.3
+				_sfx("bonk", 1.3, -6.0)
+				_flash("POOF.")
+				break
 			else:
 				die(WELL_DECK[randi() % WELL_DECK.size()])
 				return
+	if smashed != null:
+		ripples.append({"x": smashed.x, "y": smashed.y, "t": 0.0, "max": 110.0})
+		logs.erase(smashed)
 
 	# the heron dive ignores hopping (it's aerial) — you must STEER clear, or be invincible
 	if not is_invincible():
 		for e in enemies:
 			if absf(e.x - duck_x) < 44.0 and absf(e.y - BASE_Y) < 42.0:
+				if shield_charges > 0:
+					shield_charges -= 1
+					duck_shake = 0.3
+					_sfx("bonk", 1.3, -6.0)
+					_flash("POOF.")
+					ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 110.0})
+					enemies.erase(e)
+					return
 				die("a HERON!")
 				return
 
@@ -769,7 +886,7 @@ func _collect(it: Dictionary) -> void:
 	ripples.append({"x": it.x, "y": it.y, "t": 0.0, "max": 40.0})
 
 func _add_loft(amount: float) -> void:
-	loft = clampf(loft + amount, 0.0, 1.0)
+	loft = clampf(loft + amount * (1.0 + 0.3 * _up("loft")), 0.0, 1.0)
 	if loft >= 1.0 and not loft_ready:
 		loft_ready = true
 		_sfx("chime", 1.5)                         # LOFT ready fanfare
@@ -789,6 +906,8 @@ func _flash(msg: String) -> void:
 
 func _refresh_hud() -> void:
 	score_label.text = "%d m" % int(distance / 10.0)
+	if shield_charges > 0:
+		score_label.text += "   🛡 %d" % shield_charges
 	loft_bar.value = loft
 	loft_bar.is_ready = loft_ready
 
@@ -883,6 +1002,22 @@ func _draw() -> void:
 
 	_draw_duck()
 
+	# draft overlay: the river waits while you choose
+	if drafting:
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6))
+		draw_string(font, Vector2(0, 250), "CHOOSE AN UPGRADE", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 38, Color(1, 0.92, 0.45))
+		for i in draft_choices.size():
+			var rc := _draft_rect(i)
+			draw_style_box(_btn_sb(), rc)
+			var u: Dictionary = draft_choices[i]
+			var owned: int = picked.get(u.id, 0)
+			var nm: String = u.name if owned == 0 else "%s  ×%d" % [u.name, owned + 1]
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 54), nm,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 28, Color.WHITE)
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 92), u.desc,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 19, Color(1, 1, 1, 0.75))
+		return
+
 	if alive and state == St.GROUNDED and idle_timer > 4.0:
 		var dp := Vector2(duck_x, BASE_Y)
 		draw_string(font, dp + Vector2(-26, -DUCK_R - 40), "quack?",
@@ -891,7 +1026,7 @@ func _draw() -> void:
 func _draw_duck() -> void:
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if duck_shake > 0.0 else 0.0
-	var lift: float = (HOP_LIFT if state != St.MEGA else MEGA_LIFT) * duck_hop_mul
+	var lift: float = (HOP_LIFT * _hop_boost() if state != St.MEGA else MEGA_LIFT) * duck_hop_mul
 	var duck_pos := Vector2(duck_x + shake_x, BASE_Y - h * lift)
 	var duck_scale := 1.0 + (0.35 if state != St.MEGA else 1.2) * h
 
@@ -910,7 +1045,7 @@ func _draw_duck() -> void:
 			_draw_stack(duck_pos, 2.4 + 1.8 * h, st_slices, yaw, roll, false)
 		else:
 			var fr := _duck_frame(h)
-			var ds := fr.get_size() * DUCK_DRAW * duck_scale
+			var ds := fr.get_size() * DUCK_DRAW * duck_scale * pow(0.9, float(_up("tiny")))
 			if fancy and state == St.HOPPING:
 				# the fancy hop: a full unannounced barrel roll, spinning into the steer
 				var dir: float = signf(duck_vx) if absf(duck_vx) > 20.0 else 1.0
@@ -1023,17 +1158,23 @@ func _draw_select() -> void:
 	var unlocked := _is_unlocked(sel_index)
 	var sp: String = duck.species
 	var bob := sin(anim_t * 2.5) * 8.0
-	# big PIXEL-ART render that cycles through poses (a little turntable)
-	if unlocked and sp != "" and ducks.has(sp):
-		var poses = _showcase(ducks[sp])
-		var fr = poses[int(anim_t * 1.6) % poses.size()]
+	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise
+	var cur = ducks.get(sp, ducks["mallard"])
+	var spin: Array = cur.get("spin", [])
+	var fr = null
+	if not spin.is_empty():
+		fr = spin[int(floor(fposmod(select_yaw, TAU) / TAU * spin.size())) % spin.size()]
+	else:
+		fr = cur.get("hero")
+		if fr == null:
+			fr = cur["idle"][0]
+	if unlocked:
 		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
 	else:
-		# locked: the actual species as a dark silhouette — show the shape, keep the mystery
-		var lcur = ducks.get(sp, ducks["mallard"])
-		var lhero = lcur.get("hero")
-		_blit_modulated(lhero if lhero != null else lcur["idle"][0], Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
+		# locked: same spinnable shape, dark silhouette — keep the mystery
+		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
 		draw_string(font, Vector2(0, 355.0), "LOCKED", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 28, Color(1, 1, 1, 0.7))
+	draw_string(font, Vector2(0, 432.0), "◂ drag to spin ▸", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.45))
 
 	# name + trait + stat bars
 	draw_string(font, Vector2(0, 466.0), duck.name, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 34, Color.WHITE)
@@ -1072,13 +1213,6 @@ func _draw_select() -> void:
 			_blit_centered(th, r.get_center(), 1.4)
 		else:
 			_blit_modulated(th, r.get_center(), 1.4, Color(0.34, 0.37, 0.44, 1.0))
-
-func _showcase(cur) -> Array:
-	# front-facing turntable: hero face <-> side profiles (never the unflattering belly-up back)
-	var hero = cur.get("hero")
-	if hero == null:
-		hero = cur["idle"][0]
-	return [hero, cur["side"][1], hero, cur["side"][-1]]
 
 func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	if tex == null:

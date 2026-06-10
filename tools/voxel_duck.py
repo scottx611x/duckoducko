@@ -34,11 +34,11 @@ HERO_YAW, HERO_PITCH = 20, 28   # menu/select front 3/4: full face + chest
 # Each species = a palette (same keys, shared geometry recolors automatically) +
 # geometry flags + a render "size" (bufflehead is just plain small).
 SPECIES = dict(
-    mallard=dict(),
-    hen=dict(hen=True),
-    wood=dict(crest=True, face_paint="wood", red_eye=True),
+    mallard=dict(dark_rump=True),
+    hen=dict(hen=True, bill_saddle=True),
+    wood=dict(crest=True, face_paint="wood", red_eye=True, chest_speckles=True, flank_bars=True),
     bufflehead=dict(head_scale=1.22, bill_len=14, face_paint="bufflehead", size=0.85),
-    pintail=dict(pin_tail=True, face_paint="pintail"),
+    pintail=dict(pin_tail=True, face_paint="pintail", long_neck=True, bill_stripe=True),
 )
 
 
@@ -105,7 +105,7 @@ def palette(sp):
         white=(240, 238, 230), collar=(240, 238, 230),
         wing=(152, 144, 126), wingd=(118, 110, 94), primary=(74, 70, 62),
         specw=(236, 236, 228), spec=(58, 108, 172), specd=(40, 76, 128),
-        tail=(44, 40, 52), tailhi=(92, 88, 100), eye=(20, 18, 22),
+        tail=(44, 40, 52), tailhi=(226, 223, 213), eye=(20, 18, 22),
     )
 
 
@@ -152,6 +152,16 @@ def build(sp="mallard", wings="folded"):
     ellip(0, -0.5, 6.5, 4.4, 3.6, 3.6, P["chest"], only_empty=True)
     ellip(0, -1.6, 7.0, 3.2, 2.6, 2.6, P["chestd"], only_empty=True)
     ellip(0, 1.6, 6.5, 3.4, 1.6, 2.6, P["chestl"], only_empty=True)
+    if spec.get("chest_speckles"):
+        # wood-duck burgundy chest is stippled with little white arrowheads
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["chest"], P["chestd"], P["chestl"]) and (x * 53 + y * 29 + z * 71) % 7 == 0:
+                V[(x, y, z)] = P["white"]
+    if spec.get("dark_rump"):
+        # drake mallard: black rump/undertail between the gray body and the tail
+        for (x, y, z) in list(V.keys()):
+            if z <= -7 and V[(x, y, z)] in (P["back"], P["body"], P["belly"], P["verm_d"], P["verm_l"]):
+                V[(x, y, z)] = (38, 36, 44)
     # ---- wings: folded (with bordered speculum + primaries) or spread (hops) ----
     if wings == "folded":
         for s in (1, -1):
@@ -161,6 +171,16 @@ def build(sp="mallard", wings="folded"):
             for z in (-5, -4, -3):                                   # speculum, white-bordered
                 put(6 * s, 2, z, P["specw"]); put(6 * s, 1, z, P["spec"])
                 put(6 * s, 0, z, P["specd"]); put(6 * s, -1, z, P["specw"])
+        if spec.get("flank_bars"):
+            # wood duck: black-and-white barring along the wing's leading edge
+            for (x, y, z) in list(V.keys()):
+                if V[(x, y, z)] in (P["wing"], P["wingd"]) and z >= 4:
+                    V[(x, y, z)] = P["white"] if y % 2 == 0 else (30, 28, 34)
+        if sp == "bufflehead":
+            # bright white flanks below the dark folded wing
+            for (x, y, z) in list(V.keys()):
+                if V[(x, y, z)] in (P["wing"], P["wingd"]) and y < 1:
+                    V[(x, y, z)] = P["body"]
     else:
         up = 2 if wings == "out_up" else 0
         for s in (1, -1):
@@ -176,18 +196,21 @@ def build(sp="mallard", wings="folded"):
     put(-2, 1, -11, P["tailhi"]); put(2, 1, -11, P["tailhi"])
     if sp == "mallard":
         put(0, 4, -10, P["tail"]); put(0, 5, -11, P["tail"]); put(0, 5, -10, P["tail"])  # curl
+        for z in (-12, -11, -10):                     # white outer tail feathers
+            put(-3, 1, z, P["tailhi"]); put(3, 1, z, P["tailhi"])
     if spec.get("pin_tail"):
         # the pintail's pin: a long thin point raked up behind the tail
         box(-1, 1, 2, 3, -15, -13, P["tail"])
         box(0, 0, 3, 4, -18, -15, P["tail"])
         put(0, 4, -18, P["tailhi"])
-    # ---- neck + head ----
+    # ---- neck + head (pintail carries its head on an elegant long neck) ----
     hs = spec.get("head_scale", 1.0)
-    ellip(0, 3.4, 7, 2.7, 3.0, 2.7, P["head"])
-    ellip(0, 6.6, 10, 3.7 * hs, 3.7 * hs, 3.6 * hs, P["head"])
-    ellip(0, 4.0, 10.2, 3.6, 1.6, 3.2, P["nape"], only_empty=True)     # dark underside/nape
-    ellip(0, 8.2, 10.6, 2.7 * hs, 2.1 * hs, 2.6 * hs, P["headh"], only_empty=True)  # sheen
-    ellip(0, 9.0, 11.0, 1.5, 1.2, 1.6, P["glint"], only_empty=True)    # bright glint
+    NY = 2 if spec.get("long_neck") else 0
+    ellip(0, 3.4 + NY * 0.5, 7, 2.5 if NY else 2.7, 3.0 + NY * 0.8, 2.5 if NY else 2.7, P["head"])
+    ellip(0, 6.6 + NY, 10, 3.7 * hs, 3.7 * hs, 3.6 * hs, P["head"])
+    ellip(0, 4.0 + NY * 0.6, 10.2, 3.6, 1.6, 3.2, P["nape"], only_empty=True)  # dark underside/nape
+    ellip(0, 8.2 + NY, 10.6, 2.7 * hs, 2.1 * hs, 2.6 * hs, P["headh"], only_empty=True)  # sheen
+    ellip(0, 9.0 + NY, 11.0, 1.5, 1.2, 1.6, P["glint"], only_empty=True)  # bright glint
     if hen:
         ellip(0, 8.6, 9.6, 3.4, 1.8, 3.2, P["crown"], only_empty=True)  # dark cap
         for z in range(8, 13):                                          # eye-line
@@ -215,7 +238,7 @@ def build(sp="mallard", wings="folded"):
                 V[(x, y, z)] = P["white"]
     elif fp == "pintail":
         # white breast finger running up each side of the neck toward the head
-        for y in range(1, 7):
+        for y in range(1, 7 + NY):
             for z in (6, 7):
                 if (2, y, z) in V:
                     V[(2, y, z)] = P["white"]
@@ -230,18 +253,25 @@ def build(sp="mallard", wings="folded"):
                 put(x, y, 7, P["collar"])
     # ---- bill: long, flat, spatulate (short + stubby on a bufflehead) ----
     bl = spec.get("bill_len", 17)
-    box(-2, 2, 4, 5, 11, bl - 1, P["bill"])
-    box(-1, 1, 4, 5, bl, bl, P["bill"])               # rounded tip
-    box(-2, 2, 6, 6, 10, 12, P["billd"], only_empty=True)  # base shade under head
-    box(-2, 2, 5, 5, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
-    box(-1, 1, 4, 5, bl, bl, P["nail"])               # nail at tip
-    put(1, 5, 13, P["nostril"]); put(-1, 5, 13, P["nostril"])
+    box(-2, 2, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
+    box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["bill"])     # rounded tip
+    box(-2, 2, 6 + NY, 6 + NY, 10, 12, P["billd"], only_empty=True)  # base shade under head
+    box(-2, 2, 5 + NY, 5 + NY, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
+    box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["nail"])     # nail at tip
+    put(1, 5 + NY, 13, P["nostril"]); put(-1, 5 + NY, 13, P["nostril"])
+    if spec.get("bill_saddle"):
+        # hen mallard: dark saddle blotch on the orange bill
+        box(-1, 1, 5 + NY, 5 + NY, 13, 15, (96, 70, 46))
+    if spec.get("bill_stripe"):
+        # pintail: black culmen stripe down the blue-gray bill
+        for z in range(11, bl + 1):
+            put(0, 5 + NY, z, P["nail"])
     # ---- eyes (+ glint) ----
     ex = 3 if hs <= 1.0 else 4                        # bigger head -> eyes sit wider
     eye = (196, 44, 32) if spec.get("red_eye") else P["eye"]
     for sx in (ex, -ex):
-        put(sx, 7, 10, eye); put(sx, 8, 10, eye); put(sx, 7, 11, eye)
-        put(sx, 8, 11, P["white"], only_empty=True)
+        put(sx, 7 + NY, 10, eye); put(sx, 8 + NY, 10, eye); put(sx, 7 + NY, 11, eye)
+        put(sx, 8 + NY, 11, P["white"], only_empty=True)
     return V
 
 
@@ -356,6 +386,9 @@ def generate_ducks(art_dir):
         save(render(SH, gy, PITCH - math.radians(4), scale=sc), "%s_idle_1.png" % sp)
         # menu HERO + duck-select: front 3/4 so you see his face/chest (gameplay is back view)
         save(render(SH, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_hero.png" % sp)
+        # 24-frame turntable at hero pitch: free rotation on the duck-select screen
+        for i in range(24):
+            save(render(SH, math.radians(i * 15), math.radians(HERO_PITCH), scale=sc), "%s_spin_%02d.png" % (sp, i))
         # 7-frame banking sweep (offsets from the back-view base)
         for i, off in enumerate(BANK_OFF):
             save(render(SH, math.radians(GAME_YAW + off), PITCH, scale=sc), "%s_bank_%d.png" % (sp, i))

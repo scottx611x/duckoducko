@@ -44,10 +44,14 @@ Press **F5** to play, **F8** to stop.
 - Desktop testing: click-drag to steer, click to hop, **Space** = hop, **M** = mega,
   **L** = laser.
 
-### Progression
+### Progression (roguelike-lite)
+- **Drafts:** every 400m the river pauses and deals 3 upgrades — pick one. Stackable,
+  run-scoped: spring legs, double hop, crumb magnet, thick feathers (shield), loft
+  engine, lazy river, snack radar, tuck & trim. Your build is eulogized on death.
 - Feathers collected in a run bank to `user://save.cfg` along with your best distance.
 - Spend feathers on the duck-select screen to unlock Wood Duck (25), Bufflehead (50),
   Pintail (90). Stats are real: hop/steer values bias lift, hang time, and steering.
+  Ducks on the select screen are freely rotatable — drag to spin.
 - Every 500m the river washes into a new themed stretch (Lazy Pond → Park Picnic →
   Spooky Bog → City Fountain → Aurora Lake).
 
