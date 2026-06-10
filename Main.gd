@@ -23,6 +23,16 @@ const LASER_W := 78.0
 
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.", "a HERON!"]
 
+# themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
+const THEME_LEN := 5000.0       # distance units (10 units = 1m)
+const THEMES := [
+	{"name": "Lazy Pond",     "tint": Color(1.0, 1.0, 1.0)},
+	{"name": "Park Picnic",   "tint": Color(1.08, 1.04, 0.82)},
+	{"name": "Spooky Bog",    "tint": Color(0.66, 0.72, 0.62)},
+	{"name": "City Fountain", "tint": Color(0.82, 0.98, 1.08)},
+	{"name": "Aurora Lake",   "tint": Color(0.52, 0.62, 0.98)},
+]
+
 # collectibles: score (adds to distance) + loft fill + spawn weight
 const ITEM_DEFS := [
 	{"name": "feather", "score": 30.0, "loft": 0.12, "weight": 5},
@@ -35,12 +45,13 @@ const ITEM_DEFS := [
 const MENU_DUCKS_BTN := Rect2(160.0, 770.0, 220.0, 56.0)
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
+# hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
 const ROSTER := [
-	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "trait": "the balanced drake", "unlocked": true},
-	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.55, "trait": "the clever hen", "unlocked": true},
-	{"name": "Wood Duck", "species": "", "hop": 0.75, "steer": 0.5, "trait": "floaty show-off", "unlocked": false},
-	{"name": "Bufflehead", "species": "", "hop": 0.6, "steer": 0.75, "trait": "tiny & twitchy", "unlocked": false},
-	{"name": "Pintail", "species": "", "hop": 0.45, "steer": 0.85, "trait": "the best steerer", "unlocked": false},
+	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "trait": "the balanced drake", "cost": 0},
+	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.55, "trait": "the clever hen", "cost": 0},
+	{"name": "Wood Duck", "species": "wood", "hop": 0.75, "steer": 0.5, "trait": "floaty show-off", "cost": 25},
+	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.6, "steer": 0.75, "trait": "tiny & twitchy", "cost": 50, "size": 0.85},
+	{"name": "Pintail", "species": "pintail", "hop": 0.45, "steer": 0.85, "trait": "the best steerer", "cost": 90},
 ]
 
 # ---- state -------------------------------------------------------------------
@@ -57,6 +68,16 @@ var hop_t := 0.0
 var mega_t := 0.0
 var laser_t := 0.0
 
+# per-duck gameplay multipliers, set from ROSTER stats in start_game
+var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
+var duck_steer_mul := 1.0       # scales steering responsiveness
+var duck_size_mul := 1.0        # bufflehead: smaller duck, smaller hitbox
+
+# fancy hop: every ~10th hop is an unannounced barrel roll (WHIMSY §1)
+var hop_count := 0
+var fancy_next := 10
+var fancy := false
+
 var duck_x := VIEW.x * 0.5
 var target_x := VIEW.x * 0.5
 var last_duck_x := VIEW.x * 0.5
@@ -68,8 +89,24 @@ var distance := 0.0
 var alive := true
 var dead_msg := ""
 
+var theme_idx := 0
+var theme_prev := 0
+var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
+
 var loft := 0.0
 var loft_ready := false
+
+# milestone chime: every 100m, pitch climbing a pentatonic scale (WHIMSY §8)
+const PENTA := [0, 2, 4, 7, 9, 12, 14, 16]
+var next_milestone := 100
+var milestone_step := 0
+var quacked := false            # one idle quack per bout of impatience
+
+# persistence (user://save.cfg): feather wallet, best run, unlocked species
+var feathers := 0
+var best_m := 0
+var unlocked_extra := []        # species strings bought with feathers
+var run_feathers := 0           # feathers collected this run
 
 var logs: Array = []           # {x, y, w, h, missed, phase, frog, frog_gone}
 var items: Array = []          # {x, y, got, kind}
@@ -109,11 +146,16 @@ var tex_items := {}
 var tex_water: Texture2D
 var has_art := false
 
+# ---- audio --------------------------------------------------------------------
+var sfx := {}                   # name -> AudioStream
+var sfx_pool: Array = []        # round-robin AudioStreamPlayers
+var sfx_next := 0
+
 func _ready() -> void:
 	font = ThemeDB.fallback_font
 
-	for sp in ["mallard", "hen"]:
-		ducks[sp] = _load_duck(sp)
+	for r in ROSTER:
+		ducks[r.species] = _load_duck(r.species)
 	tex_shadow = load("res://art/shadow.png")
 	tex_log = load("res://art/log.png")
 	tex_frog = load("res://art/frog.png")
@@ -138,8 +180,8 @@ func _ready() -> void:
 	hud.add_child(score_label)
 
 	center_label = Label.new()
-	center_label.size = Vector2(VIEW.x, 200)
-	center_label.position = Vector2(0, VIEW.y * 0.34)
+	center_label.size = Vector2(VIEW.x, 320)
+	center_label.position = Vector2(0, VIEW.y * 0.28)
 	center_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	center_label.add_theme_font_size_override("font_size", 44)
@@ -151,8 +193,86 @@ func _ready() -> void:
 	loft_bar.position = Vector2(VIEW.x * 0.5 - 180, VIEW.y - 96)
 	hud.add_child(loft_bar)
 
+	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
+			"mega", "laser", "quack", "unlock", "click"]:
+		var p := "res://sfx/%s.wav" % n
+		if ResourceLoader.exists(p):
+			sfx[n] = load(p)
+	for i in 8:
+		var pl := AudioStreamPlayer.new()
+		add_child(pl)
+		sfx_pool.append(pl)
+
+	_load_save()
 	reset_game()
 	_enter_menu()
+	if "--smoke" in OS.get_cmdline_user_args():
+		_smoke()
+	if "--dbg" in OS.get_cmdline_user_args():
+		_dbg()
+
+# headless CI-style pass over the whole loop: select/unlock -> play -> theme
+# change -> mega -> laser -> death/save. Run: godot --headless --path . -- --smoke
+func _smoke() -> void:
+	await get_tree().create_timer(0.3).timeout
+	print("SMOKE menu ok, has_art=", has_art, " sfx=", sfx.size())
+	_open_select()
+	sel_index = 2
+	feathers = 100
+	_select_press(SEL_PLAY_BTN.get_center())          # buys the wood duck
+	print("SMOKE unlock wood=", _is_unlocked(2), " feathers=", feathers)
+	_select_press(SEL_PLAY_BTN.get_center())          # plays it
+	print("SMOKE playing species=", species, " hop_mul=", duck_hop_mul, " steer_mul=", duck_steer_mul)
+	await get_tree().create_timer(0.4).timeout
+	hop()
+	await get_tree().create_timer(0.7).timeout
+	distance = 4990.0                                  # cross a theme boundary
+	await get_tree().create_timer(0.6).timeout
+	print("SMOKE theme=", THEMES[theme_idx].name, " sweep=", theme_sweep)
+	loft = 1.0; loft_ready = true
+	mega_hop()
+	await get_tree().create_timer(cur_mega_dur() + 0.3).timeout
+	loft = 1.0; loft_ready = true
+	fire_laser()
+	await get_tree().create_timer(1.0).timeout
+	for i in 24:                                       # enough hops to hit a fancy one
+		hop()
+		await get_tree().create_timer(0.08).timeout
+	print("SMOKE hops=", hop_count, " fancy_next=", fancy_next)
+	run_feathers = 3
+	die("smoke")
+	print("SMOKE dead ok, best_m=", best_m, " feathers=", feathers)
+	reset_game()
+	print("SMOKE reset ok")
+	get_tree().quit()
+
+func _sfx(snd: String, pitch := 1.0, vol_db := 0.0) -> void:
+	if not sfx.has(snd) or sfx_pool.is_empty():
+		return
+	var pl: AudioStreamPlayer = sfx_pool[sfx_next % sfx_pool.size()]
+	sfx_next += 1
+	pl.stream = sfx[snd]
+	pl.pitch_scale = pitch
+	pl.volume_db = vol_db
+	pl.play()
+
+# ---- save file -----------------------------------------------------------------
+func _load_save() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://save.cfg") == OK:
+		feathers = cfg.get_value("save", "feathers", 0)
+		best_m = cfg.get_value("save", "best_m", 0)
+		unlocked_extra = cfg.get_value("save", "unlocked", [])
+
+func _save() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("save", "feathers", feathers)
+	cfg.set_value("save", "best_m", best_m)
+	cfg.set_value("save", "unlocked", unlocked_extra)
+	cfg.save("user://save.cfg")
+
+func _is_unlocked(i: int) -> bool:
+	return ROSTER[i].cost == 0 or ROSTER[i].species in unlocked_extra
 
 func _load_duck(sp: String) -> Dictionary:
 	var d := {}
@@ -194,6 +314,15 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_play.png")
+	# mid-wash theme transition (Spooky Bog rolling in)
+	theme_prev = 0
+	theme_idx = 2
+	theme_sweep = 0.45
+	fancy = true                        # and the fancy barrel roll
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_theme.png")
+	fancy = false
+	theme_sweep = 1.0
 	state = St.GROUNDED
 	loft = 1.0
 	loft_ready = true
@@ -203,6 +332,13 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_mega.png")
+	# select screen: a locked duck (pintail) with cost text
+	_enter_menu()
+	_open_select()
+	sel_index = 4
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_locked.png")
 	get_tree().quit()
 
 func _enter_menu() -> void:
@@ -222,12 +358,22 @@ func _open_select() -> void:
 func start_game() -> void:
 	in_menu = false
 	in_select = false
-	var sp: String = ROSTER[sel_index].species
-	if sp != "":
-		species = sp
+	var r: Dictionary = ROSTER[sel_index]
+	if r.species != "" and ducks.has(r.species):
+		species = r.species
+	duck_hop_mul = 0.85 + 0.3 * r.hop      # 0.5 stat -> 1.0x
+	duck_steer_mul = 0.85 + 0.3 * r.steer
+	duck_size_mul = r.get("size", 1.0)
 	reset_game()
 	score_label.visible = true
 	loft_bar.visible = true
+
+# per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
+func cur_hop_dur() -> float:
+	return HOP_DUR * duck_hop_mul
+
+func cur_mega_dur() -> float:
+	return MEGA_DUR * (0.9 + 0.2 * duck_hop_mul)
 
 func reset_game() -> void:
 	state = St.GROUNDED
@@ -255,6 +401,16 @@ func reset_game() -> void:
 	heron_timer = 6.0
 	wake_timer = 0.0
 	idle_timer = 0.0
+	next_milestone = 100
+	milestone_step = 0
+	quacked = false
+	run_feathers = 0
+	hop_count = 0
+	fancy_next = 6 + randi() % 7
+	fancy = false
+	theme_idx = 0
+	theme_prev = 0
+	theme_sweep = 1.0
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 	center_label.visible = false
@@ -282,6 +438,7 @@ func _input(event: InputEvent) -> void:
 func _on_press(pos: Vector2) -> void:
 	idle_timer = 0.0
 	if in_menu:
+		_sfx("click")
 		if MENU_DUCKS_BTN.has_point(pos):
 			_open_select()
 		else:
@@ -291,6 +448,7 @@ func _on_press(pos: Vector2) -> void:
 		_select_press(pos)
 		return
 	if not alive:
+		_sfx("click")
 		reset_game()
 		return
 	# tapping the (ready) LOFT bar: left half = MEGA, right half = LASER
@@ -319,14 +477,26 @@ func _on_drag(pos: Vector2) -> void:
 func _select_press(pos: Vector2) -> void:
 	spin_prev_x = pos.x
 	if SEL_BACK_BTN.has_point(pos):
+		_sfx("click")
 		_enter_menu()
 		return
-	if SEL_PLAY_BTN.has_point(pos) and ROSTER[sel_index].unlocked:
-		start_game()
+	if SEL_PLAY_BTN.has_point(pos):
+		if _is_unlocked(sel_index):
+			_sfx("click")
+			start_game()
+		elif feathers >= ROSTER[sel_index].cost:
+			feathers -= ROSTER[sel_index].cost     # buy the duck
+			unlocked_extra.append(ROSTER[sel_index].species)
+			_save()
+			_sfx("unlock")
+		else:
+			_sfx("bonk", 1.4, -8.0)                # can't afford: tiny sad squeak
 		return
 	for i in ROSTER.size():
-		if _thumb_rect(i).has_point(pos) and ROSTER[i].unlocked:
-			sel_index = i
+		if _thumb_rect(i).has_point(pos):
+			if i != sel_index:
+				_sfx("click", 1.2)
+			sel_index = i                          # locked ducks can be previewed
 			return
 
 func _on_release() -> void:
@@ -345,6 +515,13 @@ func hop() -> void:
 	if state == St.GROUNDED:
 		state = St.HOPPING
 		hop_t = 0.0
+		hop_count += 1
+		fancy = hop_count >= fancy_next
+		if fancy:
+			fancy_next = hop_count + 8 + randi() % 6
+			_sfx("hop", 1.3)                       # the fancy one sounds fancier
+		else:
+			_sfx("hop", randf_range(0.95, 1.1))
 
 func mega_hop() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0:
@@ -354,6 +531,7 @@ func mega_hop() -> void:
 	mega_style = "fly" if randf() < 0.5 else "tumble"
 	loft = 0.0
 	loft_ready = false
+	_sfx("mega")
 
 func fire_laser() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA:
@@ -361,11 +539,20 @@ func fire_laser() -> void:
 	laser_t = LASER_DUR
 	loft = 0.0
 	loft_ready = false
+	_sfx("laser")
 
 func die(msg: String) -> void:
 	alive = false
 	dead_msg = msg
-	center_label.text = msg + "\n\ntap to retry"
+	_sfx("bonk")
+	center_label.add_theme_font_size_override("font_size", 32)
+	var m := int(distance / 10.0)
+	feathers += run_feathers
+	var record := m > best_m
+	best_m = maxi(best_m, m)
+	_save()
+	var sub := "NEW BEST!" if record else "best: %d m" % best_m
+	center_label.text = "%s\n\n%d m · %s\n+%d 🪶\n\ntap to retry" % [msg, m, sub, run_feathers]
 	center_label.visible = true
 
 # ---- per-frame ---------------------------------------------------------------
@@ -383,7 +570,30 @@ func _update_play(delta: float) -> void:
 	distance += speed * delta
 	idle_timer += delta
 
-	duck_x = lerpf(duck_x, target_x, clampf(delta * STEER_LERP, 0.0, 1.0))
+	# milestone chime every 100m, climbing a pentatonic scale
+	if int(distance / 10.0) >= next_milestone:
+		_sfx("chime", pow(2.0, PENTA[milestone_step % PENTA.size()] / 12.0), -4.0)
+		milestone_step += 1
+		next_milestone += 100
+
+	# themed stretches: new palette washes down the screen, the duck approves
+	var ti := int(distance / THEME_LEN) % THEMES.size()
+	if ti != theme_idx:
+		theme_prev = theme_idx
+		theme_idx = ti
+		theme_sweep = 0.0
+		_sfx("chime", 0.75)
+		_flash("ooh.\n%s" % THEMES[theme_idx].name)
+	theme_sweep = minf(theme_sweep + delta * 0.8, 1.0)
+
+	# the duck grows impatient (one judgmental quack per idle bout)
+	if idle_timer > 4.0 and not quacked and state == St.GROUNDED:
+		_sfx("quack")
+		quacked = true
+	elif idle_timer < 4.0:
+		quacked = false
+
+	duck_x = lerpf(duck_x, target_x, clampf(delta * STEER_LERP * duck_steer_mul, 0.0, 1.0))
 	duck_vx = (duck_x - last_duck_x) / maxf(delta, 0.0001)
 	last_duck_x = duck_x
 	if duck_shake > 0.0:
@@ -407,8 +617,9 @@ func _update_hop(delta: float) -> void:
 	match state:
 		St.HOPPING:
 			hop_t += delta
-			if hop_t / HOP_DUR >= 1.0:
+			if hop_t / cur_hop_dur() >= 1.0:
 				state = St.GROUNDED
+				fancy = false
 				_land(false)
 		St.MEGA:
 			mega_t += delta
@@ -417,7 +628,7 @@ func _update_hop(delta: float) -> void:
 			for it in items:
 				if not it.got and absf(it.x - duck_x) < 70.0:
 					_collect(it)
-			if mega_t / MEGA_DUR >= 1.0:
+			if mega_t / cur_mega_dur() >= 1.0:
 				state = St.GROUNDED
 				cam.zoom = Vector2.ONE
 				_land(true)
@@ -425,9 +636,9 @@ func _update_hop(delta: float) -> void:
 func hop_height() -> float:
 	match state:
 		St.HOPPING:
-			return sin((hop_t / HOP_DUR) * PI)
+			return sin((hop_t / cur_hop_dur()) * PI)
 		St.MEGA:
-			return sin((mega_t / MEGA_DUR) * PI)
+			return sin((mega_t / cur_mega_dur()) * PI)
 		_:
 			return 0.0
 
@@ -440,7 +651,10 @@ func is_invincible() -> bool:
 func _land(mega: bool) -> void:
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
+		_sfx("splash_big")
 		_flash("WHEE.")
+	else:
+		_sfx("splash", randf_range(0.9, 1.1), -6.0)
 
 func _update_wake(delta: float) -> void:
 	wake_timer -= delta
@@ -518,12 +732,13 @@ func _laser_burn() -> void:
 	enemies = e_survivors
 
 func _collide() -> void:
+	var r := DUCK_R * duck_size_mul
 	for it in items:
-		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < DUCK_R + 18.0:
+		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < r + 18.0:
 			_collect(it)
 
 	for l in logs:
-		if absf(l.x - duck_x) < l.w * 0.5 + DUCK_R * 0.52 and absf(l.y - BASE_Y) < l.h * 0.5 + DUCK_R * 0.52:
+		if absf(l.x - duck_x) < l.w * 0.5 + r * 0.52 and absf(l.y - BASE_Y) < l.h * 0.5 + r * 0.52:
 			if is_airborne() or is_invincible():
 				if not l.missed:
 					l.missed = true
@@ -548,12 +763,16 @@ func _collect(it: Dictionary) -> void:
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	distance += def.score * 0.6
 	_add_loft(def.loft)
+	if def.name == "feather":
+		run_feathers += 1
+	_sfx("collect", 1.0 + it.kind * 0.12)          # rarer = brighter ping
 	ripples.append({"x": it.x, "y": it.y, "t": 0.0, "max": 40.0})
 
 func _add_loft(amount: float) -> void:
 	loft = clampf(loft + amount, 0.0, 1.0)
-	if loft >= 1.0:
+	if loft >= 1.0 and not loft_ready:
 		loft_ready = true
+		_sfx("chime", 1.5)                         # LOFT ready fanfare
 
 func _update_ripples(delta: float) -> void:
 	for r in ripples:
@@ -561,6 +780,7 @@ func _update_ripples(delta: float) -> void:
 	ripples = ripples.filter(func(r): return r.t < 0.6)
 
 func _flash(msg: String) -> void:
+	center_label.add_theme_font_size_override("font_size", 44)
 	center_label.text = msg
 	center_label.visible = true
 	await get_tree().create_timer(0.7).timeout
@@ -576,19 +796,25 @@ func _refresh_hud() -> void:
 func _draw() -> void:
 	var scroll: float = anim_t * 80.0 if in_menu else distance
 
-	# water (tiled, scrolling) or flat-color fallback
+	# water (tiled, scrolling) or flat-color fallback; theme tint washes down the
+	# screen behind a sweep line during a theme change (rows above = new palette)
+	var tint_new: Color = THEMES[theme_idx].tint
+	var tint_old: Color = THEMES[theme_prev].tint
+	var sweep_y := theme_sweep * (VIEW.y + 80.0)
 	if has_art:
 		var t := tex_water.get_size()
 		var off := fmod(scroll, t.y)
 		var y := -t.y + off
 		while y < VIEW.y:
+			var tint := tint_new if y + t.y * 0.5 < sweep_y else tint_old
 			var x := 0.0
 			while x < VIEW.x:
-				draw_texture(tex_water, Vector2(x, y))
+				draw_texture(tex_water, Vector2(x, y), tint)
 				x += t.x
 			y += t.y
 	else:
-		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.30, 0.62, 0.78))
+		var base := Color(0.30, 0.62, 0.78)
+		draw_rect(Rect2(Vector2.ZERO, VIEW), base * tint_new)
 
 	if in_menu:
 		_draw_menu()
@@ -665,7 +891,7 @@ func _draw() -> void:
 func _draw_duck() -> void:
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if duck_shake > 0.0 else 0.0
-	var lift: float = HOP_LIFT if state != St.MEGA else MEGA_LIFT
+	var lift: float = (HOP_LIFT if state != St.MEGA else MEGA_LIFT) * duck_hop_mul
 	var duck_pos := Vector2(duck_x + shake_x, BASE_Y - h * lift)
 	var duck_scale := 1.0 + (0.35 if state != St.MEGA else 1.2) * h
 
@@ -678,14 +904,22 @@ func _draw_duck() -> void:
 		var st_slices = ducks[species]["stack"]
 		if state == St.MEGA and not st_slices.is_empty():
 			# MEGA HOP: the duck becomes the 3D voxel — tumbling or flying
-			var p := mega_t / MEGA_DUR
+			var p := mega_t / cur_mega_dur()
 			var yaw: float = p * TAU * 0.5 if mega_style == "fly" else p * TAU * 2.0
 			var roll: float = sin(p * PI) * 0.22 if mega_style == "fly" else p * TAU
 			_draw_stack(duck_pos, 2.4 + 1.8 * h, st_slices, yaw, roll, false)
 		else:
 			var fr := _duck_frame(h)
 			var ds := fr.get_size() * DUCK_DRAW * duck_scale
-			draw_texture_rect(fr, Rect2(duck_pos - ds * 0.5, ds), false)
+			if fancy and state == St.HOPPING:
+				# the fancy hop: a full unannounced barrel roll, spinning into the steer
+				var dir: float = signf(duck_vx) if absf(duck_vx) > 20.0 else 1.0
+				var rot: float = (hop_t / cur_hop_dur()) * TAU * dir
+				draw_set_transform(duck_pos, rot, Vector2.ONE)
+				draw_texture_rect(fr, Rect2(-ds * 0.5, ds), false)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				draw_texture_rect(fr, Rect2(duck_pos - ds * 0.5, ds), false)
 	else:
 		draw_circle(Vector2(duck_x, BASE_Y + 6), DUCK_R * (1.0 - 0.55 * h), Color(0, 0, 0, 0.22 * (1.0 - 0.4 * h)))
 		draw_circle(duck_pos, DUCK_R * duck_scale, Color(0.97, 0.84, 0.27))
@@ -738,6 +972,11 @@ func _draw_menu() -> void:
 		_blit_centered(hen_hero if hen_hero != null else ducks["hen"]["idle"][0], Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
 		_blit_centered(drake_hero if drake_hero != null else ducks["mallard"]["idle"][0], Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
 
+	# wallet + best run
+	if feathers > 0 or best_m > 0:
+		draw_string(font, Vector2(0, 640), "🪶 %d   ·   best %d m" % [feathers, best_m],
+			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 22, Color(1, 0.92, 0.45, 0.9))
+
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
 	draw_string(font, Vector2(0, 700), "▶  tap to play  ◀", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 36, Color(1, 1, 1, pulse))
@@ -777,8 +1016,11 @@ func _draw_select() -> void:
 	draw_string(font, Vector2(SEL_BACK_BTN.position.x, SEL_BACK_BTN.position.y + 33), "< back",
 		HORIZONTAL_ALIGNMENT_CENTER, SEL_BACK_BTN.size.x, 22, Color.WHITE)
 
+	# feather wallet
+	draw_string(font, Vector2(VIEW.x - 190, 60), "🪶 %d" % feathers, HORIZONTAL_ALIGNMENT_RIGHT, 170, 26, Color(1, 0.92, 0.45))
+
 	var duck = ROSTER[sel_index]
-	var unlocked: bool = duck.unlocked
+	var unlocked := _is_unlocked(sel_index)
 	var sp: String = duck.species
 	var bob := sin(anim_t * 2.5) * 8.0
 	# big PIXEL-ART render that cycles through poses (a little turntable)
@@ -787,8 +1029,10 @@ func _draw_select() -> void:
 		var fr = poses[int(anim_t * 1.6) % poses.size()]
 		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
 	else:
-		var lhero = ducks["mallard"].get("hero")
-		_blit_modulated(lhero if lhero != null else ducks["mallard"]["idle"][0], Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
+		# locked: the actual species as a dark silhouette — show the shape, keep the mystery
+		var lcur = ducks.get(sp, ducks["mallard"])
+		var lhero = lcur.get("hero")
+		_blit_modulated(lhero if lhero != null else lcur["idle"][0], Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
 		draw_string(font, Vector2(0, 355.0), "LOCKED", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 28, Color(1, 1, 1, 0.7))
 
 	# name + trait + stat bars
@@ -801,8 +1045,12 @@ func _draw_select() -> void:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
 		draw_string(font, Vector2(SEL_PLAY_BTN.position.x, SEL_PLAY_BTN.position.y + 38), "PLAY  >",
 			HORIZONTAL_ALIGNMENT_CENTER, SEL_PLAY_BTN.size.x, 28, Color.WHITE)
+	elif feathers >= duck.cost:
+		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
+		draw_string(font, Vector2(SEL_PLAY_BTN.position.x, SEL_PLAY_BTN.position.y + 38), "UNLOCK · %d 🪶" % duck.cost,
+			HORIZONTAL_ALIGNMENT_CENTER, SEL_PLAY_BTN.size.x, 26, Color(1, 0.92, 0.45))
 	else:
-		draw_string(font, Vector2(0, SEL_PLAY_BTN.position.y + 38), "locked — earn feathers to unlock",
+		draw_string(font, Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d 🪶 to unlock — you have %d" % [duck.cost, feathers],
 			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 20, Color(1, 1, 1, 0.5))
 
 	# roster thumbnails (locked ones ghosted to a silhouette)
@@ -816,12 +1064,14 @@ func _draw_select() -> void:
 			sb.border_color = Color(1, 0.9, 0.4)
 		draw_style_box(sb, r)
 		var rd = ROSTER[i]
-		if rd.unlocked and rd.species != "" and ducks.has(rd.species):
-			var th = ducks[rd.species].get("hero")
-			_blit_centered(th if th != null else ducks[rd.species]["idle"][0], r.get_center(), 1.4)
+		var rcur = ducks.get(rd.species, ducks["mallard"])
+		var th = rcur.get("hero")
+		if th == null:
+			th = rcur["idle"][0]
+		if _is_unlocked(i):
+			_blit_centered(th, r.get_center(), 1.4)
 		else:
-			var lh = ducks["mallard"].get("hero")
-			_blit_modulated(lh if lh != null else ducks["mallard"]["idle"][0], r.get_center(), 1.4, Color(0.34, 0.37, 0.44, 1.0))
+			_blit_modulated(th, r.get_center(), 1.4, Color(0.34, 0.37, 0.44, 1.0))
 
 func _showcase(cur) -> Array:
 	# front-facing turntable: hero face <-> side profiles (never the unflattering belly-up back)

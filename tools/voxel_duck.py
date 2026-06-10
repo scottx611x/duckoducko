@@ -30,9 +30,20 @@ BANK_OFF = [34, 22, 11, 0, -11, -22, -34]
 HERO_YAW, HERO_PITCH = 20, 28   # menu/select front 3/4: full face + chest
 
 
-# ---- palettes ----------------------------------------------------------------
-def palette(hen):
-    if hen:
+# ---- species -------------------------------------------------------------------
+# Each species = a palette (same keys, shared geometry recolors automatically) +
+# geometry flags + a render "size" (bufflehead is just plain small).
+SPECIES = dict(
+    mallard=dict(),
+    hen=dict(hen=True),
+    wood=dict(crest=True, face_paint="wood", red_eye=True),
+    bufflehead=dict(head_scale=1.22, bill_len=14, face_paint="bufflehead", size=0.85),
+    pintail=dict(pin_tail=True, face_paint="pintail"),
+)
+
+
+def palette(sp):
+    if sp == "hen":
         return dict(
             back=(140, 114, 84), body=(174, 148, 112), belly=(206, 184, 148),
             verm_d=(120, 96, 68), verm_l=(196, 174, 138),
@@ -45,7 +56,46 @@ def palette(hen):
             specw=(228, 224, 210), spec=(70, 116, 168), specd=(46, 82, 128),
             tail=(112, 88, 62), tailhi=(150, 124, 92), eye=(22, 18, 20),
         )
-    return dict(
+    if sp == "wood":  # the show-off: iridescent crested head, burgundy chest, buffy flanks
+        return dict(
+            back=(64, 60, 76), body=(192, 162, 104), belly=(214, 200, 164),
+            verm_d=(50, 46, 60), verm_l=(94, 88, 106),
+            nape=(66, 48, 104), head=(36, 112, 72), headh=(92, 172, 112),
+            crown=(70, 50, 110), glint=(144, 222, 162),
+            chest=(124, 48, 58), chestd=(96, 34, 46), chestl=(152, 70, 80),
+            bill=(216, 92, 70), billd=(160, 52, 42), nail=(46, 34, 32), nostril=(120, 50, 40),
+            white=(242, 240, 232), collar=(242, 240, 232),
+            wing=(70, 92, 88), wingd=(52, 70, 66), primary=(40, 50, 54),
+            specw=(236, 234, 226), spec=(58, 108, 172), specd=(40, 76, 128),
+            tail=(40, 36, 48), tailhi=(82, 72, 92), eye=(20, 18, 22),
+        )
+    if sp == "bufflehead":  # tiny: black-and-white, big head wedge patch
+        return dict(
+            back=(32, 30, 38), body=(228, 226, 220), belly=(240, 238, 232),
+            verm_d=(26, 24, 32), verm_l=(52, 50, 60),
+            nape=(40, 34, 58), head=(38, 34, 54), headh=(90, 62, 124),
+            crown=(30, 26, 44), glint=(124, 182, 144),
+            chest=(234, 232, 226), chestd=(204, 202, 196), chestl=(246, 244, 238),
+            bill=(122, 132, 142), billd=(92, 100, 110), nail=(60, 66, 74), nostril=(80, 88, 98),
+            white=(244, 242, 238), collar=(244, 242, 238),
+            wing=(46, 44, 52), wingd=(34, 32, 40), primary=(26, 24, 30),
+            specw=(238, 238, 240), spec=(226, 226, 230), specd=(186, 186, 194),
+            tail=(92, 94, 102), tailhi=(132, 134, 142), eye=(18, 16, 20),
+        )
+    if sp == "pintail":  # the gymnast: chocolate head, white neck stripe, long pin tail
+        return dict(
+            back=(122, 122, 124), body=(172, 172, 170), belly=(214, 212, 206),
+            verm_d=(98, 98, 100), verm_l=(196, 196, 194),
+            nape=(64, 40, 28), head=(94, 60, 42), headh=(124, 84, 60),
+            crown=(72, 46, 32), glint=(142, 102, 72),
+            chest=(238, 236, 228), chestd=(208, 206, 198), chestl=(248, 246, 240),
+            bill=(112, 126, 142), billd=(72, 82, 96), nail=(32, 34, 40), nostril=(60, 68, 80),
+            white=(242, 240, 234), collar=(242, 240, 234),
+            wing=(142, 142, 140), wingd=(110, 110, 108), primary=(72, 72, 70),
+            specw=(228, 222, 192), spec=(96, 120, 76), specd=(66, 86, 54),
+            tail=(36, 36, 40), tailhi=(92, 92, 98), eye=(20, 18, 22),
+        )
+    return dict(  # mallard drake
         back=(132, 126, 110), body=(170, 164, 148), belly=(214, 208, 192),
         verm_d=(116, 110, 96), verm_l=(198, 192, 176),
         nape=(22, 96, 54), head=(40, 142, 80), headh=(96, 196, 128),
@@ -60,9 +110,12 @@ def palette(hen):
 
 
 # ---- voxel model -------------------------------------------------------------
-def build(hen=False, wings="folded"):
-    """Return {(x,y,z): rgb}.  x=right, y=up, z=head(+).  Detailed mallard drake / hen."""
-    P = palette(hen)
+def build(sp="mallard", wings="folded"):
+    """Return {(x,y,z): rgb}.  x=right, y=up, z=head(+).  Shared duck geometry,
+    species palette + flags (crest / head patch / pin tail / face paint)."""
+    spec = SPECIES[sp]
+    hen = spec.get("hen", False)
+    P = palette(sp)
     V = {}
 
     def put(x, y, z, c, only_empty=False):
@@ -121,34 +174,73 @@ def build(hen=False, wings="folded"):
     box(-2, 2, 0, 2, -13, -10, P["tail"])
     box(-1, 1, 2, 3, -12, -10, P["tail"])
     put(-2, 1, -11, P["tailhi"]); put(2, 1, -11, P["tailhi"])
-    if not hen:
+    if sp == "mallard":
         put(0, 4, -10, P["tail"]); put(0, 5, -11, P["tail"]); put(0, 5, -10, P["tail"])  # curl
+    if spec.get("pin_tail"):
+        # the pintail's pin: a long thin point raked up behind the tail
+        box(-1, 1, 2, 3, -15, -13, P["tail"])
+        box(0, 0, 3, 4, -18, -15, P["tail"])
+        put(0, 4, -18, P["tailhi"])
     # ---- neck + head ----
+    hs = spec.get("head_scale", 1.0)
     ellip(0, 3.4, 7, 2.7, 3.0, 2.7, P["head"])
-    ellip(0, 6.6, 10, 3.7, 3.7, 3.6, P["head"])
+    ellip(0, 6.6, 10, 3.7 * hs, 3.7 * hs, 3.6 * hs, P["head"])
     ellip(0, 4.0, 10.2, 3.6, 1.6, 3.2, P["nape"], only_empty=True)     # dark underside/nape
-    ellip(0, 8.2, 10.6, 2.7, 2.1, 2.6, P["headh"], only_empty=True)    # sheen
+    ellip(0, 8.2, 10.6, 2.7 * hs, 2.1 * hs, 2.6 * hs, P["headh"], only_empty=True)  # sheen
     ellip(0, 9.0, 11.0, 1.5, 1.2, 1.6, P["glint"], only_empty=True)    # bright glint
     if hen:
         ellip(0, 8.6, 9.6, 3.4, 1.8, 3.2, P["crown"], only_empty=True)  # dark cap
         for z in range(8, 13):                                          # eye-line
             put(3, 6, z, P["crown"], only_empty=True); put(-3, 6, z, P["crown"], only_empty=True)
-    # ---- white collar ring at neck base ----
-    for a in range(0, 360, 14):
-        x = round(2.9 * math.cos(math.radians(a)))
-        y = round(3.4 + 2.9 * math.sin(math.radians(a)))
-        if (x, y, 7) in V:
-            put(x, y, 7, P["collar"])
-    # ---- bill: long, flat, spatulate ----
-    box(-2, 2, 4, 5, 11, 16, P["bill"])
-    box(-1, 1, 4, 5, 17, 17, P["bill"])               # rounded tip
+    if spec.get("crest"):
+        # wood-duck crest: an iridescent mane sweeping back/down off the head
+        ellip(0, 7.4, 7.2, 2.4, 2.6, 2.6, P["crown"])
+        ellip(0, 5.4, 5.6, 1.7, 1.9, 1.9, P["crown"])
+        ellip(0, 8.8, 8.4, 1.9, 1.6, 2.2, P["nape"], only_empty=True)
+    fp = spec.get("face_paint")
+    if fp == "wood":
+        # two thin white face lines: over the eye to the crest tip + white throat
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["head"], P["headh"], P["crown"], P["nape"]):
+                if abs(x) >= 2 and y == 9 and 6 <= z <= 11:
+                    V[(x, y, z)] = P["white"]
+                elif abs(x) >= 2 and y == 6 and 5 <= z <= 9:
+                    V[(x, y, z)] = P["white"]
+                elif y <= 5 and z >= 10:                       # chin/throat patch
+                    V[(x, y, z)] = P["white"]
+    elif fp == "bufflehead":
+        # the signature wedge: a huge white patch wrapping the back half of the head
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["head"], P["headh"], P["glint"]) and z <= 9.5 and y >= 5.0:
+                V[(x, y, z)] = P["white"]
+    elif fp == "pintail":
+        # white breast finger running up each side of the neck toward the head
+        for y in range(1, 7):
+            for z in (6, 7):
+                if (2, y, z) in V:
+                    V[(2, y, z)] = P["white"]
+                if (-2, y, z) in V:
+                    V[(-2, y, z)] = P["white"]
+    # ---- white collar ring at neck base (mallards only) ----
+    if sp in ("mallard", "hen"):
+        for a in range(0, 360, 14):
+            x = round(2.9 * math.cos(math.radians(a)))
+            y = round(3.4 + 2.9 * math.sin(math.radians(a)))
+            if (x, y, 7) in V:
+                put(x, y, 7, P["collar"])
+    # ---- bill: long, flat, spatulate (short + stubby on a bufflehead) ----
+    bl = spec.get("bill_len", 17)
+    box(-2, 2, 4, 5, 11, bl - 1, P["bill"])
+    box(-1, 1, 4, 5, bl, bl, P["bill"])               # rounded tip
     box(-2, 2, 6, 6, 10, 12, P["billd"], only_empty=True)  # base shade under head
-    box(-2, 2, 5, 5, 12, 16, P["billd"], only_empty=True)  # top ridge
-    box(-1, 1, 4, 5, 17, 17, P["nail"])               # nail at tip
+    box(-2, 2, 5, 5, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
+    box(-1, 1, 4, 5, bl, bl, P["nail"])               # nail at tip
     put(1, 5, 13, P["nostril"]); put(-1, 5, 13, P["nostril"])
     # ---- eyes (+ glint) ----
-    for sx in (3, -3):
-        put(sx, 7, 10, P["eye"]); put(sx, 8, 10, P["eye"]); put(sx, 7, 11, P["eye"])
+    ex = 3 if hs <= 1.0 else 4                        # bigger head -> eyes sit wider
+    eye = (196, 44, 32) if spec.get("red_eye") else P["eye"]
+    for sx in (ex, -ex):
+        put(sx, 7, 10, eye); put(sx, 8, 10, eye); put(sx, 7, 11, eye)
         put(sx, 8, 11, P["white"], only_empty=True)
     return V
 
@@ -254,30 +346,32 @@ def generate_ducks(art_dir):
     def save(img, name):
         img.save(os.path.join(art_dir, name))
 
-    for sp, hen in (("mallard", False), ("hen", True)):
-        SH = shade(build(hen, "folded"))
+    for sp in SPECIES:
+        size = SPECIES[sp].get("size", 1.0)        # bufflehead renders plain small
+        sc = 1.45 * size
+        SH = shade(build(sp, "folded"))
         gy = math.radians(GAME_YAW)
         # idle (gentle head-bob via slight pitch change)
-        save(render(SH, gy, PITCH), "%s_idle_0.png" % sp)
-        save(render(SH, gy, PITCH - math.radians(4)), "%s_idle_1.png" % sp)
+        save(render(SH, gy, PITCH, scale=sc), "%s_idle_0.png" % sp)
+        save(render(SH, gy, PITCH - math.radians(4), scale=sc), "%s_idle_1.png" % sp)
         # menu HERO + duck-select: front 3/4 so you see his face/chest (gameplay is back view)
-        save(render(SH, math.radians(HERO_YAW), math.radians(HERO_PITCH)), "%s_hero.png" % sp)
+        save(render(SH, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_hero.png" % sp)
         # 7-frame banking sweep (offsets from the back-view base)
         for i, off in enumerate(BANK_OFF):
-            save(render(SH, math.radians(GAME_YAW + off), PITCH), "%s_bank_%d.png" % (sp, i))
+            save(render(SH, math.radians(GAME_YAW + off), PITCH, scale=sc), "%s_bank_%d.png" % (sp, i))
         # back-compat aliases (duck-select uses side keys; -1=left=head leans screen-left)
-        save(render(SH, math.radians(GAME_YAW + 15), PITCH), "%s_turn_left.png" % sp)
-        save(render(SH, math.radians(GAME_YAW - 15), PITCH), "%s_turn_right.png" % sp)
-        save(render(SH, math.radians(GAME_YAW + SIDE_YAW), SIDE_PITCH), "%s_side_left.png" % sp)
-        save(render(SH, math.radians(GAME_YAW - SIDE_YAW), SIDE_PITCH), "%s_side_right.png" % sp)
+        save(render(SH, math.radians(GAME_YAW + 15), PITCH, scale=sc), "%s_turn_left.png" % sp)
+        save(render(SH, math.radians(GAME_YAW - 15), PITCH, scale=sc), "%s_turn_right.png" % sp)
+        save(render(SH, math.radians(GAME_YAW + SIDE_YAW), SIDE_PITCH, scale=sc), "%s_side_left.png" % sp)
+        save(render(SH, math.radians(GAME_YAW - SIDE_YAW), SIDE_PITCH, scale=sc), "%s_side_right.png" % sp)
         # hops: wings spread (out / out_up flap), same back-view camera
-        save(render(shade(build(hen, "out")), gy, PITCH), "%s_hop_0.png" % sp)
-        save(render(shade(build(hen, "out_up")), gy, PITCH), "%s_hop_1.png" % sp)
+        save(render(shade(build(sp, "out")), gy, PITCH, scale=sc), "%s_hop_0.png" % sp)
+        save(render(shade(build(sp, "out_up")), gy, PITCH, scale=sc), "%s_hop_1.png" % sp)
         # face: close-up head, front-on (used at mega-hop apex + menus)
         save(render(SH, math.radians(0), math.radians(15), out=FACE_CANVAS,
-                    scale=2.5, cy_frac=0.46), "%s_face.png" % sp)
+                    scale=2.5 * size, cy_frac=0.46), "%s_face.png" % sp)
         # real 3D slices for the mega-hop sprite-stack
-        Vf = build(hen, "folded")
+        Vf = build(sp, "folded")
         for i, sl in enumerate(stack_slices(Vf, shade(Vf))):
             save(sl, "%s_stack_%02d.png" % (sp, i))
     print("ducks generated ->", art_dir)
