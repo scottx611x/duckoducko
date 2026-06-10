@@ -17,13 +17,17 @@ from PIL import Image, ImageDraw
 S = 5                       # supersample
 BODY_CANVAS = 64            # square canvas for idle/bank/side/hop frames
 FACE_CANVAS = 40
-# BACK VIEW: camera behind & above, head/bill leads UP the screen (swims forward).
-PITCH = math.radians(-42)
-SIDE_PITCH = math.radians(-30)
-# 7-frame bank yaw sweep: 0=hard left .. 3=straight .. 6=hard right. Signs verified
-# against the render so the head leans toward travel direction.
-BANK_YAW = [34, 22, 11, 0, -11, -22, -34]
-SIDE_YAW = 70
+# BACK VIEW: camera ABOVE & BEHIND (base yaw 180 + positive pitch) so you see his
+# BACK (green crown, vermiculated back, tail-curl), head leading UP the screen.
+# (A negative pitch instead flips him belly-up -- that was the bug.)
+GAME_YAW = 180
+PITCH = math.radians(48)
+SIDE_PITCH = math.radians(40)
+SIDE_YAW = 70               # side_left = GAME_YAW+SIDE_YAW (head leans screen-left)
+# 7-frame bank sweep as yaw OFFSETS from GAME_YAW: 0=hard left .. 3=straight .. 6=hard
+# right. +offset leans the head screen-LEFT (toward travel for a left steer). Verified.
+BANK_OFF = [34, 22, 11, 0, -11, -22, -34]
+HERO_YAW, HERO_PITCH = 20, 28   # menu/select front 3/4: full face + chest
 
 
 # ---- palettes ----------------------------------------------------------------
@@ -252,24 +256,25 @@ def generate_ducks(art_dir):
 
     for sp, hen in (("mallard", False), ("hen", True)):
         SH = shade(build(hen, "folded"))
-        # idle (gentle head-bob via slight pitch change, since back view is symmetric)
-        save(render(SH, 0, PITCH), "%s_idle_0.png" % sp)
-        save(render(SH, 0, PITCH + math.radians(4)), "%s_idle_1.png" % sp)
+        gy = math.radians(GAME_YAW)
+        # idle (gentle head-bob via slight pitch change)
+        save(render(SH, gy, PITCH), "%s_idle_0.png" % sp)
+        save(render(SH, gy, PITCH - math.radians(4)), "%s_idle_1.png" % sp)
         # menu HERO + duck-select: front 3/4 so you see his face/chest (gameplay is back view)
-        save(render(SH, math.radians(158), math.radians(30)), "%s_hero.png" % sp)
-        # 7-frame banking sweep
-        for i, yv in enumerate(BANK_YAW):
-            save(render(SH, math.radians(yv), PITCH), "%s_bank_%d.png" % (sp, i))
-        # back-compat aliases (duck-select turntable uses turn/side keys)
-        save(render(SH, math.radians(-22), PITCH), "%s_turn_left.png" % sp)
-        save(render(SH, math.radians(22), PITCH), "%s_turn_right.png" % sp)
-        save(render(SH, math.radians(-SIDE_YAW), SIDE_PITCH), "%s_side_left.png" % sp)
-        save(render(SH, math.radians(SIDE_YAW), SIDE_PITCH), "%s_side_right.png" % sp)
-        # hops: wings spread (out / out_up flap)
-        save(render(shade(build(hen, "out")), 0, PITCH), "%s_hop_0.png" % sp)
-        save(render(shade(build(hen, "out_up")), 0, PITCH), "%s_hop_1.png" % sp)
+        save(render(SH, math.radians(HERO_YAW), math.radians(HERO_PITCH)), "%s_hero.png" % sp)
+        # 7-frame banking sweep (offsets from the back-view base)
+        for i, off in enumerate(BANK_OFF):
+            save(render(SH, math.radians(GAME_YAW + off), PITCH), "%s_bank_%d.png" % (sp, i))
+        # back-compat aliases (duck-select uses side keys; -1=left=head leans screen-left)
+        save(render(SH, math.radians(GAME_YAW + 15), PITCH), "%s_turn_left.png" % sp)
+        save(render(SH, math.radians(GAME_YAW - 15), PITCH), "%s_turn_right.png" % sp)
+        save(render(SH, math.radians(GAME_YAW + SIDE_YAW), SIDE_PITCH), "%s_side_left.png" % sp)
+        save(render(SH, math.radians(GAME_YAW - SIDE_YAW), SIDE_PITCH), "%s_side_right.png" % sp)
+        # hops: wings spread (out / out_up flap), same back-view camera
+        save(render(shade(build(hen, "out")), gy, PITCH), "%s_hop_0.png" % sp)
+        save(render(shade(build(hen, "out_up")), gy, PITCH), "%s_hop_1.png" % sp)
         # face: close-up head, front-on (used at mega-hop apex + menus)
-        save(render(SH, math.radians(180), math.radians(14), out=FACE_CANVAS,
+        save(render(SH, math.radians(0), math.radians(15), out=FACE_CANVAS,
                     scale=2.5, cy_frac=0.46), "%s_face.png" % sp)
         # real 3D slices for the mega-hop sprite-stack
         Vf = build(hen, "folded")
