@@ -1,6 +1,20 @@
 # DUCKODUCKO 🦆
 
-A whimsical top-down tap-to-hop duck game. See `DESIGN.md` and `WHIMSY.md`.
+A whimsical top-down tap-to-hop duck roguelike. See `DESIGN.md` and `WHIMSY.md`.
+
+## 🌐 Play it (beta)
+
+**https://scottx611x.github.io/duckoducko-web/** — runs in any browser, sound on.
+Name your duck on the menu; feathers, unlocks, and your best distance persist in
+the browser (per-device localStorage — a shared online leaderboard needs a tiny
+backend and is parked for now).
+
+Ship a new build to the beta testers:
+```
+tools/deploy_web.sh
+```
+(rebuilds the Web export into `docs/` and pushes it to the public
+`scottx611x/duckoducko-web` Pages repo — this source repo stays private)
 
 ## M1 prototype (this)
 

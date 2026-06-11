@@ -3,6 +3,7 @@
 
 # Godot export artifacts
 /build/
+/docs/
 *.translation
 
 # Python tooling

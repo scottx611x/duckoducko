@@ -192,6 +192,19 @@ def unlock():
     return out
 
 
+def peep():
+    """A duckling's tiny chirp."""
+    dur = 0.12
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        f = 1500.0 + 500.0 * math.sin(p * math.pi)      # chirp up then down
+        s = sine(f, t) * 0.8 + sine(f * 2.0, t) * 0.1
+        out.append(s * env(t, dur, 0.004, 2.0) * 0.4)
+    return out
+
+
 def click():
     """UI tick."""
     dur = 0.05
@@ -214,4 +227,5 @@ if __name__ == "__main__":
     save("quack.wav", quack())
     save("unlock.wav", unlock())
     save("click.wav", click())
+    save("peep.wav", peep())
     print("done.")

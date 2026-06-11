@@ -463,11 +463,14 @@ def make_heron(frame=0):
 
 
 def make_water():
-    img = Image.new("RGBA", (64, 64), (46, 102, 130, 255))
+    """Richer water: layered wave crests, deep troughs, sparse sun sparkles."""
+    img = Image.new("RGBA", (64, 64), (38, 92, 124, 255))
     px = img.load()
-    crest = (70, 132, 160, 255)
-    crest_hi = (96, 158, 184, 255)
-    trough = (36, 86, 112, 255)
+    crest = (62, 124, 154, 255)
+    crest_hi = (92, 154, 182, 255)
+    trough = (28, 76, 104, 255)
+    deep = (22, 66, 94, 255)
+    sparkle = (190, 226, 240, 255)
     for y in range(64):
         for x in range(64):
             s = (x + y)
@@ -477,6 +480,58 @@ def make_water():
                 px[x, y] = crest_hi
             elif (x - y) % 16 == 0 and (x + y * 2) % 32 < 4:
                 px[x, y] = trough
+            elif (x * 7 + y * 3) % 64 == 0 and (x - y) % 24 < 3:
+                px[x, y] = deep
+    # sun sparkles (deterministic scatter)
+    for i in range(10):
+        sx = (i * 23 + 7) % 64
+        sy = (i * 41 + 13) % 64
+        px[sx, sy] = sparkle
+    return img
+
+
+def make_bank(side="left"):
+    """Grassy river bank strip with reeds, cattails and tiny flowers (tiles vertically)."""
+    W, H = 28, 64
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    px = img.load()
+    GRASS = (64, 128, 66, 255)
+    GRASSD = (48, 104, 52, 255)
+    GRASSL = (88, 152, 82, 255)
+    DIRT = (110, 88, 56, 255)
+    DIRTD = (84, 66, 42, 255)
+    REED = (70, 118, 56, 255)
+    CAT = (124, 82, 46, 255)
+    # grass body with mottle
+    d.rectangle([0, 0, W - 5, H], fill=GRASS)
+    for y in range(H):
+        for x in range(0, W - 4):
+            h = (x * 31 + y * 17) % 11
+            if h == 0:
+                px[x, y] = GRASSD
+            elif h == 1:
+                px[x, y] = GRASSL
+    # dirt lip at the waterline
+    d.rectangle([W - 5, 0, W - 3, H], fill=DIRT)
+    d.rectangle([W - 3, 0, W - 2, H], fill=DIRTD)
+    for y in range(0, H, 7):                       # ragged edge
+        px[W - 2, y] = DIRTD
+        px[W - 1, (y + 3) % H] = DIRTD
+    # cattails + reeds along the lip
+    for i, ry in enumerate(range(4, H, 16)):
+        rx = W - 9 + (i % 2) * 3
+        d.line([rx, ry + 12, rx, ry], fill=REED)
+        d.line([rx, ry + 6, rx + 2, ry + 2], fill=REED)   # leaf
+        if i % 2 == 0:
+            d.rectangle([rx - 1, ry, rx, ry + 4], fill=CAT)   # the sausage
+    # tiny flowers
+    for i in range(5):
+        fx = (i * 11 + 3) % (W - 8)
+        fy = (i * 27 + 9) % H
+        px[fx, fy] = (244, 240, 220, 255) if i % 2 else (232, 150, 170, 255)
+    if side == "right":
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
     return img
 
 
@@ -488,8 +543,9 @@ def save(img, name):
 # Ducks now come from the VOXEL model (single source of truth for 2D views + the
 # 3D mega-hop slices); see tools/voxel_duck.py.  The make_duck_* helpers above are
 # retained only as the prior 2D-only fallback and are no longer wired up.
-from voxel_duck import generate_ducks
+from voxel_duck import generate_ducks, generate_critters
 generate_ducks(ART)
+generate_critters(ART)          # voxel heron + ducklings (replaces 2D make_heron)
 
 save(make_shadow(), "shadow.png")
 save(make_log(), "log.png")
@@ -498,7 +554,7 @@ save(make_bug(), "bug.png")
 save(make_bread(), "bread.png")
 save(make_berry(), "berry.png")
 save(make_frog(), "frog.png")
-save(make_heron(0), "heron_0.png")
-save(make_heron(1), "heron_1.png")
 save(make_water(), "water.png")
+save(make_bank("left"), "bank_left.png")
+save(make_bank("right"), "bank_right.png")
 print("done.")

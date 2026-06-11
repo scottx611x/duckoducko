@@ -410,6 +410,123 @@ def generate_ducks(art_dir):
     print("ducks generated ->", art_dir)
 
 
+# ---- critters: the heron (baddie) + ducklings (the heart-melter) ---------------
+def _vox_helpers(V):
+    def put(x, y, z, c, only_empty=False):
+        if only_empty and (x, y, z) in V:
+            return
+        V[(x, y, z)] = c
+
+    def ellip(cx, cy, cz, rx, ry, rz, c, only_empty=False):
+        for x in range(int(cx - rx - 1), int(cx + rx + 2)):
+            for y in range(int(cy - ry - 1), int(cy + ry + 2)):
+                for z in range(int(cz - rz - 1), int(cz + rz + 2)):
+                    if ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2 <= 1.0:
+                        put(x, y, z, c, only_empty)
+
+    def box(x0, x1, y0, y1, z0, z1, c, only_empty=False):
+        for x in range(x0, x1 + 1):
+            for y in range(y0, y1 + 1):
+                for z in range(z0, z1 + 1):
+                    put(x, y, z, c, only_empty)
+    return put, ellip, box
+
+
+def build_heron(flap=0):
+    """Great blue heron in a strike dive, seen from above. Head points +z
+    (rendered yaw=0 so it dives DOWN the screen toward the duck)."""
+    BODY = (122, 136, 154); BODYD = (94, 106, 124); COVERT = (108, 122, 140)
+    PRIM = (40, 44, 54); WHITE = (240, 242, 244); CREST = (26, 28, 36)
+    BILL = (228, 182, 72); RUST = (148, 94, 62); LEG = (62, 54, 46)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    # slim body, darker mantle
+    ellip(0, 0, 0, 3.2, 2.6, 5.5, BODY)
+    ellip(0, 1.4, -0.5, 2.6, 1.8, 4.8, BODYD, only_empty=True)
+    ellip(0, -1.6, 1.0, 2.4, 1.4, 4.0, WHITE, only_empty=True)   # pale belly
+    # huge spread wings, primaries black, slight sweep-back; flap lifts/droops tips
+    for s in (1, -1):
+        for w in range(11):
+            x = (3 + w) * s
+            lift = (1 if flap == 0 else 2) + (w // 4) - (w // 5 if flap else 0)
+            z0 = -4 + (w // 2)          # trailing edge sweeps forward
+            z1 = 3 - (w // 4)           # leading edge sweeps back
+            col = PRIM if w >= 8 else (COVERT if w % 2 else BODY)
+            box(x, x, lift, lift + 1, z0, z1, col)
+            if w < 8 and w % 3 == 0:    # covert rows
+                box(x, x, lift + 1, lift + 1, z0 + 1, z1 - 1, BODYD)
+    # extended strike neck: white throat, slate sides
+    box(-1, 1, 1, 2, 5, 8, BODY)
+    box(0, 0, 0, 1, 6, 9, WHITE)
+    box(0, 0, 1, 2, 9, 11, WHITE)
+    # head: white crown, black brow stripes sweeping to a trailing plume
+    ellip(0, 2.6, 12, 1.9, 1.7, 2.1, WHITE)
+    for z in (11, 12, 13):
+        put(1, 4, z, CREST); put(-1, 4, z, CREST)
+    put(0, 4, 10, CREST); put(0, 5, 9, CREST); put(0, 5, 8, CREST)   # the plume
+    # dagger bill
+    box(0, 0, 2, 3, 14, 18, BILL)
+    put(0, 2, 19, BILL)
+    # fierce little eyes
+    put(2, 3, 12, (244, 204, 60)); put(-2, 3, 12, (244, 204, 60))
+    put(2, 3, 13, CREST); put(-2, 3, 13, CREST)
+    # rusty thighs + trailing legs
+    for s in (1, -1):
+        put(s, -1, -5, RUST)
+        for z in range(-11, -5):
+            put(s, 0 if z > -9 else 1, z, LEG)
+    return V
+
+
+def build_duckling(wings="folded"):
+    """A fuzzy duckling: yellow puff, dark cap, stubby everything."""
+    BUFF = (244, 216, 122); BUFFD = (212, 182, 94); BELLY = (252, 240, 186)
+    CAP = (176, 144, 62); BILL = (240, 162, 72); EYE = (26, 22, 18)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    ellip(0, 0, 0, 3.2, 2.8, 4.0, BUFF)
+    ellip(0, -1.4, 0.5, 2.6, 1.8, 3.2, BELLY, only_empty=True)
+    ellip(0, 1.6, -0.5, 2.4, 1.6, 3.2, BUFFD, only_empty=True)
+    # fuzz speckles
+    for (x, y, z) in list(V.keys()):
+        if V[(x, y, z)] == BUFF and (x * 37 + y * 13 + z * 59) % 8 == 0:
+            V[(x, y, z)] = BUFFD
+    if wings == "out":                       # stubby flailing wing nubs
+        for s in (1, -1):
+            box(3 * s, 4 * s, 1, 1, -1, 1, BUFFD)
+    # big head, dark cap
+    ellip(0, 2.6, 2.6, 2.7, 2.5, 2.5, BUFF)
+    ellip(0, 4.0, 2.2, 2.2, 1.4, 2.2, CAP, only_empty=True)
+    # eyes + tiny bill
+    put(2, 3, 4, EYE); put(-2, 3, 4, EYE)
+    box(-1, 1, 2, 2, 5, 6, BILL)
+    put(0, 1, -4, BUFFD)                     # tail tuft
+    return V
+
+
+def generate_critters(art_dir):
+    import os
+
+    def save(img, name):
+        img.save(os.path.join(art_dir, name))
+
+    # heron: dive pose, two flap frames, rendered larger than a duck
+    for f in (0, 1):
+        SH = shade(build_heron(f))
+        save(render(SH, math.radians(0), math.radians(55), out=72, scale=1.5),
+             "heron_%d.png" % f)
+    # duckling: back view to match gameplay camera
+    gy = math.radians(GAME_YAW)
+    SHd = shade(build_duckling("folded"))
+    save(render(SHd, gy, PITCH, out=32, scale=1.5), "duckling_idle_0.png")
+    save(render(SHd, gy, PITCH - math.radians(5), out=32, scale=1.5), "duckling_idle_1.png")
+    SHo = shade(build_duckling("out"))
+    save(render(SHo, gy, PITCH, out=32, scale=1.5), "duckling_hop_0.png")
+    save(render(SHo, gy, PITCH - math.radians(6), out=32, scale=1.5), "duckling_hop_1.png")
+    print("critters generated ->", art_dir)
+
+
 if __name__ == "__main__":
     import os
     generate_ducks(os.path.join(os.path.dirname(__file__), "..", "art"))
+    generate_critters(os.path.join(os.path.dirname(__file__), "..", "art"))

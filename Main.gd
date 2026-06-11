@@ -23,17 +23,39 @@ const LASER_W := 78.0
 
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.", "a HERON!"]
 
-# roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades
+# roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades.
+# rarity: 0=common, 1=rare (blue), 2=epic (gold) — weighted deal, colored cards.
 const DRAFT_EVERY := 4000.0     # distance units (10 = 1m)
 const UPGRADES := [
-	{"id": "spring", "name": "SPRING LEGS", "desc": "+15% hop height & hang time"},
-	{"id": "double", "name": "DOUBLE HOP", "desc": "hop again in mid-air"},
-	{"id": "magnet", "name": "CRUMB MAGNET", "desc": "+45% collect reach"},
-	{"id": "shield", "name": "THICK FEATHERS", "desc": "shrug off one bonk"},
-	{"id": "loft", "name": "LOFT ENGINE", "desc": "LOFT fills 30% faster"},
-	{"id": "zen", "name": "LAZY RIVER", "desc": "the river ramps up 25% slower"},
-	{"id": "snacks", "name": "SNACK RADAR", "desc": "+35% more snacks float by"},
-	{"id": "tiny", "name": "TUCK & TRIM", "desc": "10% smaller duck"},
+	{"id": "spring", "name": "SPRING LEGS", "desc": "+15% hop height & hang time", "rarity": 0},
+	{"id": "magnet", "name": "CRUMB MAGNET", "desc": "+45% collect reach", "rarity": 0},
+	{"id": "snacks", "name": "SNACK RADAR", "desc": "+35% more snacks float by", "rarity": 0},
+	{"id": "zen", "name": "LAZY RIVER", "desc": "the river ramps up 25% slower", "rarity": 0},
+	{"id": "loft", "name": "LOFT ENGINE", "desc": "LOFT fills 30% faster", "rarity": 1},
+	{"id": "tiny", "name": "TUCK & TRIM", "desc": "10% smaller duck", "rarity": 1},
+	{"id": "shield", "name": "THICK FEATHERS", "desc": "shrug off one bonk", "rarity": 1},
+	{"id": "duckling", "name": "A DUCKLING", "desc": "+1 buddy · +8% pace · takes a bonk for you", "rarity": 1},
+	{"id": "springy", "name": "BOUNCY RIVER", "desc": "golden spring logs twice as often", "rarity": 1},
+	{"id": "double", "name": "DOUBLE HOP", "desc": "hop again in mid-air", "rarity": 2},
+	{"id": "trio", "name": "DUCKLING PARADE", "desc": "+3 little buddies, peeping", "rarity": 2},
+	{"id": "gold", "name": "GOLDEN BILL", "desc": "every snack counts double", "rarity": 2},
+]
+const RARITY_W := [1.0, 0.5, 0.2]
+const RARITY_COL := [Color(0.85, 0.88, 0.92), Color(0.45, 0.75, 1.0), Color(1.0, 0.84, 0.3)]
+const RARITY_NAME := ["", "RARE", "EPIC"]
+const MAX_DUCKLINGS := 8
+const BANK_W := 26.0            # reed-lined banks frame the river
+const SPRING_LOG_CHANCE := 0.12
+
+const FACTS := [
+	"ducks invented the kazoo.",
+	"a group of ducklings is called a 'consequence.'",
+	"herons are legally required to be dramatic.",
+	"bread is a social construct.",
+	"the river is mostly water.",
+	"wood ducks cannot read. don't test them.",
+	"golden logs are 100% certified bouncy.",
+	"quack responsibly.",
 ]
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
@@ -113,6 +135,15 @@ var next_draft := DRAFT_EVERY
 var picked := {}                # upgrade id -> stacks taken this run
 var shield_charges := 0
 var air_hops := 0               # double-hops spent since last landing
+var hyper := false              # current MEGA is a spring-log hyper jump
+
+# the duckling conga line (WHIMSY §4): derived from a position/hop history
+var ducklings_n := 0
+var trail: Array = []           # {t, x} — duck_x history for followers
+var hop_events: Array = []      # hop start times — ducklings mirror them late
+
+# particles: splashes, sparkles, fluff
+var parts: Array = []           # {x, y, vx, vy, t, life, col}
 
 var loft := 0.0
 var loft_ready := false
@@ -165,7 +196,13 @@ var tex_frog: Texture2D
 var tex_heron := []
 var tex_items := {}
 var tex_water: Texture2D
+var tex_bank_l: Texture2D
+var tex_bank_r: Texture2D
+var tex_duckling := {}          # {"idle": [..], "hop": [..]}
 var has_art := false
+
+var duck_name := ""             # beta tester's duck, for bragging rights
+var name_edit: LineEdit
 
 # ---- audio --------------------------------------------------------------------
 var sfx := {}                   # name -> AudioStream
@@ -182,6 +219,14 @@ func _ready() -> void:
 	tex_frog = load("res://art/frog.png")
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
 	tex_water = load("res://art/water.png")
+	if ResourceLoader.exists("res://art/bank_left.png"):
+		tex_bank_l = load("res://art/bank_left.png")
+		tex_bank_r = load("res://art/bank_right.png")
+	if ResourceLoader.exists("res://art/duckling_idle_0.png"):
+		tex_duckling = {
+			"idle": [load("res://art/duckling_idle_0.png"), load("res://art/duckling_idle_1.png")],
+			"hop": [load("res://art/duckling_hop_0.png"), load("res://art/duckling_hop_1.png")],
+		}
 	for kind in ITEM_DEFS:
 		tex_items[kind.name] = load("res://art/%s.png" % kind.name)
 	has_art = ducks.has("mallard") and ducks["mallard"]["idle"][0] != null and tex_water != null
@@ -215,7 +260,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click"]:
+			"mega", "laser", "quack", "unlock", "click", "peep"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -224,7 +269,19 @@ func _ready() -> void:
 		add_child(pl)
 		sfx_pool.append(pl)
 
+	name_edit = LineEdit.new()
+	name_edit.placeholder_text = "name your duck"
+	name_edit.max_length = 16
+	name_edit.size = Vector2(250, 42)
+	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 838)
+	name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_edit.text_changed.connect(func(t: String) -> void:
+		duck_name = t.strip_edges()
+		_save())
+	hud.add_child(name_edit)
+
 	_load_save()
+	name_edit.text = duck_name
 	reset_game()
 	_enter_menu()
 	if "--smoke" in OS.get_cmdline_user_args():
@@ -252,6 +309,21 @@ func _smoke() -> void:
 	print("SMOKE drafting=", drafting, " choices=", draft_choices.size())
 	_on_press(_draft_rect(1).get_center())             # take the middle card
 	print("SMOKE picked=", picked, " drafting=", drafting)
+	# ducklings: pick a parade, then let one soak a bonk
+	_pick_upgrade(UPGRADES[10])                        # trio
+	print("SMOKE ducklings=", ducklings_n)
+	# spring log under the duck -> hyper jump
+	logs.append({"x": duck_x, "y": BASE_Y, "w": 160.0, "h": 46.0, "missed": false,
+		"spring": true, "phase": 0.0, "frog": false, "frog_gone": false})
+	await get_tree().create_timer(0.2).timeout
+	print("SMOKE hyper=", hyper, " state=", state)
+	await get_tree().create_timer(cur_mega_dur() + 0.3).timeout
+	# plain log under the duck -> a duckling takes it
+	var before := ducklings_n
+	logs.append({"x": duck_x, "y": BASE_Y, "w": 160.0, "h": 46.0, "missed": false,
+		"spring": false, "phase": 0.0, "frog": false, "frog_gone": false})
+	await get_tree().create_timer(0.2).timeout
+	print("SMOKE duckling soak: ", before, "->", ducklings_n, " alive=", alive)
 	distance = 4990.0                                  # cross a theme boundary
 	await get_tree().create_timer(0.6).timeout
 	print("SMOKE theme=", THEMES[theme_idx].name, " sweep=", theme_sweep)
@@ -289,12 +361,14 @@ func _load_save() -> void:
 		feathers = cfg.get_value("save", "feathers", 0)
 		best_m = cfg.get_value("save", "best_m", 0)
 		unlocked_extra = cfg.get_value("save", "unlocked", [])
+		duck_name = cfg.get_value("save", "duck_name", "")
 
 func _save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("save", "feathers", feathers)
 	cfg.set_value("save", "best_m", best_m)
 	cfg.set_value("save", "unlocked", unlocked_extra)
+	cfg.set_value("save", "duck_name", duck_name)
 	cfg.save("user://save.cfg")
 
 func _is_unlocked(i: int) -> bool:
@@ -341,7 +415,10 @@ func _dbg() -> void:
 	start_game()                        # species becomes hen
 	distance = 1300.0
 	logs.append({"x": 130.0, "y": 200.0, "w": 170.0, "h": 46.0, "missed": false, "phase": 0.0, "frog": true, "frog_gone": false})
+	logs.append({"x": 380.0, "y": 480.0, "w": 150.0, "h": 46.0, "missed": false, "spring": true, "phase": 1.3, "frog": false, "frog_gone": false})
 	enemies.append({"x": 300.0, "y": 360.0, "vy": 0.0})
+	ducklings_n = 3
+	await get_tree().create_timer(0.5).timeout      # let the trail fill in
 	state = St.HOPPING
 	hop_t = HOP_DUR * 0.4
 	await get_tree().create_timer(0.05).timeout
@@ -386,6 +463,8 @@ func _enter_menu() -> void:
 	score_label.visible = false
 	loft_bar.visible = false
 	center_label.visible = false
+	if name_edit != null:
+		name_edit.visible = true
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 
@@ -393,6 +472,7 @@ func _open_select() -> void:
 	in_menu = false
 	in_select = true
 	select_yaw = 0.0
+	name_edit.visible = false
 
 func start_game() -> void:
 	in_menu = false
@@ -406,12 +486,15 @@ func start_game() -> void:
 	reset_game()
 	score_label.visible = true
 	loft_bar.visible = true
+	name_edit.visible = false
 
 # per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
 func cur_hop_dur() -> float:
 	return HOP_DUR * duck_hop_mul * _hop_boost()
 
 func cur_mega_dur() -> float:
+	if hyper:
+		return 1.7                                  # spring-log arc: shorter, punchier
 	return MEGA_DUR * (0.9 + 0.2 * duck_hop_mul)
 
 # ---- roguelike upgrades ---------------------------------------------------------
@@ -427,11 +510,26 @@ func _size_mul() -> float:
 func _open_draft() -> void:
 	drafting = true
 	next_draft += DRAFT_EVERY
-	var pool := UPGRADES.duplicate()
-	pool.shuffle()
-	draft_choices = pool.slice(0, 3)
+	draft_choices = _deal_draft()
 	center_label.visible = false
 	_sfx("chime", 1.25)
+
+# rarity-weighted deal of 3 distinct upgrades (epics are the chase)
+func _deal_draft() -> Array:
+	var pool := UPGRADES.duplicate()
+	var out: Array = []
+	for n in 3:
+		var total := 0.0
+		for u in pool:
+			total += RARITY_W[u.rarity]
+		var r := randf() * total
+		for i in pool.size():
+			r -= RARITY_W[pool[i].rarity]
+			if r <= 0.0 or i == pool.size() - 1:
+				out.append(pool[i])
+				pool.remove_at(i)
+				break
+	return out
 
 func _draft_rect(i: int) -> Rect2:
 	return Rect2(70.0, 310.0 + i * 150.0, 400.0, 130.0)
@@ -440,9 +538,52 @@ func _pick_upgrade(u: Dictionary) -> void:
 	picked[u.id] = picked.get(u.id, 0) + 1
 	if u.id == "shield":
 		shield_charges += 1
+	elif u.id == "duckling":
+		_add_ducklings(1)
+	elif u.id == "trio":
+		_add_ducklings(3)
 	drafting = false
 	_sfx("unlock")
 	_flash(u.name + "!")
+
+func _add_ducklings(n: int) -> void:
+	ducklings_n = mini(ducklings_n + n, MAX_DUCKLINGS)
+	for i in n:
+		_sfx("peep", randf_range(0.9, 1.2))
+	_spawn_parts(duck_x, BASE_Y + 40.0, 10, Color(0.97, 0.87, 0.45), 120.0)
+
+func _lose_duckling() -> void:
+	ducklings_n -= 1
+	duck_shake = 0.25
+	_sfx("peep", 0.7)
+	_flash("PEEP!\n(he's fine. probably.)")
+	_spawn_parts(duck_x, BASE_Y + 38.0 * (ducklings_n + 1), 14, Color(0.97, 0.87, 0.45), 150.0)
+
+# the spring-log payoff: an instant invincible hyper arc
+func hyper_jump() -> void:
+	state = St.MEGA
+	mega_t = 0.0
+	mega_style = "fly"
+	hyper = true
+	_sfx("mega", 1.4)
+	_flash("BOING!")
+	_spawn_parts(duck_x, BASE_Y, 12, Color(1.0, 0.9, 0.4), 220.0)
+
+# ---- particles -----------------------------------------------------------------
+func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
+	for i in n:
+		var a := randf() * TAU
+		var s := randf_range(spd * 0.35, spd)
+		parts.append({"x": x, "y": y, "vx": cos(a) * s, "vy": sin(a) * s - spd * 0.45,
+			"t": 0.0, "life": randf_range(0.3, 0.65), "col": col})
+
+func _update_parts(delta: float) -> void:
+	for p in parts:
+		p.t += delta
+		p.x += p.vx * delta
+		p.y += p.vy * delta + speed * delta * 0.4
+		p.vy += 340.0 * delta
+	parts = parts.filter(func(p): return p.t < p.life)
 
 func reset_game() -> void:
 	state = St.GROUNDED
@@ -486,6 +627,11 @@ func reset_game() -> void:
 	picked.clear()
 	shield_charges = 0
 	air_hops = 0
+	hyper = false
+	ducklings_n = 0
+	trail.clear()
+	hop_events.clear()
+	parts.clear()
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 	center_label.visible = false
@@ -502,6 +648,8 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
 		_on_drag(event.position)
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if name_edit != null and name_edit.has_focus():
+			return                                 # typing a duck name, not playing
 		if event.keycode == KEY_SPACE:
 			if in_menu: start_game()
 			else: hop()
@@ -513,6 +661,9 @@ func _input(event: InputEvent) -> void:
 func _on_press(pos: Vector2) -> void:
 	idle_timer = 0.0
 	if in_menu:
+		if Rect2(name_edit.position, name_edit.size).has_point(pos):
+			return                                 # let the LineEdit take the tap
+		name_edit.release_focus()
 		_sfx("click")
 		if MENU_DUCKS_BTN.has_point(pos):
 			_open_select()
@@ -553,7 +704,7 @@ func _on_drag(pos: Vector2) -> void:
 		return
 	if (pos - press_pos).length() > 18.0:
 		moved = true
-	target_x = clampf(pos.x, DUCK_R, VIEW.x - DUCK_R)
+	target_x = clampf(pos.x, BANK_W + DUCK_R, VIEW.x - BANK_W - DUCK_R)
 
 func _select_press(pos: Vector2) -> void:
 	spin_prev_x = pos.x
@@ -597,6 +748,7 @@ func hop() -> void:
 		state = St.HOPPING
 		hop_t = 0.0
 		hop_count += 1
+		hop_events.append(anim_t)                  # the ducklings are watching
 		fancy = hop_count >= fancy_next
 		if fancy:
 			fancy_next = hop_count + 8 + randi() % 6
@@ -606,6 +758,7 @@ func hop() -> void:
 	elif state == St.HOPPING and air_hops < _up("double"):
 		air_hops += 1                              # DOUBLE HOP: relaunch mid-air
 		hop_t = 0.0
+		hop_events.append(anim_t)
 		_sfx("hop", 1.2)
 
 func mega_hop() -> void:
@@ -614,6 +767,7 @@ func mega_hop() -> void:
 	state = St.MEGA
 	mega_t = 0.0
 	mega_style = "fly" if randf() < 0.5 else "tumble"
+	hyper = false
 	loft = 0.0
 	loft_ready = false
 	_sfx("mega")
@@ -644,7 +798,8 @@ func die(msg: String) -> void:
 			build += ("" if build == "" else " · ") + u.name + ("" if n == 1 else " ×%d" % n)
 	if build != "":
 		build = "\n" + build
-	center_label.text = "%s\n\n%d m · %s\n+%d 🪶%s\n\ntap to retry" % [msg, m, sub, run_feathers, build]
+	var who := duck_name if duck_name != "" else "you"
+	center_label.text = "%s\n\n%s paddled %d m · %s\n+%d 🪶%s\n\ntap to retry" % [msg, who, m, sub, run_feathers, build]
 	center_label.visible = true
 
 # ---- per-frame ---------------------------------------------------------------
@@ -659,8 +814,15 @@ func _process(delta: float) -> void:
 
 func _update_play(delta: float) -> void:
 	speed = BASE_SPEED + SPEED_RAMP * (distance / 200.0) * pow(0.75, _up("zen"))
-	distance += speed * delta
+	distance += speed * delta * (1.0 + 0.08 * ducklings_n)   # the conga pays
 	idle_timer += delta
+
+	trail.append({"t": anim_t, "x": duck_x})
+	while trail.size() > 240:
+		trail.pop_front()
+	while hop_events.size() > 0 and anim_t - hop_events[0] > 3.0:
+		hop_events.pop_front()
+	_update_parts(delta)
 
 	# milestone chime every 100m, climbing a pentatonic scale
 	if int(distance / 10.0) >= next_milestone:
@@ -719,7 +881,7 @@ func _update_hop(delta: float) -> void:
 				_land(false)
 		St.MEGA:
 			mega_t += delta
-			var z := 1.0 - 0.26 * hop_height()
+			var z := 1.0 - (0.12 if hyper else 0.26) * hop_height()
 			cam.zoom = Vector2(z, z)
 			for it in items:
 				if not it.got and absf(it.x - duck_x) < 70.0 * (1.0 + 0.45 * _up("magnet")):
@@ -749,9 +911,12 @@ func _land(mega: bool) -> void:
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
 		_sfx("splash_big")
-		_flash("WHEE.")
+		_flash("BOING." if hyper else "WHEE.")
+		_spawn_parts(duck_x, BASE_Y, 18, Color(0.9, 0.97, 1.0), 260.0)
+		hyper = false
 	else:
 		_sfx("splash", randf_range(0.9, 1.1), -6.0)
+		_spawn_parts(duck_x, BASE_Y, 7, Color(0.9, 0.97, 1.0), 150.0)
 
 func _update_wake(delta: float) -> void:
 	wake_timer -= delta
@@ -773,21 +938,22 @@ func _spawn(delta: float) -> void:
 	log_timer -= delta
 	if log_timer <= 0.0 and distance > LOG_START_DIST:
 		var w := randf_range(110.0, 230.0)
+		var is_spring := randf() < SPRING_LOG_CHANCE * (2.0 if _up("springy") > 0 else 1.0)
 		logs.append({
-			"x": randf_range(w * 0.5, VIEW.x - w * 0.5),
-			"y": -60.0, "w": w, "h": 46.0, "missed": false,
-			"phase": randf() * TAU, "frog": randf() < 0.35, "frog_gone": false,
+			"x": randf_range(w * 0.5 + BANK_W, VIEW.x - w * 0.5 - BANK_W),
+			"y": -60.0, "w": w, "h": 46.0, "missed": false, "spring": is_spring,
+			"phase": randf() * TAU, "frog": (not is_spring) and randf() < 0.35, "frog_gone": false,
 		})
 		log_timer = randf_range(0.65, 1.15) * (BASE_SPEED / speed) + 0.25
 
 	item_timer -= delta
 	if item_timer <= 0.0:
-		items.append({"x": randf_range(40.0, VIEW.x - 40.0), "y": -40.0, "got": false, "kind": _pick_kind()})
+		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks"))
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START:
-		var hx := clampf(duck_x + randf_range(-140.0, 140.0), 40.0, VIEW.x - 40.0)
+		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0})
 		heron_timer = randf_range(4.5, 8.0)
 
@@ -846,12 +1012,20 @@ func _collide() -> void:
 					if l.frog and not l.frog_gone:
 						l.frog_gone = true
 						ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
+			elif l.get("spring", false):
+				smashed = l                      # golden log: it's a trampoline
+				hyper_jump()
+				break
 			elif shield_charges > 0:
 				shield_charges -= 1              # THICK FEATHERS soaks the bonk
 				smashed = l
 				duck_shake = 0.3
 				_sfx("bonk", 1.3, -6.0)
 				_flash("POOF.")
+				break
+			elif ducklings_n > 0:
+				smashed = l                      # a brave little buddy takes it
+				_lose_duckling()
 				break
 			else:
 				die(WELL_DECK[randi() % WELL_DECK.size()])
@@ -864,11 +1038,14 @@ func _collide() -> void:
 	if not is_invincible():
 		for e in enemies:
 			if absf(e.x - duck_x) < 44.0 and absf(e.y - BASE_Y) < 42.0:
-				if shield_charges > 0:
-					shield_charges -= 1
+				if shield_charges > 0 or ducklings_n > 0:
+					if shield_charges > 0:
+						shield_charges -= 1
+						_sfx("bonk", 1.3, -6.0)
+						_flash("POOF.")
+					else:
+						_lose_duckling()
 					duck_shake = 0.3
-					_sfx("bonk", 1.3, -6.0)
-					_flash("POOF.")
 					ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 110.0})
 					enemies.erase(e)
 					return
@@ -878,12 +1055,14 @@ func _collide() -> void:
 func _collect(it: Dictionary) -> void:
 	it.got = true
 	var def: Dictionary = ITEM_DEFS[it.kind]
-	distance += def.score * 0.6
-	_add_loft(def.loft)
+	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL
+	distance += def.score * 0.6 * mult
+	_add_loft(def.loft * mult)
 	if def.name == "feather":
-		run_feathers += 1
+		run_feathers += 1 * int(mult)
 	_sfx("collect", 1.0 + it.kind * 0.12)          # rarer = brighter ping
 	ripples.append({"x": it.x, "y": it.y, "t": 0.0, "max": 40.0})
+	_spawn_parts(it.x, it.y, 6, Color(1.0, 0.9, 0.5), 110.0)
 
 func _add_loft(amount: float) -> void:
 	loft = clampf(loft + amount * (1.0 + 0.3 * _up("loft")), 0.0, 1.0)
@@ -906,6 +1085,8 @@ func _flash(msg: String) -> void:
 
 func _refresh_hud() -> void:
 	score_label.text = "%d m" % int(distance / 10.0)
+	if ducklings_n > 0:
+		score_label.text += "  ×%.2f" % (1.0 + 0.08 * ducklings_n)
 	if shield_charges > 0:
 		score_label.text += "   🛡 %d" % shield_charges
 	loft_bar.value = loft
@@ -935,6 +1116,30 @@ func _draw() -> void:
 		var base := Color(0.30, 0.62, 0.78)
 		draw_rect(Rect2(Vector2.ZERO, VIEW), base * tint_new)
 
+	# drifting shimmer layer: the same water, half-phase, breathing alpha
+	if has_art:
+		var t2 := tex_water.get_size()
+		var off2 := fmod(scroll * 1.22 + 31.0, t2.y)
+		var y2 := -t2.y + off2
+		var sha := 0.10 + 0.05 * sin(anim_t * 0.8)
+		while y2 < VIEW.y:
+			var x2 := 17.0 - t2.x
+			while x2 < VIEW.x:
+				draw_texture(tex_water, Vector2(x2, y2), Color(1, 1, 1, sha))
+				x2 += t2.x
+			y2 += t2.y
+
+	# reed-lined banks frame the river (they take the theme wash too)
+	if has_art and tex_bank_l != null:
+		var bs := tex_bank_l.get_size()
+		var boff := fmod(scroll, bs.y)
+		var by := -bs.y + boff
+		while by < VIEW.y:
+			var btint := tint_new if by + bs.y * 0.5 < sweep_y else tint_old
+			draw_texture(tex_bank_l, Vector2(0, by), btint)
+			draw_texture(tex_bank_r, Vector2(VIEW.x - bs.x, by), btint)
+			by += bs.y
+
 	if in_menu:
 		_draw_menu()
 		return
@@ -953,20 +1158,36 @@ func _draw() -> void:
 		var rp: float = r.t / 0.6
 		draw_arc(Vector2(r.x, r.y), r.max * rp, 0, TAU, 28, Color(1, 1, 1, 0.5 * (1.0 - rp)), 3.0)
 
-	# logs (bob + sway) with frog passenger
+	# logs (bob + sway) with frog passenger; golden spring logs pulse + glow
 	for l in logs:
 		var bob: float = sin(anim_t * 2.0 + l.phase) * 3.0
 		var sway: float = sin(anim_t * 1.3 + l.phase) * 0.05
+		var springy: bool = l.get("spring", false)
 		draw_set_transform(Vector2(l.x, l.y + bob), sway, Vector2.ONE)
 		if has_art:
-			draw_texture_rect(tex_log, Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), false)
+			if springy:
+				var pulse: float = 0.55 + 0.45 * sin(anim_t * 6.0 + l.phase)
+				draw_arc(Vector2.ZERO, l.w * 0.55 + pulse * 6.0, 0, TAU, 36,
+					Color(1.0, 0.85, 0.35, 0.22 + 0.2 * pulse), 5.0)
+				draw_texture_rect(tex_log, Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), false,
+					Color(1.0, 0.86, 0.42))
+				draw_string(font, Vector2(-l.w * 0.5, 7), "↑", HORIZONTAL_ALIGNMENT_CENTER,
+					l.w, 22, Color(1, 1, 0.85, 0.6 + 0.4 * pulse))
+			else:
+				draw_texture_rect(tex_log, Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), false)
 			if l.frog and not l.frog_gone:
 				var fz := tex_frog.get_size() * 2.0
 				var fhop: float = absf(sin(anim_t * 3.0 + l.phase)) * 4.0
 				draw_texture_rect(tex_frog, Rect2(Vector2(-l.w * 0.28, -fhop) - fz * 0.5, fz), false)
 		else:
-			draw_rect(Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), Color(0.45, 0.30, 0.18))
+			draw_rect(Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h),
+				Color(0.85, 0.7, 0.3) if springy else Color(0.45, 0.30, 0.18))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# particles (splash droplets, sparkles, duckling fluff)
+	for p in parts:
+		var pa: float = 1.0 - p.t / p.life
+		draw_circle(Vector2(p.x, p.y), 1.5 + 2.5 * pa, Color(p.col.r, p.col.g, p.col.b, 0.85 * pa))
 
 	# collectibles
 	for it in items:
@@ -1000,7 +1221,9 @@ func _draw() -> void:
 		draw_rect(Rect2(duck_x - LASER_W * 0.5, 0, LASER_W, BASE_Y), Color(1, 0.5, 0.4, 0.42 * flick))
 		draw_rect(Rect2(duck_x - LASER_W * 0.18, 0, LASER_W * 0.36, BASE_Y), Color(1, 1, 1, 0.85 * flick))
 
+	_draw_ducklings()
 	_draw_duck()
+	_draw_atmosphere()
 
 	# draft overlay: the river waits while you choose
 	if drafting:
@@ -1008,13 +1231,22 @@ func _draw() -> void:
 		draw_string(font, Vector2(0, 250), "CHOOSE AN UPGRADE", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 38, Color(1, 0.92, 0.45))
 		for i in draft_choices.size():
 			var rc := _draft_rect(i)
-			draw_style_box(_btn_sb(), rc)
 			var u: Dictionary = draft_choices[i]
+			var rcol: Color = RARITY_COL[u.rarity]
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.07, 0.13, 0.19, 0.95)
+			sb.set_corner_radius_all(14)
+			sb.set_border_width_all(3)
+			sb.border_color = rcol
+			draw_style_box(sb, rc)
+			if u.rarity > 0:
+				draw_string(font, Vector2(rc.position.x, rc.position.y + 25), RARITY_NAME[u.rarity],
+					HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 14, rcol)
 			var owned: int = picked.get(u.id, 0)
 			var nm: String = u.name if owned == 0 else "%s  ×%d" % [u.name, owned + 1]
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 54), nm,
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 58), nm,
 				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 28, Color.WHITE)
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 92), u.desc,
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 94), u.desc,
 				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 19, Color(1, 1, 1, 0.75))
 		return
 
@@ -1023,10 +1255,63 @@ func _draw() -> void:
 		draw_string(font, dp + Vector2(-26, -DUCK_R - 40), "quack?",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 1, 1, 0.9))
 
+# the conga line: each duckling follows the duck's wake and hops a beat late
+func _draw_ducklings() -> void:
+	if ducklings_n <= 0 or tex_duckling.is_empty():
+		return
+	for i in ducklings_n:
+		var dx := _trail_x(0.22 * (i + 1))
+		var dy := BASE_Y + 40.0 * (i + 1)
+		if dy > VIEW.y - 50.0:
+			break
+		var h := _duckling_h(i)
+		var pos := Vector2(dx, dy - h * 80.0)
+		var sc := 2.0 * (1.0 + 0.3 * h)
+		if tex_shadow != null:
+			var ss: Vector2 = tex_shadow.get_size() * 1.2 * (1.0 - 0.4 * h)
+			draw_texture_rect(tex_shadow, Rect2(Vector2(dx, dy + 6) - ss * 0.5, ss),
+				false, Color(1, 1, 1, 0.8 - 0.3 * h))
+		var frames: Array = tex_duckling["hop"] if h > 0.05 else tex_duckling["idle"]
+		var fr: Texture2D = frames[int(anim_t * (14.0 if h > 0.05 else 4.0) + i) % 2]
+		var sz := fr.get_size() * sc
+		draw_texture_rect(fr, Rect2(pos - sz * 0.5, sz), false)
+
+func _trail_x(ago: float) -> float:
+	var target := anim_t - ago
+	for j in range(trail.size() - 1, -1, -1):
+		if trail[j].t <= target:
+			return trail[j].x
+	return trail[0].x if trail.size() > 0 else duck_x
+
+func _duckling_h(i: int) -> float:
+	var delay := 0.16 * (i + 1)
+	var dur := cur_hop_dur() * 0.85
+	for e in hop_events:
+		var p: float = (anim_t - e - delay) / dur
+		if p >= 0.0 and p < 1.0:
+			return sin(p * PI)
+	return 0.0
+
+# theme atmosphere: bog fog drifts, aurora ribbons breathe
+func _draw_atmosphere() -> void:
+	if theme_idx == 2:                              # Spooky Bog
+		for f in 6:
+			var fx := fposmod(f * 137.0 + anim_t * (9.0 + f * 3.0), VIEW.x + 240.0) - 120.0
+			var fy := 110.0 + f * 135.0 + sin(anim_t * 0.5 + f) * 20.0
+			draw_circle(Vector2(fx, fy), 72.0 + f * 9.0, Color(0.74, 0.8, 0.76, 0.07))
+	elif theme_idx == 4:                            # Aurora Lake
+		for b in 3:
+			var pts := PackedVector2Array()
+			for i in 25:
+				var x := i * (VIEW.x / 24.0)
+				pts.append(Vector2(x, 80.0 + b * 64.0 + sin(anim_t * 0.6 + b * 1.7 + i * 0.35) * 26.0))
+			var acol := Color(0.35, 0.95, 0.6, 0.10) if b % 2 == 0 else Color(0.6, 0.5, 0.95, 0.11)
+			draw_polyline(pts, acol, 22.0)
+
 func _draw_duck() -> void:
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if duck_shake > 0.0 else 0.0
-	var lift: float = (HOP_LIFT * _hop_boost() if state != St.MEGA else MEGA_LIFT) * duck_hop_mul
+	var lift: float = (HOP_LIFT * _hop_boost() if state != St.MEGA else (400.0 if hyper else MEGA_LIFT)) * duck_hop_mul
 	var duck_pos := Vector2(duck_x + shake_x, BASE_Y - h * lift)
 	var duck_scale := 1.0 + (0.35 if state != St.MEGA else 1.2) * h
 
@@ -1092,6 +1377,8 @@ func _draw_menu() -> void:
 	var tbob := sin(anim_t * 2.0) * 6.0
 	draw_string(font, Vector2(0, 200 + tbob), "DUCKODUCKO", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 66, Color(1, 0.92, 0.45))
 	draw_string(font, Vector2(0, 246 + tbob), "a whimsical duck hopper", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 24, Color(0.95, 0.97, 1.0, 0.85))
+	var fact: String = FACTS[int(anim_t / 5.0) % FACTS.size()]
+	draw_string(font, Vector2(0, 284), "duck fact: " + fact, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.5))
 
 	if has_art:
 		# orbiting collectibles around the centered hero
