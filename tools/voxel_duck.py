@@ -223,7 +223,7 @@ def palette(sp):
 
 
 # ---- voxel model -------------------------------------------------------------
-def build(sp="mallard", wings="folded"):
+def build(sp="mallard", wings="folded", beak_open=False):
     """Return {(x,y,z): rgb}.  x=right, y=up, z=head(+).  Shared duck geometry,
     species palette + flags (crest / head patch / pin tail / face paint)."""
     spec = SPECIES[sp]
@@ -413,19 +413,31 @@ def build(sp="mallard", wings="folded"):
     # ---- bill: long, flat, spatulate (stubby on a bufflehead, a spike on a merganser) ----
     bl = spec.get("bill_len", 17)
     bw = 1 if spec.get("bill_thin") else (3 if spec.get("bill_wide") else 2)
-    box(-bw, bw, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
-    box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["bill"])     # rounded tip
-    box(-2, 2, 6 + NY, 6 + NY, 10, 12, P["billd"], only_empty=True)  # base shade under head
-    box(-2, 2, 5 + NY, 5 + NY, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
-    box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["nail"])     # nail at tip
-    put(1, 5 + NY, 13, P["nostril"]); put(-1, 5 + NY, 13, P["nostril"])
-    if spec.get("bill_saddle"):
-        # hen mallard: dark saddle blotch on the orange bill
-        box(-1, 1, 5 + NY, 5 + NY, 13, 15, (96, 70, 46))
-    if spec.get("bill_stripe"):
-        # pintail: black culmen stripe down the blue-gray bill
-        for z in range(11, bl + 1):
-            put(0, 5 + NY, z, P["nail"])
+    if beak_open:
+        # mid-QUACK: upper mandible tips up, lower swings down, dark mouth at the hinge
+        box(-bw, bw, 5 + NY, 6 + NY, 11, bl - 1, P["bill"])
+        box(-1, 1, 6 + NY, 6 + NY, bl, bl, P["bill"])
+        box(-1, 1, 6 + NY, 6 + NY, bl, bl, P["nail"])
+        mw = max(0, bw - 1)
+        box(-mw, mw, 4 + NY, 4 + NY, 11, 13, (44, 26, 28))         # open mouth
+        span = max(1, bl - 12)
+        for z in range(11, bl):
+            drop = 1 + (z - 11) * 3 // span
+            box(-bw, bw, 4 + NY - drop, 4 + NY - drop, z, z, P["billd"])
+    else:
+        box(-bw, bw, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
+        box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["bill"])     # rounded tip
+        box(-2, 2, 6 + NY, 6 + NY, 10, 12, P["billd"], only_empty=True)  # base shade under head
+        box(-2, 2, 5 + NY, 5 + NY, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
+        box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["nail"])     # nail at tip
+        put(1, 5 + NY, 13, P["nostril"]); put(-1, 5 + NY, 13, P["nostril"])
+        if spec.get("bill_saddle"):
+            # hen mallard: dark saddle blotch on the orange bill
+            box(-1, 1, 5 + NY, 5 + NY, 13, 15, (96, 70, 46))
+        if spec.get("bill_stripe"):
+            # pintail: black culmen stripe down the blue-gray bill
+            for z in range(11, bl + 1):
+                put(0, 5 + NY, z, P["nail"])
     # ---- eyes (+ glint) ----
     ex = 3 if hs <= 1.0 else 4                        # bigger head -> eyes sit wider
     eye = spec.get("eye_col", (196, 44, 32) if spec.get("red_eye") else P["eye"])
@@ -546,6 +558,9 @@ def generate_ducks(art_dir):
         save(render(SH, gy, PITCH - math.radians(4), scale=sc), "%s_idle_1.png" % sp)
         # menu HERO + duck-select: front 3/4 so you see his face/chest (gameplay is back view)
         save(render(SH, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_hero.png" % sp)
+        # mid-QUACK hero frame: shown when the menu duck is tapped
+        save(render(shade(build(sp, "folded", beak_open=True)),
+                    math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_quack.png" % sp)
         # 24-frame turntable at hero pitch: free rotation on the duck-select screen
         for i in range(24):
             save(render(SH, math.radians(i * 15), math.radians(HERO_PITCH), scale=sc), "%s_spin_%02d.png" % (sp, i))
@@ -690,6 +705,75 @@ def build_duckling(wings="folded"):
     return V
 
 
+def build_sadie(frame=0):
+    """Sadie: chocolate lab, red collar, swimming with just head/shoulders/tail out of
+    the water. Faces +z (game draws her in profile crossing the river). Built from the
+    reference photo: wet near-black chocolate coat, bright red collar."""
+    COAT = (58, 40, 30); COATL = (84, 60, 44); COATD = (40, 27, 21)
+    COLLAR = (196, 44, 38); EYE = (22, 18, 16); NOSE = (24, 20, 18)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    bob = 0 if frame == 0 else -1
+    # shoulders/back hump: the only body above the waterline (flat-bottomed)
+    for (cx, cy, cz, rx, ry, rz, c) in [
+            (0, 0.5, -2, 3.6, 2.6, 6.0, COAT),
+            (0, 1.8, -1, 2.8, 1.6, 4.4, COATL)]:
+        for x in range(-5, 6):
+            for y in range(0, 5):
+                for z in range(-9, 5):
+                    if ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2 <= 1.0:
+                        put(x, y, z, c, c == COATL)
+    # neck + blocky lab head
+    ellip(0, 3 + bob, 4, 2.2, 2.4, 2.2, COAT)
+    ellip(0, 5.2 + bob, 6, 2.6, 2.4, 2.6, COAT)
+    ellip(0, 6.4 + bob, 6.4, 2.0, 1.4, 2.0, COATL, only_empty=True)   # wet sheen crown
+    # square snout
+    box(-1, 1, 3 + bob, 5 + bob, 8, 10, COAT)
+    box(-1, 1, 4 + bob, 4 + bob, 10, 10, NOSE)
+    # floppy ears, hanging
+    for s in (1, -1):
+        box(3 * s, 3 * s, 3 + bob, 6 + bob, 5, 7, COATD)
+        put(3 * s, 2 + bob, 6, COATD)
+    # the famous RED collar
+    for a in range(0, 360, 16):
+        x = round(2.3 * math.cos(math.radians(a)))
+        y = round(3 + bob + 2.3 * math.sin(math.radians(a)))
+        if (x, y, 4) in V or (x, y, 3) in V:
+            put(x, y, 4, COLLAR)
+    # kind eyes
+    put(2, 5 + bob, 8, EYE); put(-2, 5 + bob, 8, EYE)
+    # tail up like a rudder, wagging frame-to-frame
+    tx = 0 if frame == 0 else 1
+    for i, z in enumerate(range(-9, -13, -1)):
+        put(tx * (i // 2), 1 + i, z, COAT)
+    return V
+
+
+def make_chuckit():
+    """Sadie's beloved ball: orange with the blue band (from the photo)."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGBA", (12, 12), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    ORANGE = (240, 118, 36, 255)
+    ORANGED = (198, 88, 24, 255)
+    BLUE = (66, 118, 200, 255)
+    d.ellipse([1, 1, 10, 10], fill=ORANGE)
+    d.ellipse([2, 2, 6, 6], fill=(252, 152, 70, 255))
+    d.arc([1, 1, 10, 10], 110, 250, fill=ORANGED)
+    d.line([(3, 9), (9, 3)], fill=BLUE, width=2)
+    o = img.copy()
+    px, opx = img.load(), o.load()
+    for y in range(12):
+        for x in range(12):
+            if px[x, y][3] == 0:
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < 12 and 0 <= ny < 12 and px[nx, ny][3] > 0:
+                        opx[x, y] = (30, 24, 20, 255)
+                        break
+    return o
+
+
 def generate_critters(art_dir):
     import os
 
@@ -709,6 +793,11 @@ def generate_critters(art_dir):
     SHo = shade(build_duckling("out"))
     save(render(SHo, gy, PITCH, out=32, scale=1.5), "duckling_hop_0.png")
     save(render(SHo, gy, PITCH - math.radians(6), out=32, scale=1.5), "duckling_hop_1.png")
+    # Sadie: profile view (yaw 90 = facing screen-right), two paddle frames + her ball
+    for f in (0, 1):
+        save(render(shade(build_sadie(f)), math.radians(90), math.radians(40), out=64, scale=1.7),
+             "sadie_%d.png" % f)
+    make_chuckit().save(os.path.join(art_dir, "chuckit.png"))
     print("critters generated ->", art_dir)
 
 

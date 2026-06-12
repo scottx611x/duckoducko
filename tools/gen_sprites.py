@@ -380,11 +380,26 @@ def make_log():
 
 
 def make_feather():
+    """An actual feather (it used to read as an oat): white vane, dark quill shaft
+    poking out bare at the bottom, notched trailing edge, soft golden glow edge."""
     img = Image.new("RGBA", (14, 20), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse([2, 1, 11, 17], fill=(248, 226, 120, 255))
-    d.ellipse([3, 5, 10, 16], fill=(255, 244, 180, 255))
-    d.line([7, 2, 6, 19], fill=(190, 150, 60, 255), width=1)
+    VANE = (240, 238, 228, 255)
+    VANED = (210, 206, 192, 255)
+    GOLD = (250, 224, 130, 255)
+    QUILL = (130, 116, 92, 255)
+    # angled vane (teardrop, leaning right), barbs hinted by shading bands
+    d.polygon([(7, 0), (11, 3), (12, 8), (10, 13), (7, 15), (4, 12), (3, 7), (4, 3)], fill=VANE)
+    d.polygon([(7, 0), (11, 3), (12, 8), (10, 13), (8, 14), (8, 2)], fill=VANED)
+    d.line([(11, 4), (8, 6)], fill=GOLD)               # golden edge glint
+    d.line([(12, 8), (8, 10)], fill=GOLD)
+    # notches: real feathers split
+    img.putpixel((3, 8), (0, 0, 0, 0))
+    img.putpixel((4, 9), (0, 0, 0, 0))
+    img.putpixel((11, 10), (0, 0, 0, 0))
+    # central shaft, continuing past the vane as bare quill
+    d.line([(7, 1), (7, 15)], fill=QUILL)
+    d.line([(7, 15), (6, 19)], fill=QUILL)
     return add_outline(img)
 
 
@@ -467,6 +482,82 @@ def make_flipflop():
     d.ellipse([2, 9, 6, 14], fill=SOLED)
     d.line([(4, 3), (1, 7)], fill=STRAP)
     d.line([(4, 3), (7, 7)], fill=STRAP)
+    return add_outline(img)
+
+
+def make_cone():
+    """A traffic cone. In a river. Nature is healing."""
+    img = Image.new("RGBA", (12, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    CONE = (236, 110, 50, 255)
+    CONED = (190, 78, 34, 255)
+    BAND = (244, 240, 232, 255)
+    d.polygon([(5, 1), (6, 1), (9, 11), (2, 11)], fill=CONE)
+    d.rectangle([3, 6, 8, 8], fill=BAND)
+    d.rectangle([0, 11, 11, 13], fill=CONED)
+    d.rectangle([1, 11, 10, 12], fill=CONE)
+    return add_outline(img)
+
+
+def make_gnome():
+    """A garden gnome, adrift. He has seen things."""
+    img = Image.new("RGBA", (10, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    HAT = (200, 52, 56, 255)
+    FACE = (238, 196, 160, 255)
+    BEARD = (240, 238, 232, 255)
+    COAT = (66, 110, 170, 255)
+    d.polygon([(4, 0), (5, 0), (8, 6), (1, 6)], fill=HAT)
+    d.rectangle([2, 6, 7, 8], fill=FACE)
+    d.polygon([(1, 8), (8, 8), (7, 12), (2, 12)], fill=BEARD)
+    d.rectangle([2, 11, 7, 15], fill=COAT)
+    img.putpixel((3, 7), (24, 24, 28, 255))
+    img.putpixel((6, 7), (24, 24, 28, 255))
+    return add_outline(img)
+
+
+def make_boot():
+    """One rubber boot. The fish live in it now."""
+    img = Image.new("RGBA", (13, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    RUB = (94, 130, 84, 255)
+    RUBD = (66, 96, 60, 255)
+    SOLE = (52, 48, 50, 255)
+    d.rectangle([1, 1, 6, 10], fill=RUB)
+    d.rectangle([1, 9, 11, 12], fill=RUB)
+    d.ellipse([7, 8, 12, 12], fill=RUB)
+    d.rectangle([1, 12, 12, 13], fill=SOLE)
+    d.rectangle([1, 1, 6, 2], fill=RUBD)
+    d.line([(6, 3), (6, 9)], fill=RUBD)
+    return add_outline(img)
+
+
+def make_noodle():
+    """A pool noodle, escaped from a better party."""
+    img = Image.new("RGBA", (8, 18), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    NOOD = (120, 220, 230, 255)
+    NOODD = (78, 170, 184, 255)
+    d.rounded_rectangle([2, 0, 6, 17], radius=2, fill=NOOD)
+    d.ellipse([2, 0, 6, 3], fill=NOODD)
+    d.ellipse([3, 1, 5, 2], fill=(30, 60, 70, 255))
+    d.line([(3, 4), (3, 15)], fill=NOODD)
+    return add_outline(img)
+
+
+def make_umbrella():
+    """An upturned umbrella, sailing badly."""
+    img = Image.new("RGBA", (16, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    CAN = (172, 80, 170, 255)
+    CAND = (128, 54, 128, 255)
+    POLE = (90, 90, 96, 255)
+    d.polygon([(1, 4), (15, 4), (12, 10), (4, 10)], fill=CAN)
+    for sx in (4, 8, 12):
+        d.line([(sx, 4), (sx, 9)], fill=CAND)
+    d.arc([1, 0, 15, 9], 180, 360, fill=CAND)
+    d.line([(8, 10), (8, 13)], fill=POLE)
+    d.line([(8, 13), (10, 13)], fill=POLE)
     return add_outline(img)
 
 
@@ -633,6 +724,11 @@ save(make_ducky(), "ducky.png")
 save(make_boat(), "prop_boat.png")
 save(make_bottle(), "prop_bottle.png")
 save(make_flipflop(), "prop_flipflop.png")
+save(make_cone(), "prop_cone.png")
+save(make_gnome(), "prop_gnome.png")
+save(make_boot(), "prop_boot.png")
+save(make_noodle(), "prop_noodle.png")
+save(make_umbrella(), "prop_umbrella.png")
 save(make_water(), "water.png")
 save(make_bank("left"), "bank_left.png")
 save(make_bank("right"), "bank_right.png")
