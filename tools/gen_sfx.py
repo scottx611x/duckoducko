@@ -192,6 +192,19 @@ def unlock():
     return out
 
 
+def crunch():
+    """Woody log-splinter thunk for the landing shockwave."""
+    dur = 0.22
+    out = []
+    lp = 0.0
+    for i in range(n_samples(dur)):
+        t = i / SR
+        lp += (random.uniform(-1, 1) - lp) * 0.35
+        thump = sine(95.0 * (1.0 - 0.3 * t / dur), t) * 0.5 * env(t, dur * 0.6, 0.002, 2.0)
+        out.append(lp * env(t, dur, 0.001, 3.0) * 0.9 + thump)
+    return out
+
+
 def peep():
     """A duckling's tiny chirp."""
     dur = 0.12
@@ -228,4 +241,5 @@ if __name__ == "__main__":
     save("unlock.wav", unlock())
     save("click.wav", click())
     save("peep.wav", peep())
+    save("crunch.wav", crunch())
     print("done.")

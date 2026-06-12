@@ -426,6 +426,22 @@ def make_berry():
     return add_outline(img)
 
 
+def make_ducky():
+    """The rubber ducky. It squeaks. It judges."""
+    img = Image.new("RGBA", (16, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    Y = (252, 210, 60, 255)
+    YD = (214, 168, 40, 255)
+    O = (240, 140, 50, 255)
+    d.ellipse([1, 5, 12, 13], fill=Y)               # body
+    d.ellipse([2, 9, 11, 13], fill=YD)
+    d.polygon([(1, 6), (4, 4), (4, 9)], fill=YD)    # tail flick
+    d.ellipse([6, 1, 13, 8], fill=Y)                # head
+    d.polygon([(12, 4), (15, 5), (12, 7)], fill=O)  # bill
+    img.putpixel((10, 3), (20, 18, 18, 255))
+    return add_outline(img)
+
+
 def make_frog():
     img = Image.new("RGBA", (14, 12), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -554,6 +570,7 @@ save(make_bug(), "bug.png")
 save(make_bread(), "bread.png")
 save(make_berry(), "berry.png")
 save(make_frog(), "frog.png")
+save(make_ducky(), "ducky.png")
 save(make_water(), "water.png")
 save(make_bank("left"), "bank_left.png")
 save(make_bank("right"), "bank_right.png")

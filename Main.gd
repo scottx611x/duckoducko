@@ -21,7 +21,8 @@ const HERON_START := 900.0      # the heron shows up once you're warmed up
 const LASER_DUR := 0.7
 const LASER_W := 78.0
 
-const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.", "a HERON!"]
+const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.",
+	"a HERON!", "physics.", "the audacity.", "log: 1 — duck: 0", "*sad quack*"]
 
 # roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades.
 # rarity: 0=common, 1=rare (blue), 2=epic (gold) — weighted deal, colored cards.
@@ -56,6 +57,10 @@ const FACTS := [
 	"wood ducks cannot read. don't test them.",
 	"golden logs are 100% certified bouncy.",
 	"quack responsibly.",
+	"the heron has a name. it's Gerald.",
+	"rubber duckies are always watching.",
+	"hop #100 is legendary. keep count.",
+	"try tapping the big duck. he loves it.",
 ]
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
@@ -74,6 +79,7 @@ const ITEM_DEFS := [
 	{"name": "bread",   "score": 20.0, "loft": 0.10, "weight": 3},
 	{"name": "berry",   "score": 45.0, "loft": 0.16, "weight": 2},
 	{"name": "bug",     "score": 70.0, "loft": 0.22, "weight": 1},
+	{"name": "ducky",   "score": 10.0, "loft": 0.30, "weight": 1},   # it squeaks.
 ]
 
 # duck-select screen
@@ -131,6 +137,7 @@ var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
 # roguelike run state
 var drafting := false
 var draft_choices: Array = []
+var draft_open_t := 0.0         # taps are ignored briefly after a draft opens
 var next_draft := DRAFT_EVERY
 var picked := {}                # upgrade id -> stacks taken this run
 var shield_charges := 0
@@ -204,6 +211,13 @@ var has_art := false
 var duck_name := ""             # beta tester's duck, for bragging rights
 var name_edit: LineEdit
 
+# menu easter egg: the big drake likes being tapped
+var menu_spin_vel := 0.0
+var menu_spin := 0.0
+var menu_taps := 0
+var menu_msg := ""
+var menu_msg_t := -10.0
+
 # ---- audio --------------------------------------------------------------------
 var sfx := {}                   # name -> AudioStream
 var sfx_pool: Array = []        # round-robin AudioStreamPlayers
@@ -260,7 +274,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -307,6 +321,7 @@ func _smoke() -> void:
 	distance = next_draft - 5.0                        # cross the 400m draft mark
 	await get_tree().create_timer(0.4).timeout
 	print("SMOKE drafting=", drafting, " choices=", draft_choices.size())
+	await get_tree().create_timer(0.6).timeout         # ride out the tap grace
 	_on_press(_draft_rect(1).get_center())             # take the middle card
 	print("SMOKE picked=", picked, " drafting=", drafting)
 	# ducklings: pick a parade, then let one soak a bonk
@@ -434,9 +449,9 @@ func _dbg() -> void:
 	fancy = false
 	theme_sweep = 1.0
 	state = St.GROUNDED
-	# the upgrade draft overlay
+	# the upgrade draft overlay (after the deal-in animation settles)
 	_open_draft()
-	await get_tree().create_timer(0.05).timeout
+	await get_tree().create_timer(0.85).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_draft.png")
 	_pick_upgrade(draft_choices[0])
@@ -487,6 +502,8 @@ func start_game() -> void:
 	score_label.visible = true
 	loft_bar.visible = true
 	name_edit.visible = false
+	if duck_name.to_lower().strip_edges() in ["heron", "gerald", "a heron"]:
+		_flash("wait. are you a heron?")
 
 # per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
 func cur_hop_dur() -> float:
@@ -509,6 +526,7 @@ func _size_mul() -> float:
 
 func _open_draft() -> void:
 	drafting = true
+	draft_open_t = anim_t
 	next_draft += DRAFT_EVERY
 	draft_choices = _deal_draft()
 	center_label.visible = false
@@ -534,6 +552,28 @@ func _deal_draft() -> Array:
 func _draft_rect(i: int) -> Rect2:
 	return Rect2(70.0, 310.0 + i * 150.0, 400.0, 130.0)
 
+func _upgrade_icon(id: String):
+	match id:
+		"spring", "double":
+			return ducks[species]["hop"][0]
+		"magnet":
+			return tex_items.get("bread")
+		"snacks":
+			return tex_items.get("berry")
+		"zen":
+			return tex_frog
+		"loft":
+			return tex_items.get("bug")
+		"tiny":
+			return tex_items.get("ducky")
+		"shield", "gold":
+			return tex_items.get("feather")
+		"duckling", "trio":
+			return tex_duckling.get("idle", [null])[0]
+		"springy":
+			return tex_log
+	return null
+
 func _pick_upgrade(u: Dictionary) -> void:
 	picked[u.id] = picked.get(u.id, 0) + 1
 	if u.id == "shield":
@@ -558,6 +598,26 @@ func _lose_duckling() -> void:
 	_sfx("peep", 0.7)
 	_flash("PEEP!\n(he's fine. probably.)")
 	_spawn_parts(duck_x, BASE_Y + 38.0 * (ducklings_n + 1), 14, Color(0.97, 0.87, 0.45), 150.0)
+
+# landings detonate: the splash shockwave splinters logs under you, so a brave
+# hop or mega is never punished by whatever floated in beneath the arc
+func _landing_blast(radius: float) -> void:
+	var hit := false
+	var survivors: Array = []
+	for l in logs:
+		if absf(l.y - BASE_Y) < 70.0 and absf(l.x - duck_x) < radius + l.w * 0.5 \
+				and not l.get("spring", false):
+			hit = true
+			ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 95.0})
+			_spawn_parts(l.x, l.y, 11, Color(0.62, 0.42, 0.24), 190.0)
+			_add_loft(0.06)
+			if l.frog and not l.frog_gone:
+				ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
+		else:
+			survivors.append(l)
+	logs = survivors
+	if hit:
+		_sfx("crunch", randf_range(0.9, 1.1))
 
 # the spring-log payoff: an instant invincible hyper arc
 func hyper_jump() -> void:
@@ -664,6 +724,23 @@ func _on_press(pos: Vector2) -> void:
 		if Rect2(name_edit.position, name_edit.size).has_point(pos):
 			return                                 # let the LineEdit take the tap
 		name_edit.release_focus()
+		if pos.distance_to(Vector2(VIEW.x * 0.5, 448.0)) < 95.0:
+			menu_taps += 1                         # he LOVES this
+			menu_spin_vel += 9.0
+			_sfx("quack", randf_range(0.85, 1.2))
+			if menu_taps == 5:
+				menu_msg = "ok. ok. you have my attention."
+				menu_msg_t = anim_t
+			elif menu_taps == 12:
+				menu_msg = "the duck has filed a complaint."
+				menu_msg_t = anim_t
+			elif menu_taps == 25:
+				menu_msg = "...fine. you win. +5 🪶"
+				menu_msg_t = anim_t
+				feathers += 5
+				_save()
+				_sfx("unlock")
+			return
 		_sfx("click")
 		if MENU_DUCKS_BTN.has_point(pos):
 			_open_select()
@@ -678,6 +755,8 @@ func _on_press(pos: Vector2) -> void:
 		reset_game()
 		return
 	if drafting:
+		if anim_t - draft_open_t < 0.45:
+			return                                 # grace: no hop-spam click-through
 		for i in draft_choices.size():
 			if _draft_rect(i).has_point(pos):
 				_pick_upgrade(draft_choices[i])
@@ -749,6 +828,9 @@ func hop() -> void:
 		hop_t = 0.0
 		hop_count += 1
 		hop_events.append(anim_t)                  # the ducklings are watching
+		if hop_count == 100:
+			_flash("hop #100.\nlegendary.")
+			_sfx("chime", 2.0)
 		fancy = hop_count >= fancy_next
 		if fancy:
 			fancy_next = hop_count + 8 + randi() % 6
@@ -805,6 +887,9 @@ func die(msg: String) -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
+	if in_menu:
+		menu_spin += menu_spin_vel * delta
+		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
 	if in_select:
 		select_yaw += delta * 0.7
 	if not in_menu and not in_select and alive and not drafting:
@@ -909,6 +994,7 @@ func is_invincible() -> bool:
 func _land(mega: bool) -> void:
 	air_hops = 0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
+	_landing_blast(280.0 if mega else 120.0)
 	if mega:
 		_sfx("splash_big")
 		_flash("BOING." if hyper else "WHEE.")
@@ -1060,7 +1146,11 @@ func _collect(it: Dictionary) -> void:
 	_add_loft(def.loft * mult)
 	if def.name == "feather":
 		run_feathers += 1 * int(mult)
-	_sfx("collect", 1.0 + it.kind * 0.12)          # rarer = brighter ping
+	if def.name == "ducky":
+		_sfx("quack", 1.9, -2.0)                   # squeak.
+		_flash("squeak.")
+	else:
+		_sfx("collect", 1.0 + it.kind * 0.12)      # rarer = brighter ping
 	ripples.append({"x": it.x, "y": it.y, "t": 0.0, "max": 40.0})
 	_spawn_parts(it.x, it.y, 6, Color(1.0, 0.9, 0.5), 110.0)
 
@@ -1225,35 +1315,53 @@ func _draw() -> void:
 	_draw_duck()
 	_draw_atmosphere()
 
-	# draft overlay: the river waits while you choose
+	# draft overlay: the river waits while you choose (cards deal themselves in,
+	# and taps are ignored for the first beat so hop-spam can't click through)
 	if drafting:
-		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6))
-		draw_string(font, Vector2(0, 250), "CHOOSE AN UPGRADE", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 38, Color(1, 0.92, 0.45))
+		var ot := anim_t - draft_open_t
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6 * minf(ot / 0.25, 1.0)))
+		draw_string(font, Vector2(0, 232), "CHOOSE AN UPGRADE", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 38, Color(1, 0.92, 0.45))
+		draw_string(font, Vector2(0, 264), "checkpoint %d m — the river waits" % int(distance / 10.0),
+			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.55))
 		for i in draft_choices.size():
+			var ap := clampf((ot - 0.08 - i * 0.13) / 0.3, 0.0, 1.0)
+			if ap <= 0.0:
+				continue
+			ap = 1.0 - pow(1.0 - ap, 2.0)                  # ease-out
 			var rc := _draft_rect(i)
+			rc.position.y += (1.0 - ap) * 48.0
 			var u: Dictionary = draft_choices[i]
 			var rcol: Color = RARITY_COL[u.rarity]
+			var pulse := 0.62 + 0.38 * sin(anim_t * 5.0 + i * 1.4)
 			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.07, 0.13, 0.19, 0.95)
+			sb.bg_color = Color(0.07, 0.13, 0.19, 0.95 * ap)
 			sb.set_corner_radius_all(14)
 			sb.set_border_width_all(3)
-			sb.border_color = rcol
+			sb.border_color = Color(rcol.r, rcol.g, rcol.b, ap * pulse)
 			draw_style_box(sb, rc)
+			# the upgrade's icon, plucked from the world
+			var ic = _upgrade_icon(u.id)
+			if ic != null:
+				var gold: bool = u.id in ["gold", "springy"]
+				var isc := minf(2.4, 50.0 / ic.get_size().x)
+				_blit_modulated(ic, rc.position + Vector2(48.0, rc.size.y * 0.52), isc,
+					Color(1.0, 0.86, 0.45, ap) if gold else Color(1, 1, 1, ap))
 			if u.rarity > 0:
 				draw_string(font, Vector2(rc.position.x, rc.position.y + 25), RARITY_NAME[u.rarity],
-					HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 14, rcol)
+					HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 14, Color(rcol.r, rcol.g, rcol.b, ap))
 			var owned: int = picked.get(u.id, 0)
 			var nm: String = u.name if owned == 0 else "%s  ×%d" % [u.name, owned + 1]
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 58), nm,
-				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 28, Color.WHITE)
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 94), u.desc,
-				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 19, Color(1, 1, 1, 0.75))
+			draw_string(font, Vector2(rc.position.x + 40.0, rc.position.y + 58), nm,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - 40.0, 27, Color(1, 1, 1, ap))
+			draw_string(font, Vector2(rc.position.x + 40.0, rc.position.y + 94), u.desc,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - 40.0, 18, Color(1, 1, 1, 0.75 * ap))
 		return
 
 	if alive and state == St.GROUNDED and idle_timer > 4.0:
 		var dp := Vector2(duck_x, BASE_Y)
-		draw_string(font, dp + Vector2(-26, -DUCK_R - 40), "quack?",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 1, 1, 0.9))
+		var nag := "the duck is judging you." if idle_timer > 9.0 else "quack?"
+		draw_string(font, dp + Vector2(-160, -DUCK_R - 40), nag,
+			HORIZONTAL_ALIGNMENT_CENTER, 320, 24, Color(1, 1, 1, 0.9))
 
 # the conga line: each duckling follows the duck's wake and hops a beat late
 func _draw_ducklings() -> void:
@@ -1389,8 +1497,12 @@ func _draw_menu() -> void:
 			var otex = tex_items[o[0]]
 			_blit_centered(otex, pos, 1.8)
 		# the stars, slowly turning on their turntables (out of phase, like showing off)
-		_blit_centered(_spin_frame("hen", anim_t * 0.55 + 2.6), Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
-		_blit_centered(_spin_frame("mallard", anim_t * 0.55), Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
+		# tapping the drake spins him: menu_spin is the easter-egg momentum
+		_blit_centered(_spin_frame("hen", anim_t * 0.55 + 2.6 + menu_spin * 0.4), Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
+		_blit_centered(_spin_frame("mallard", anim_t * 0.55 + menu_spin), Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
+		if anim_t - menu_msg_t < 3.0:
+			draw_string(font, Vector2(0, 575), menu_msg, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 21,
+				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
 
 	# wallet + best run
 	if feathers > 0 or best_m > 0:
