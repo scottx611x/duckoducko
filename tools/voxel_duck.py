@@ -44,6 +44,10 @@ SPECIES = dict(
     canvasback=dict(red_eye=True, dark_rump=True),
     eider=dict(face_paint="eider", bill_len=15),
     golden=dict(chest_speckles=True, dark_rump=True),
+    shoveler=dict(bill_len=19, bill_wide=True, eye_col=(238, 198, 60)),
+    ruddy=dict(pin_tail=True, face_paint="ruddy"),
+    harlequin=dict(face_paint="harlequin"),
+    rubberduck=dict(size=0.95),
 )
 
 
@@ -138,6 +142,58 @@ def palette(sp):
             wing=(196, 166, 82), wingd=(168, 138, 60), primary=(132, 104, 42),
             specw=(252, 246, 210), spec=(58, 108, 172), specd=(40, 76, 128),
             tail=(150, 116, 44), tailhi=(244, 226, 150), eye=(24, 20, 16),
+        )
+    if sp == "shoveler":  # green head, white chest, rust flanks, THAT bill
+        return dict(
+            back=(42, 46, 42), body=(172, 98, 58), belly=(196, 128, 84),
+            verm_d=(146, 80, 46), verm_l=(192, 120, 76),
+            nape=(22, 96, 54), head=(40, 142, 80), headh=(96, 196, 128),
+            crown=(20, 84, 48), glint=(150, 232, 182),
+            chest=(240, 238, 230), chestd=(212, 210, 202), chestl=(250, 248, 242),
+            bill=(44, 42, 46), billd=(30, 28, 32), nail=(22, 20, 24), nostril=(56, 54, 58),
+            white=(240, 238, 230), collar=(240, 238, 230),
+            wing=(120, 140, 150), wingd=(92, 110, 120), primary=(60, 72, 80),
+            specw=(236, 236, 228), spec=(58, 130, 92), specd=(40, 96, 66),
+            tail=(38, 40, 38), tailhi=(208, 206, 198), eye=(20, 18, 22),
+        )
+    if sp == "ruddy":  # chestnut body, black cap, white cheek, BLUE bill. iconic.
+        return dict(
+            back=(128, 66, 38), body=(154, 84, 48), belly=(186, 130, 92),
+            verm_d=(110, 56, 32), verm_l=(174, 102, 62),
+            nape=(28, 26, 30), head=(36, 32, 36), headh=(52, 46, 52),
+            crown=(24, 22, 26), glint=(66, 60, 66),
+            chest=(160, 92, 54), chestd=(132, 72, 40), chestl=(182, 112, 70),
+            bill=(96, 150, 210), billd=(66, 112, 168), nail=(44, 74, 112), nostril=(70, 118, 174),
+            white=(242, 240, 234), collar=(154, 84, 48),
+            wing=(120, 64, 38), wingd=(96, 50, 30), primary=(70, 38, 24),
+            specw=(170, 100, 60), spec=(140, 76, 44), specd=(110, 58, 34),
+            tail=(40, 32, 26), tailhi=(80, 62, 48), eye=(18, 16, 18),
+        )
+    if sp == "harlequin":  # slate blue, white crescents, chestnut flanks. the painting.
+        return dict(
+            back=(58, 70, 94), body=(72, 86, 112), belly=(150, 88, 52),
+            verm_d=(50, 60, 82), verm_l=(88, 102, 128),
+            nape=(44, 54, 74), head=(64, 78, 104), headh=(84, 98, 124),
+            crown=(38, 46, 64), glint=(104, 118, 144),
+            chest=(70, 84, 110), chestd=(56, 68, 92), chestl=(88, 102, 128),
+            bill=(120, 128, 140), billd=(90, 96, 108), nail=(60, 64, 72), nostril=(100, 106, 118),
+            white=(244, 244, 240), collar=(244, 244, 240),
+            wing=(52, 64, 86), wingd=(42, 52, 70), primary=(30, 38, 52),
+            specw=(238, 238, 236), spec=(96, 110, 136), specd=(70, 82, 104),
+            tail=(36, 42, 56), tailhi=(70, 80, 100), eye=(20, 18, 22),
+        )
+    if sp == "rubberduck":  # it is a rubber ducky. it squeaks. it has earned this.
+        return dict(
+            back=(238, 196, 52), body=(250, 212, 64), belly=(254, 230, 110),
+            verm_d=(230, 186, 44), verm_l=(254, 224, 92),
+            nape=(238, 196, 52), head=(250, 212, 64), headh=(254, 228, 100),
+            crown=(244, 204, 58), glint=(255, 240, 150),
+            chest=(250, 212, 64), chestd=(238, 196, 52), chestl=(254, 228, 100),
+            bill=(244, 130, 40), billd=(206, 100, 28), nail=(180, 86, 24), nostril=(214, 106, 32),
+            white=(254, 240, 150), collar=(250, 212, 64),
+            wing=(244, 202, 56), wingd=(232, 188, 46), primary=(220, 176, 40),
+            specw=(254, 230, 110), spec=(246, 208, 60), specd=(234, 192, 48),
+            tail=(240, 198, 54), tailhi=(254, 228, 100), eye=(24, 22, 22),
         )
     if sp == "pintail":  # the gymnast: chocolate head, white neck stripe, long pin tail
         return dict(
@@ -319,6 +375,26 @@ def build(sp="mallard", wings="folded"):
             for z in (9, 13):
                 if (x, 6, z) in V:
                     V[(x, 6, z)] = (30, 28, 32)
+    elif fp == "ruddy":
+        # the ruddy's bright white cheeks, below the black cap
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["head"], P["headh"]) and abs(x) >= 2 \
+                    and 4.5 <= y <= 7.0 and 9.0 <= z <= 13.0:
+                V[(x, y, z)] = P["white"]
+    elif fp == "harlequin":
+        # the harlequin's paint job: white crescent before the eye, ear dot,
+        # and a thin white collar slash at the neck base
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["head"], P["headh"], P["glint"], P["crown"]):
+                if z >= 12.0 and y >= 5.0:
+                    V[(x, y, z)] = P["white"]          # face crescent
+                elif abs(x) >= 3 and 6.5 <= y <= 7.5 and 8.0 <= z <= 9.0:
+                    V[(x, y, z)] = P["white"]          # ear dot
+        for a in range(0, 360, 12):
+            x = round(2.9 * math.cos(math.radians(a)))
+            y = round(3.4 + 2.9 * math.sin(math.radians(a)))
+            if (x, y, 6) in V:
+                V[(x, y, 6)] = P["white"]              # collar slash
     elif fp == "pintail":
         # white breast finger running up each side of the neck toward the head
         for y in range(1, 7 + NY):
@@ -336,7 +412,7 @@ def build(sp="mallard", wings="folded"):
                 put(x, y, 7, P["collar"])
     # ---- bill: long, flat, spatulate (stubby on a bufflehead, a spike on a merganser) ----
     bl = spec.get("bill_len", 17)
-    bw = 1 if spec.get("bill_thin") else 2
+    bw = 1 if spec.get("bill_thin") else (3 if spec.get("bill_wide") else 2)
     box(-bw, bw, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
     box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["bill"])     # rounded tip
     box(-2, 2, 6 + NY, 6 + NY, 10, 12, P["billd"], only_empty=True)  # base shade under head

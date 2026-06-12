@@ -102,6 +102,18 @@ const FACTS := [
 	"try tapping the big duck. he loves it.",
 	"the hooded merganser wears the hood. always.",
 	"frogs ribbit in lowercase.",
+	"shovelers don't dig. the bill is for soup.",
+	"ruddy ducks have blue bills and zero explanations.",
+	"a wet duck is just a duck. they're waterproof. look it up.",
+	"the harlequin duck did its own makeup.",
+	"canvasbacks are not made of canvas. probably.",
+	"ducklings are 90% fluff, 10% audacity.",
+	"the king eider has never once abdicated.",
+	"logs can't swim. that's why they're so angry.",
+	"a duck's favorite distance is 100 more meters.",
+	"the golden mallard pays for nothing. feathers fear it.",
+	"this water is fresh. the attitude is not.",
+	"every spring log was once a regular log that believed.",
 ]
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
@@ -147,10 +159,14 @@ const ROSTER := [
 	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "trait": "the clever hen", "cost": 0},
 	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "trait": "floaty show-off", "cost": 60},
 	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "trait": "tiny & twitchy", "cost": 120, "size": 0.85},
+	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "trait": "that bill? born with it", "cost": 160},
 	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "trait": "the best steerer", "cost": 200},
 	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "trait": "the crested diver", "cost": 280},
+	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "trait": "blue bill. stiff tail. zero fear.", "cost": 350},
 	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "trait": "the redhead racer", "cost": 450},
+	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "trait": "painted by the river itself", "cost": 550},
 	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 700},
+	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "trait": "squeaks. the endgame flex.", "cost": 999, "size": 0.95},
 	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 1200},
 ]
 
@@ -1356,9 +1372,10 @@ func _update_play(delta: float) -> void:
 		_flash("ooh.\n%s" % THEMES[theme_idx].name)
 	theme_sweep = minf(theme_sweep + delta * 0.8, 1.0)
 
-	# the duck grows impatient (one judgmental quack per idle bout)
+	# the duck grows impatient (one judgmental quack per idle bout).
+	# rubber duckies do not quack. rubber duckies squeak.
 	if idle_timer > 4.0 and not quacked and state == St.GROUNDED:
-		_sfx("quack")
+		_sfx("quack", 2.0 if species == "rubberduck" else 1.0)
 		quacked = true
 	elif idle_timer < 4.0:
 		quacked = false
@@ -1684,8 +1701,7 @@ func _draw_death() -> void:
 	mb.set_border_width_all(1)
 	mb.border_color = Color(1, 1, 1, 0.35)
 	draw_style_box(mb, DEATH_MENU_BTN)
-	draw_string(font, Vector2(DEATH_MENU_BTN.position.x, DEATH_MENU_BTN.position.y + 29), "menu",
-		HORIZONTAL_ALIGNMENT_CENTER, DEATH_MENU_BTN.size.x, 18, Color(1, 1, 1, 0.8))
+	_btn_label(DEATH_MENU_BTN, "menu", 18, Color(1, 1, 1, 0.8))
 
 func _flash(msg: String) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
@@ -2102,17 +2118,21 @@ func _draw_menu() -> void:
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
 	_otext(Vector2(0, 692), "▶  tap to play  ◀", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
-	# DUCKS + SHOP buttons
+	# DUCKS + SHOP buttons (plain text: emoji glyph widths wreck centering on Android)
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
-	draw_string(font, Vector2(MENU_DUCKS_BTN.position.x, MENU_DUCKS_BTN.position.y + 33), "🦆  DUCKS",
-		HORIZONTAL_ALIGNMENT_CENTER, MENU_DUCKS_BTN.size.x, 24, Color(1, 1, 1, 0.95))
+	_btn_label(MENU_DUCKS_BTN, "DUCKS", 24, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
-	draw_string(font, Vector2(MENU_SHOP_BTN.position.x, MENU_SHOP_BTN.position.y + 33), "🪶  SHOP",
-		HORIZONTAL_ALIGNMENT_CENTER, MENU_SHOP_BTN.size.x, 24, Color(1, 1, 1, 0.95))
+	_btn_label(MENU_SHOP_BTN, "SHOP", 24, Color(1, 1, 1, 0.95))
 	_otext(Vector2(0, 906), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
 		17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	_otext(Vector2(0, 940), "DUCKODUCKO beta · made by scott", 13, Color(1, 1, 1, 0.35),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
+# exact vertical centering (baseline math) — draw_string y is a BASELINE, and
+# guessed offsets drift across platforms/fonts
+func _btn_label(rect: Rect2, txt: String, size: int, col := Color.WHITE) -> void:
+	var y := rect.position.y + (rect.size.y - font.get_height(size)) * 0.5 + font.get_ascent(size)
+	draw_string(font, Vector2(rect.position.x, y), txt, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, size, col)
 
 func _btn_sb() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -2166,8 +2186,7 @@ func _draw_shop() -> void:
 	_otext(Vector2(0, 140), "permanent. every run. very duck.", 16, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	draw_string(font, Vector2(VIEW.x - 190, 60), "🪶 %d" % feathers, HORIZONTAL_ALIGNMENT_RIGHT, 170, 26, Color(1, 0.92, 0.45))
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	draw_string(font, Vector2(SEL_BACK_BTN.position.x, SEL_BACK_BTN.position.y + 33), "< back",
-		HORIZONTAL_ALIGNMENT_CENTER, SEL_BACK_BTN.size.x, 22, Color.WHITE)
+	_btn_label(SEL_BACK_BTN, "◂ back", 22)
 	for i in META.size():
 		var rc := _shop_row(i)
 		var m: Dictionary = META[i]
@@ -2199,18 +2218,23 @@ func _draw_shop() -> void:
 
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
+	# the roster outgrew one row: wrap into rows of 7, each row centered
 	var n := ROSTER.size()
-	var tw := minf(86.0, (VIEW.x - 16.0) / float(n))   # the roster grew; thumbs shrink to fit
-	var x0 := VIEW.x * 0.5 - n * tw * 0.5
-	return Rect2(x0 + i * tw + 4.0, 770.0, tw - 8.0, 86.0)
+	var per_row := 7
+	var row := i / per_row
+	var col := i % per_row
+	var row_n := mini(per_row, n - row * per_row)
+	var tw := minf(86.0, (VIEW.x - 16.0) / float(per_row))
+	var rh := 80.0
+	var x0 := VIEW.x * 0.5 - row_n * tw * 0.5
+	return Rect2(x0 + col * tw + 4.0, 742.0 + row * (rh + 8.0), tw - 8.0, rh)
 
 func _draw_select() -> void:
 	var cx := VIEW.x * 0.5
 	_otext(Vector2(0, 110), "CHOOSE YOUR DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
 
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	draw_string(font, Vector2(SEL_BACK_BTN.position.x, SEL_BACK_BTN.position.y + 33), "< back",
-		HORIZONTAL_ALIGNMENT_CENTER, SEL_BACK_BTN.size.x, 22, Color.WHITE)
+	_btn_label(SEL_BACK_BTN, "◂ back", 22)
 
 	# feather wallet
 	draw_string(font, Vector2(VIEW.x - 190, 60), "🪶 %d" % feathers, HORIZONTAL_ALIGNMENT_RIGHT, 170, 26, Color(1, 0.92, 0.45))
@@ -2237,12 +2261,10 @@ func _draw_select() -> void:
 
 	if unlocked:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
-		draw_string(font, Vector2(SEL_PLAY_BTN.position.x, SEL_PLAY_BTN.position.y + 38), "PLAY  >",
-			HORIZONTAL_ALIGNMENT_CENTER, SEL_PLAY_BTN.size.x, 28, Color.WHITE)
+		_btn_label(SEL_PLAY_BTN, "PLAY  ▸", 28)
 	elif feathers >= duck.cost:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
-		draw_string(font, Vector2(SEL_PLAY_BTN.position.x, SEL_PLAY_BTN.position.y + 38), "UNLOCK · %d 🪶" % duck.cost,
-			HORIZONTAL_ALIGNMENT_CENTER, SEL_PLAY_BTN.size.x, 26, Color(1, 0.92, 0.45))
+		_btn_label(SEL_PLAY_BTN, "UNLOCK · %d feathers" % duck.cost, 24, Color(1, 0.92, 0.45))
 	else:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d 🪶 to unlock — you have %d" % [duck.cost, feathers],
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
