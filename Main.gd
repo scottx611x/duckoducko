@@ -1974,7 +1974,8 @@ func _draw_ducklings() -> void:
 		var dx := dp.x
 		var dy := dp.y
 		var h := _duckling_h(i)
-		var pos := Vector2(dx, dy - h * 115.0)
+		var dlift := 280.0 if state == St.MEGA else 115.0   # the vertical conga
+		var pos := Vector2(dx, dy - h * dlift)
 		var sc := 2.0 * (1.0 + 0.45 * h)
 		if tex_shadow != null:
 			var ss: Vector2 = tex_shadow.get_size() * 1.2 * (1.0 - 0.5 * h)
@@ -1993,6 +1994,10 @@ func _trail_x(ago: float) -> float:
 	return trail[0].x if trail.size() > 0 else duck_x
 
 func _duckling_h(i: int) -> float:
+	if state == St.MEGA:
+		# mama goes up, EVERYONE goes up: ride the whole mega arc, staggered
+		var mp := clampf((mega_t - 0.06 * (i + 1)) / cur_mega_dur(), 0.0, 1.0)
+		return sin(mp * PI)
 	var delay := 0.04 * (i + 1)   # the whole conga pops up with you, in a quick wave
 	var dur := cur_hop_dur()      # same hang time as the duck — clearly "with you"
 	for e in hop_events:
