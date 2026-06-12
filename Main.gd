@@ -2111,7 +2111,7 @@ func _draw_menu() -> void:
 		HORIZONTAL_ALIGNMENT_CENTER, MENU_SHOP_BTN.size.x, 24, Color(1, 1, 1, 0.95))
 	_otext(Vector2(0, 906), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
 		17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-	_otext(Vector2(0, 940), "DUCKODUCKO beta · made with one thumb", 13, Color(1, 1, 1, 0.35),
+	_otext(Vector2(0, 940), "DUCKODUCKO beta · made by scott", 13, Color(1, 1, 1, 0.35),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _btn_sb() -> StyleBoxFlat:
