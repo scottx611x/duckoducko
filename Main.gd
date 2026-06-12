@@ -41,10 +41,38 @@ const UPGRADES := [
 	{"id": "double", "name": "DOUBLE HOP", "desc": "hop again in mid-air", "rarity": 2},
 	{"id": "trio", "name": "DUCKLING PARADE", "desc": "+3 little buddies, peeping", "rarity": 2},
 	{"id": "gold", "name": "GOLDEN BILL", "desc": "every snack counts double", "rarity": 2},
+	{"id": "nestegg", "name": "NEST EGG", "desc": "+2 🪶 at every 100m milestone", "rarity": 0},
+	{"id": "snackhawk", "name": "SNACK HAWK", "desc": "snacks grabbed mid-air: double LOFT", "rarity": 1},
+	{"id": "aftershock", "name": "AFTERSHOCK", "desc": "each log your blast smashes: +12% LOFT", "rarity": 1},
+	{"id": "bounce", "name": "BOUNCE CHARGE", "desc": "spring-log bounces refill +35% LOFT", "rarity": 1},
+	{"id": "buffet", "name": "LOG BUFFET", "desc": "lasered logs each drop a snack", "rarity": 1},
+	{"id": "school", "name": "DUCKLING SCHOOL", "desc": "your ducklings fetch snacks they pass", "rarity": 2},
+	{"id": "thunder", "name": "THUNDER FEET", "desc": "EVERY landing detonates", "rarity": 2},
 ]
 const RARITY_W := [1.0, 0.5, 0.2]
 const RARITY_COL := [Color(0.85, 0.88, 0.92), Color(0.45, 0.75, 1.0), Color(1.0, 0.84, 0.3)]
 const RARITY_NAME := ["", "RARE", "EPIC"]
+
+# which upgrades amplify each other — owning one tags the other ★ in a draft
+const SYNERGY := {
+	"snackhawk": ["spring", "double", "snacks", "magnet"],
+	"spring": ["snackhawk", "double"],
+	"double": ["spring", "snackhawk"],
+	"snacks": ["snackhawk", "school", "gold", "magnet"],
+	"magnet": ["snacks", "snackhawk", "gold"],
+	"aftershock": ["thunder", "loft"],
+	"thunder": ["aftershock", "shield"],
+	"loft": ["aftershock", "bounce", "buffet"],
+	"bounce": ["springy", "loft"],
+	"springy": ["bounce"],
+	"buffet": ["loft", "gold"],
+	"gold": ["nestegg", "snacks", "buffet"],
+	"nestegg": ["gold"],
+	"school": ["duckling", "trio", "snacks"],
+	"duckling": ["school", "trio"],
+	"trio": ["school", "duckling"],
+	"shield": ["thunder"],
+}
 const MAX_DUCKLINGS := 8
 const BANK_W := 26.0            # reed-lined banks frame the river
 const SPRING_LOG_CHANCE := 0.12
@@ -381,7 +409,7 @@ func _smoke() -> void:
 	print("SMOKE picked=", picked, " drafting=", drafting)
 	# ducklings: pick a parade, then let one soak a bonk
 	_pick_upgrade(UPGRADES[10])                        # trio
-	print("SMOKE ducklings=", ducklings_n)
+	print("SMOKE ducklings=", ducklings_n, " synergy(school)=", _has_synergy("school"))
 	# spring log under the duck -> hyper jump
 	logs.append({"x": duck_x, "y": BASE_Y, "w": 160.0, "h": 46.0, "missed": false,
 		"spring": true, "phase": 0.0, "frog": false, "frog_gone": false})
@@ -623,25 +651,32 @@ func _upgrade_icon(id: String):
 	match id:
 		"spring", "double":
 			return ducks[species]["hop"][0]
-		"magnet":
+		"magnet", "buffet":
 			return tex_items.get("bread")
 		"snacks":
 			return tex_items.get("berry")
 		"zen":
 			return tex_frog
-		"loft":
+		"loft", "snackhawk":
 			return tex_items.get("bug")
 		"tiny":
 			return tex_items.get("ducky")
-		"shield", "gold":
+		"shield", "gold", "nestegg":
 			return tex_items.get("feather")
-		"duckling", "trio":
+		"duckling", "trio", "school":
 			return tex_duckling.get("idle", [null])[0]
-		"springy":
+		"springy", "bounce", "aftershock", "thunder":
 			return tex_log
 	return null
 
+func _has_synergy(id: String) -> bool:
+	for sid in SYNERGY.get(id, []):
+		if picked.get(sid, 0) > 0:
+			return true
+	return false
+
 func _pick_upgrade(u: Dictionary) -> void:
+	var combo := _has_synergy(u.id)
 	picked[u.id] = picked.get(u.id, 0) + 1
 	if u.id == "shield":
 		shield_charges += 1
@@ -651,7 +686,12 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_add_ducklings(3)
 	drafting = false
 	_sfx("unlock")
-	_flash(u.name + "!")
+	if combo:
+		_sfx("chime", 1.8)
+		_flash("SYNERGY!\n%s" % u.name)
+		_spawn_parts(duck_x, BASE_Y - 60.0, 18, Color(1.0, 0.85, 0.3), 220.0)
+	else:
+		_flash(u.name + "!")
 
 func _add_ducklings(n: int) -> void:
 	ducklings_n = mini(ducklings_n + n, MAX_DUCKLINGS)
@@ -670,12 +710,12 @@ func _lose_duckling() -> void:
 # landings detonate: the splash shockwave splinters logs under you, so a brave
 # hop or mega is never punished by whatever floated in beneath the arc
 func _landing_blast(radius: float) -> void:
-	var hit := false
+	var smashed_n := 0
 	var survivors: Array = []
 	for l in logs:
 		if absf(l.y - BASE_Y) < 70.0 and absf(l.x - duck_x) < radius + l.w * 0.5 \
 				and not l.get("spring", false):
-			hit = true
+			smashed_n += 1
 			ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 95.0})
 			_spawn_parts(l.x, l.y, 11, Color(0.62, 0.42, 0.24), 190.0)
 			_add_loft(0.06)
@@ -686,8 +726,11 @@ func _landing_blast(radius: float) -> void:
 		else:
 			survivors.append(l)
 	logs = survivors
-	if hit:
+	if smashed_n > 0:
 		_sfx("crunch", randf_range(0.9, 1.1))
+		if _up("aftershock") > 0:              # AFTERSHOCK: wreckage becomes LOFT
+			_add_loft(0.12 * smashed_n * _up("aftershock"))
+			_float_text(duck_x, BASE_Y - 110.0, "+%d×loft" % smashed_n, Color(0.5, 0.85, 1.0))
 
 # the spring-log payoff: an instant invincible hyper arc
 func hyper_jump() -> void:
@@ -695,6 +738,9 @@ func hyper_jump() -> void:
 	mega_t = 0.0
 	mega_style = "fly"
 	hyper = true
+	if _up("bounce") > 0:                      # BOUNCE CHARGE: springs feed the meter
+		_add_loft(0.35 * _up("bounce"))
+		_float_text(duck_x, BASE_Y - 110.0, "+loft!", Color(0.5, 0.85, 1.0))
 	_sfx("mega", 1.4)
 	_flash("BOING!")
 	_spawn_parts(duck_x, BASE_Y, 12, Color(1.0, 0.9, 0.4), 220.0)
@@ -1000,6 +1046,16 @@ func _update_play(delta: float) -> void:
 		pr.x += sin(anim_t * 0.8 + pr.phase) * 6.0 * delta
 	props = props.filter(func(pr): return pr.y < VIEW.y + 40.0)
 
+	# DUCKLING SCHOOL: the conga line fetches snacks it waddles over
+	if _up("school") > 0 and ducklings_n > 0:
+		for i in ducklings_n:
+			var dlx := _trail_x(0.22 * (i + 1))
+			var dly := BASE_Y + 40.0 * (i + 1)
+			for it in items:
+				if not it.got and Vector2(it.x - dlx, it.y - dly).length() < 30.0:
+					_collect(it)
+					_sfx("peep", randf_range(1.1, 1.3), -6.0)
+
 	# music leans forward with the river
 	if music_player != null:
 		music_player.pitch_scale = 1.0 + clampf((speed - BASE_SPEED) / 2400.0, 0.0, 0.08)
@@ -1016,6 +1072,9 @@ func _update_play(delta: float) -> void:
 	if int(distance / 10.0) >= next_milestone:
 		_sfx("chime", pow(2.0, PENTA[milestone_step % PENTA.size()] / 12.0), -4.0)
 		_float_text(duck_x, BASE_Y - 95.0, "%d m" % next_milestone, Color(1, 0.92, 0.45))
+		if _up("nestegg") > 0:                     # NEST EGG pays out on the chime
+			run_feathers += 2 * _up("nestegg")
+			_float_text(duck_x, BASE_Y - 120.0, "+%d 🪶" % (2 * _up("nestegg")), Color(1, 0.85, 0.35))
 		milestone_step += 1
 		next_milestone += 100
 
@@ -1107,6 +1166,8 @@ func _land(mega: bool) -> void:
 		_spawn_parts(duck_x, BASE_Y, 18, Color(0.9, 0.97, 1.0), 260.0)
 		hyper = false
 	else:
+		if _up("thunder") > 0:                 # THUNDER FEET: every landing detonates
+			_landing_blast(105.0 + 25.0 * _up("thunder"))
 		_sfx("splash", randf_range(0.9, 1.1), -6.0)
 		_spawn_parts(duck_x, BASE_Y, 7, Color(0.9, 0.97, 1.0), 150.0)
 
@@ -1175,6 +1236,8 @@ func _laser_burn() -> void:
 	for l in logs:
 		if l.y < BASE_Y + 24.0 and absf(l.x - duck_x) < LASER_W * 0.5 + l.w * 0.5:
 			ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 70.0})
+			if _up("buffet") > 0:              # LOG BUFFET: vaporized logs drop lunch
+				items.append({"x": l.x, "y": l.y, "got": false, "kind": _pick_kind()})
 		else:
 			survivors.append(l)
 	logs = survivors
@@ -1251,8 +1314,12 @@ func _collect(it: Dictionary) -> void:
 	it.got = true
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL
+	var loft_mult := mult
+	if is_airborne() and _up("snackhawk") > 0:     # SNACK HAWK: airborne grabs charge hard
+		loft_mult *= 1.0 + _up("snackhawk")
+		_float_text(it.x, it.y - 20.0, "hawk'd!", Color(0.5, 0.85, 1.0))
 	distance += def.score * 0.6 * mult
-	_add_loft(def.loft * mult)
+	_add_loft(def.loft * loft_mult)
 	if def.name == "feather":
 		run_feathers += 1 * int(mult)
 	if def.name == "ducky":
@@ -1524,13 +1591,17 @@ func _draw() -> void:
 			# the upgrade's icon, plucked from the world
 			var ic = _upgrade_icon(u.id)
 			if ic != null:
-				var gold: bool = u.id in ["gold", "springy"]
+				var gold: bool = u.id in ["gold", "springy", "bounce", "nestegg"]
 				var isc := minf(2.4, 50.0 / ic.get_size().x)
 				_blit_modulated(ic, rc.position + Vector2(48.0, rc.size.y * 0.52), isc,
 					Color(1.0, 0.86, 0.45, ap) if gold else Color(1, 1, 1, ap))
 			if u.rarity > 0:
 				draw_string(font, Vector2(rc.position.x, rc.position.y + 25), RARITY_NAME[u.rarity],
 					HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 14, Color(rcol.r, rcol.g, rcol.b, ap))
+			if _has_synergy(u.id):
+				draw_string(font, Vector2(rc.position.x - 16.0, rc.position.y + 25), "★ synergy",
+					HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x, 14,
+					Color(1, 0.85, 0.3, ap * (0.7 + 0.3 * sin(anim_t * 6.0))))
 			var owned: int = picked.get(u.id, 0)
 			var nm: String = u.name if owned == 0 else "%s  ×%d" % [u.name, owned + 1]
 			draw_string(font, Vector2(rc.position.x + 40.0, rc.position.y + 58), nm,
