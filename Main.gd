@@ -25,6 +25,8 @@ const LASER_W := 78.0
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.",
 	"physics.", "the audacity.", "log: 1 — duck: 0", "*sad quack*"]
 const HERON_DECK := ["a HERON!", "GERALD?!", "death from above.", "the sky is rude."]
+const SADIE_DECK := ["you bonked the good girl.", "SADIE?! no!!", "she forgives you. (you don't.)",
+	"bad duck. bad.", "the chuckit waits for no one."]
 
 # idle-impatience deck (stage 2, after the polite "quack?" went unanswered).
 # stage directions only — user-curated; the duck ACTS his impatience, never narrates yours.
@@ -237,12 +239,14 @@ var enemy_seq := 0              # stable heron ids (missile targeting)
 
 # Sadie: the chocolate lab. swims bank-to-bank chasing her chuckit. INFREQUENT, and
 # NEVER killable — no laser, fire, blast or escort may touch the good girl.
+# She CAN end YOUR run though: paddle into her and that's the ballgame (hop over!).
 var sadie = null                # null or {x, y, dir, t}
 var sadie_timer := 40.0
 var tex_sadie := []
 var tex_chuckit: Texture2D
 var heat := 0.0                 # ON FIRE: streak meter, 1.0 ignites
 var fire_t := 0.0               # ON FIRE: seconds of burn remaining
+var fire_max := 5.0             # ON FIRE: full burn length (for the flare-up ramp)
 var heat_warned := false        # one "heating up..." per streak
 var picked := {}                # upgrade id -> stacks taken this run
 var shield_charges := 0
@@ -530,6 +534,13 @@ func _smoke() -> void:
 	_pick_upgrade(UPGRADES[20])                        # WINGDUCKS
 	await get_tree().create_timer(1.2).timeout
 	print("SMOKE cannon crumbs=", crumbs.size() > 0 or crumb_timer > 0.0, " wingducks=", wingducks)
+	_spawn_sadie()
+	await get_tree().create_timer(0.5).timeout
+	print("SMOKE sadie=", sadie != null, " swimming=", sadie != null and sadie.t > 0.0)
+	_pick_upgrade(UPGRADES[22])                        # ON FIRE
+	_add_heat(1.0)
+	await get_tree().create_timer(0.4).timeout
+	print("SMOKE fire ignited=", fire_t > 0.0, " fire_max=", fire_max)
 	loft = 1.0; loft_ready = true
 	mega_hop()
 	await get_tree().create_timer(cur_mega_dur() + 0.3).timeout
@@ -638,6 +649,21 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_play.png")
+	# ON FIRE plume mid-burn + Sadie mid-crossing, plume leaning into a hard steer
+	picked["hotwheels"] = 1
+	fire_t = 4.0
+	fire_max = 5.0
+	_spawn_sadie()
+	sadie.x = 170.0
+	sadie.y = 330.0
+	duck_vx = 260.0
+	await get_tree().create_timer(0.3).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_fire.png")
+	picked.erase("hotwheels")
+	fire_t = 0.0
+	duck_vx = 0.0
+	sadie = null
 	# mid-wash theme transition (Spooky Bog rolling in)
 	theme_prev = 0
 	theme_idx = 2
@@ -865,6 +891,47 @@ func _next_enemy_id() -> int:
 	enemy_seq += 1
 	return enemy_seq
 
+# Sadie: someone on the bank has a chuckit and questionable aim. The ball sails
+# across the river, and Sadie follows — bank to bank, head up, tail like a rudder.
+# She is not an obstacle, not a snack, not a target. She is a visitor.
+func _spawn_sadie() -> void:
+	var dir := -1.0 if randf() < 0.5 else 1.0
+	var sx := (BANK_W - 50.0) if dir > 0.0 else (VIEW.x - BANK_W + 50.0)
+	sadie = {"x": sx, "y": randf_range(200.0, 430.0), "dir": dir, "t": 0.0, "greeted": false}
+	_sfx("quack", 0.5, -6.0)                       # the distant BOOF of a happy dog
+	_float_text(sadie.x + dir * 80.0, sadie.y - 56.0, "*boof!*", Color(0.85, 0.62, 0.4))
+
+func _update_sadie(delta: float) -> void:
+	if sadie == null:
+		if distance > 3000.0:                      # the dog park is past the 300m bend
+			sadie_timer -= delta
+			if sadie_timer <= 0.0:
+				_spawn_sadie()
+		return
+	sadie.t += delta
+	sadie.x += sadie.dir * 125.0 * delta
+	sadie.y += speed * delta * 0.16                # the current carries even good girls
+	# paddle wake: water churns behind a swimming lab
+	if randf() < 0.6:
+		parts.append({"x": sadie.x - sadie.dir * randf_range(26.0, 50.0),
+			"y": sadie.y + randf_range(-6.0, 14.0), "vx": -sadie.dir * 30.0,
+			"vy": randf_range(-20.0, 30.0), "t": 0.0, "life": randf_range(0.4, 0.7),
+			"col": Color(1, 1, 1, 0.8)})
+	if fmod(sadie.t, 0.55) < delta:
+		ripples.append({"x": sadie.x, "y": sadie.y + 8.0, "t": 0.0, "max": 34.0})
+	# she politely acknowledges the duck (once), as dogs do
+	if not sadie.greeted and absf(sadie.y - BASE_Y) < 130.0 and absf(sadie.x - duck_x) < 150.0:
+		sadie.greeted = true
+		_float_text(sadie.x, sadie.y - 60.0, "boof.", Color(0.85, 0.62, 0.4))
+		_float_text(duck_x, BASE_Y - 80.0, "quack!!", Color(1, 1, 1))
+		_sfx("quack", 1.2, -4.0)
+	# reached the far bank (or drifted off-screen): she got the chuckit. she always does.
+	var gone_x: bool = (sadie.dir > 0.0 and sadie.x > VIEW.x - BANK_W + 60.0) \
+		or (sadie.dir < 0.0 and sadie.x < BANK_W - 60.0)
+	if gone_x or sadie.y > VIEW.y + 80.0:
+		sadie = null
+		sadie_timer = randf_range(45.0, 80.0)      # INFREQUENT: a cameo, not a mechanic
+
 func _wingduck_pos(side: int) -> Vector2:
 	return Vector2(clampf(duck_x + 76.0 * side, BANK_W + 20.0, VIEW.x - BANK_W - 20.0),
 		BASE_Y + 10.0 + sin(anim_t * 3.0 + side) * 5.0)
@@ -1087,6 +1154,8 @@ func reset_game() -> void:
 	floaties.clear()
 	props.clear()
 	prop_timer = 5.0
+	sadie = null
+	sadie_timer = 40.0
 	if music_player != null:
 		music_player.pitch_scale = 1.0
 	cam.zoom = Vector2.ONE
@@ -1380,6 +1449,9 @@ func _update_play(delta: float) -> void:
 		pr.x += sin(anim_t * 0.8 + pr.phase) * 6.0 * delta
 	props = props.filter(func(pr): return pr.y < VIEW.y + 40.0)
 
+	# Sadie: the chocolate lab, in INFREQUENT pursuit of her chuckit
+	_update_sadie(delta)
+
 	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
 	# range get tagged with the pulling duckling and slide toward it until gulped.
 	if _up("school") > 0 and ducklings_n > 0:
@@ -1428,15 +1500,28 @@ func _update_play(delta: float) -> void:
 	if _up("hotwheels") > 0:
 		if fire_t > 0.0:
 			fire_t -= delta
-			for i in 2:
-				parts.append({"x": duck_x + randf_range(-16, 16), "y": BASE_Y + randf_range(-10, 12),
-					"vx": -duck_vx * 0.15, "vy": randf_range(-70, -10), "t": 0.0,
-					"life": randf_range(0.3, 0.55),
-					"col": Color(1.0, randf_range(0.35, 0.7), 0.1)})
+			# embers pop off the plume and sail up; smoke curls after them
+			for i in 3:
+				parts.append({"x": duck_x + randf_range(-20, 20), "y": BASE_Y + randf_range(-26, 8),
+					"vx": -duck_vx * 0.2 + randf_range(-18, 18), "vy": randf_range(-170, -70), "t": 0.0,
+					"life": randf_range(0.25, 0.5),
+					"col": Color(1.0, randf_range(0.55, 0.95), 0.12)})
+			if randf() < 0.3:
+				parts.append({"x": duck_x + randf_range(-12, 12), "y": BASE_Y - 34.0,
+					"vx": randf_range(-12, 12), "vy": randf_range(-55, -30), "t": 0.0,
+					"life": randf_range(0.6, 1.0), "col": Color(0.45, 0.42, 0.40, 0.5)})
+			# firelight rings ride the wake — the river itself looks lit
+			if fmod(fire_t, 0.45) < delta:
+				ripples.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y + 12.0,
+					"t": 0.0, "max": 56.0, "col": Color(1.0, 0.5, 0.1)})
 			if fire_t <= 0.0:
 				_flash("cooled off.")
 		else:
 			heat = maxf(0.0, heat - delta * 0.035)   # streaks fade slowly, not punishingly
+			if heat >= 0.7 and randf() < 0.22:       # smoldering: wisps before the WHOOSH
+				parts.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y - 20.0,
+					"vx": randf_range(-10, 10), "vy": randf_range(-45, -25), "t": 0.0,
+					"life": randf_range(0.5, 0.8), "col": Color(0.5, 0.47, 0.45, 0.45)})
 	else:
 		heat = 0.0
 		fire_t = 0.0
@@ -1744,6 +1829,15 @@ func _collide() -> void:
 				die(HERON_DECK[randi() % HERON_DECK.size()])
 				return
 
+	# Sadie: 70 pounds of wet, single-minded chocolate lab. No fire, shield, or brave
+	# duckling changes the physics of paddling into her — hop over or steer clear.
+	if sadie != null and not is_airborne() and not is_invincible():
+		if absf(sadie.x - duck_x) < 52.0 + r * 0.4 and absf(sadie.y - BASE_Y) < 38.0 + r * 0.4:
+			ripples.append({"x": sadie.x, "y": sadie.y, "t": 0.0, "max": 130.0})
+			_float_text(sadie.x, sadie.y - 60.0, "BOOF?!", Color(0.85, 0.62, 0.4))
+			die(SADIE_DECK[randi() % SADIE_DECK.size()])
+			return
+
 func _collect(it: Dictionary) -> void:
 	it.got = true
 	var def: Dictionary = ITEM_DEFS[it.kind]
@@ -1773,6 +1867,7 @@ func _add_heat(amount: float) -> void:
 	heat = clampf(heat + amount, 0.0, 1.0)
 	if heat >= 1.0:
 		fire_t = 5.0 + 1.5 * (_up("hotwheels") - 1)
+		fire_max = fire_t
 		heat = 0.0
 		heat_warned = false
 		_flash("ON FIRE!!")
@@ -2019,6 +2114,20 @@ func _draw() -> void:
 				Color(0.85, 0.7, 0.3) if springy else Color(0.45, 0.30, 0.18))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	# Sadie: head, shoulders, and optimism above the waterline. The chuckit bobs
+	# forever ahead of her, which is the whole point of being a dog.
+	if sadie != null and not tex_sadie.is_empty():
+		if tex_chuckit != null:
+			var bpos := Vector2(sadie.x + sadie.dir * 74.0, sadie.y + 6.0 + sin(anim_t * 4.2) * 3.0)
+			var bsz: Vector2 = tex_chuckit.get_size() * 2.0
+			draw_texture_rect(tex_chuckit, Rect2(bpos - bsz * 0.5, bsz), false)
+		var sfr: Texture2D = tex_sadie[int(anim_t * 5.0) % 2]
+		var spos := Vector2(sadie.x, sadie.y + sin(anim_t * 3.2) * 2.5)
+		draw_set_transform(spos, sin(anim_t * 2.4) * 0.04, Vector2(sadie.dir, 1.0))
+		var ssz: Vector2 = sfr.get_size() * DUCK_DRAW
+		draw_texture_rect(sfr, Rect2(-ssz * 0.5, ssz), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 	# particles (splash droplets, sparkles, duckling fluff)
 	for p in parts:
 		var pa: float = 1.0 - p.t / p.life
@@ -2231,12 +2340,79 @@ func _draw_atmosphere() -> void:
 			var acol := Color(0.35, 0.95, 0.6, 0.10) if b % 2 == 0 else Color(0.6, 0.5, 0.95, 0.11)
 			draw_polyline(pts, acol, 22.0)
 
+# ON FIRE: the NHL Hitz treatment. A volumetric flame plume built from fanned
+# tongues, each drawn in four shells (ember red -> orange -> yellow -> white-hot
+# core) with every inner shell lifted slightly — stacked like the voxel ducks,
+# so the fire reads 3D instead of confetti. Tongues flicker on their own phases
+# and the whole plume streams against the steer, Hitz-style.
+const FIRE_SHELLS := [
+	[Color(0.80, 0.14, 0.03, 0.60), 1.00, 0.0],
+	[Color(1.00, 0.42, 0.05, 0.80), 0.74, 4.0],
+	[Color(1.00, 0.80, 0.16, 0.90), 0.50, 8.0],
+	[Color(1.00, 0.97, 0.80, 0.95), 0.27, 11.0],
+]
+
+func _draw_fire(pos: Vector2, scale: float, intensity: float, n := 5, fan := 46.0,
+		glow := true, ydir := -1.0) -> void:
+	if intensity <= 0.0:
+		return
+	var lean := clampf(-duck_vx / 520.0, -0.85, 0.85)     # the plume trails the steer
+	var flick := 0.85 + 0.15 * sin(anim_t * 23.0) * sin(anim_t * 7.7)
+	if glow:                                              # firelight pooling on the water
+		draw_circle(pos + Vector2(0, 14.0), (34.0 + 5.0 * sin(anim_t * 11.0)) * scale * intensity,
+			Color(1.0, 0.45, 0.08, 0.13 * intensity))
+		draw_circle(pos + Vector2(0, 12.0), 21.0 * scale * intensity,
+			Color(1.0, 0.70, 0.18, 0.18 * intensity))
+	for ti in n:
+		var tp := float(ti) / maxf(1.0, float(n - 1))     # 0..1 across the fan
+		var bx := (tp - 0.5) * fan * scale
+		var ph := float(ti) * 1.73
+		var hgt := (44.0 + 30.0 * sin(anim_t * 9.0 + ph) * sin(anim_t * 3.3 + ph * 2.1)) \
+			* scale * intensity * flick
+		hgt *= 1.25 - 0.55 * absf(tp - 0.5) * 2.0         # center of the fan burns tallest
+		for sh in FIRE_SHELLS:
+			var col: Color = sh[0]
+			var base := pos + Vector2(bx, (8.0 - sh[2] * scale * 0.45 * intensity) * -ydir)
+			_flame_tongue(base, 14.0 * scale * sh[1], hgt * maxf(sh[1], 0.42), lean,
+				anim_t * 10.0 + ph + sh[1] * 3.0,
+				Color(col.r, col.g, col.b, col.a * intensity), ydir)
+
+# one tongue of flame: a closed polygon that narrows from a round base to a single
+# tip point. Both edges ride the SAME sine sway (the tongue bends, the edges never
+# cross — crossed edges are bowties and Godot's triangulator refuses them).
+func _flame_tongue(base: Vector2, w: float, h: float, lean: float, ph: float,
+		col: Color, ydir := -1.0) -> void:
+	var pts := PackedVector2Array()
+	var segs := 5
+	for i in segs + 1:                                    # left edge, base -> tip
+		var t := float(i) / float(segs)
+		var cx := base.x + lean * h * t * t + sin(ph + t * 4.6) * w * 0.55 * t
+		pts.append(Vector2(cx - w * 0.5 * (1.0 - t * t), base.y + ydir * h * t))
+	for i in range(segs - 1, -1, -1):                     # right edge, tip already placed
+		var t := float(i) / float(segs)
+		var cx := base.x + lean * h * t * t + sin(ph + t * 4.6) * w * 0.55 * t
+		pts.append(Vector2(cx + w * 0.5 * (1.0 - t * t), base.y + ydir * h * t))
+	draw_colored_polygon(pts, col)
+
 func _draw_duck() -> void:
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if duck_shake > 0.0 else 0.0
 	var lift: float = (HOP_LIFT * _hop_boost() * hop_lift_bonus if state != St.MEGA else (400.0 if hyper else MEGA_LIFT)) * duck_hop_mul
 	var duck_pos := Vector2(duck_x + shake_x, BASE_Y - h * lift)
 	var duck_scale := 1.0 + (0.35 if state != St.MEGA else 1.2) * h
+
+	# ON FIRE: flares up fast at ignition, gutters out over the last beat —
+	# and past 0.7 heat a low smolder warns you the WHOOSH is coming
+	var fire_i := 0.0
+	if fire_t > 0.0:
+		fire_i = clampf((fire_max - fire_t) / 0.3, 0.05, 1.0) * clampf(fire_t / 0.8, 0.0, 1.0)
+	elif heat >= 0.7:
+		fire_i = 0.2 * (heat - 0.7) / 0.3
+	if fire_i > 0.0:
+		# the Hitz comet: a big plume streaming down-river behind the duck...
+		_draw_fire(duck_pos + Vector2(0, 26.0), (1.9 + 0.6 * h) * duck_scale, fire_i, 6, 54.0, true, 1.0)
+		# ...and a rising halo whose tips peek over the duck's head (the 3D volume)
+		_draw_fire(duck_pos + Vector2(0, -10.0), (1.5 + 0.5 * h) * duck_scale, fire_i * 0.9, 4, 40.0, false, -1.0)
 
 	if has_art:
 		var ss := tex_shadow.get_size() * DUCK_DRAW
@@ -2272,6 +2448,10 @@ func _draw_duck() -> void:
 	else:
 		draw_circle(Vector2(duck_x, BASE_Y + 6), DUCK_R * (1.0 - 0.55 * h), Color(0, 0, 0, 0.22 * (1.0 - 0.4 * h)))
 		draw_circle(duck_pos, DUCK_R * duck_scale, Color(0.97, 0.84, 0.27))
+
+	# the front licks of the plume wrap over the sprite: properly engulfed
+	if fire_i > 0.0:
+		_draw_fire(duck_pos + Vector2(0, 34.0), (0.8 + 0.3 * h) * duck_scale, fire_i, 3, 40.0, false, -1.0)
 
 func _duck_frame(h: float) -> Texture2D:
 	var cur = ducks[species]
