@@ -159,6 +159,7 @@ enum St { GROUNDED, HOPPING, MEGA }
 var in_menu := true
 var in_select := false
 var in_shop := false
+var menu_enter_t := -10.0       # brief tap-grace after landing on the menu
 var meta_owned: Array = []      # persistent shop purchases (ids)
 var sel_index := 0
 var select_yaw := 0.0
@@ -630,6 +631,7 @@ func _enter_menu() -> void:
 	in_menu = true
 	in_select = false
 	in_shop = false
+	menu_enter_t = anim_t
 	score_label.visible = false
 	loft_bar.visible = false
 	center_label.visible = false
@@ -990,7 +992,11 @@ func reset_game() -> void:
 
 # ---- input -------------------------------------------------------------------
 func _input(event: InputEvent) -> void:
+	# on touch screens one tap arrives twice (real touch + emulated mouse);
+	# ignore the emulated twin or every tap fires double across screen changes
 	if event is InputEventScreenTouch or event is InputEventMouseButton:
+		if event is InputEventMouseButton and event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		if event.pressed:
 			_on_press(event.position)
 		else:
@@ -998,6 +1004,8 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		_on_drag(event.position)
 	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		_on_drag(event.position)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if name_edit != null and name_edit.has_focus():
@@ -1041,8 +1049,8 @@ func _on_press(pos: Vector2) -> void:
 			_open_select()
 		elif MENU_SHOP_BTN.has_point(pos):
 			_open_shop()
-		else:
-			start_game()
+		elif anim_t - menu_enter_t > 0.35:
+			start_game()                       # grace: a stray tap can't insta-start
 		return
 	if in_select:
 		_select_press(pos)
