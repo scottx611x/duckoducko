@@ -132,10 +132,12 @@ const META := [
 	{"id": "pockets", "name": "DEEP POCKETS", "desc": "feathers you bank count DOUBLE", "cost": 250},
 ]
 const SHOP_ROW_H := 96.0
+const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mobile has no Esc)
+const DEATH_MENU_BTN := Rect2(170.0, 636.0, 200.0, 44.0)
 
-# duck-select screen
-const MENU_DUCKS_BTN := Rect2(55.0, 770.0, 200.0, 56.0)
-const MENU_SHOP_BTN := Rect2(285.0, 770.0, 200.0, 56.0)
+# duck-select screen (menu buttons get breathing room on phone screens)
+const MENU_DUCKS_BTN := Rect2(50.0, 752.0, 185.0, 58.0)
+const MENU_SHOP_BTN := Rect2(305.0, 752.0, 185.0, 58.0)
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
@@ -396,7 +398,7 @@ func _ready() -> void:
 	name_edit.placeholder_text = "name your duck"
 	name_edit.max_length = 16
 	name_edit.size = Vector2(250, 42)
-	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 838)
+	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 830)
 	name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var nsb := StyleBoxFlat.new()
 	nsb.bg_color = Color(0.07, 0.13, 0.19, 0.9)
@@ -894,6 +896,7 @@ func hyper_jump() -> void:
 	mega_t = 0.0
 	mega_style = "fly"
 	hyper = true
+	hop_events.append(anim_t)                  # boing for everyone
 	if _up("bounce") > 0:                      # BOUNCE CHARGE: springs feed the meter
 		_add_loft(0.35 * _up("bounce"))
 		_float_text(duck_x, BASE_Y - 110.0, "+loft!", Color(0.5, 0.85, 1.0))
@@ -1049,7 +1052,14 @@ func _on_press(pos: Vector2) -> void:
 		return
 	if not alive:
 		_sfx("click")
-		reset_game()
+		if DEATH_MENU_BTN.has_point(pos):
+			_enter_menu()
+		else:
+			reset_game()
+		return
+	if GAME_MENU_BTN.has_point(pos) and not drafting:
+		_sfx("click")
+		_enter_menu()                              # abandon ship (mobile's Esc)
 		return
 	if drafting:
 		if anim_t - draft_open_t < 0.45:
@@ -1160,6 +1170,7 @@ func mega_hop() -> void:
 	hyper = false
 	loft = 0.0
 	loft_ready = false
+	hop_events.append(anim_t)                  # the ducklings launch too
 	_sfx("mega")
 
 func fire_laser() -> void:
@@ -1658,8 +1669,15 @@ func _draw_death() -> void:
 			draw_style_box(csb, crect)
 			draw_string(font, Vector2(x + 10.0, cy + 19.0), c.txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, c.col)
 			x += w + 8.0
-	_otext(Vector2(0, 626), "tap to retry", 30, Color(1, 1, 1, 0.55 + 0.45 * sin(anim_t * 4.0)))
-	_otext(Vector2(0, 658), "esc — menu", 15, Color(1, 1, 1, 0.45))
+	_otext(Vector2(0, 622), "tap to retry", 30, Color(1, 1, 1, 0.55 + 0.45 * sin(anim_t * 4.0)))
+	var mb := StyleBoxFlat.new()
+	mb.bg_color = Color(0.10, 0.17, 0.24, 0.9)
+	mb.set_corner_radius_all(12)
+	mb.set_border_width_all(1)
+	mb.border_color = Color(1, 1, 1, 0.35)
+	draw_style_box(mb, DEATH_MENU_BTN)
+	draw_string(font, Vector2(DEATH_MENU_BTN.position.x, DEATH_MENU_BTN.position.y + 29), "menu",
+		HORIZONTAL_ALIGNMENT_CENTER, DEATH_MENU_BTN.size.x, 18, Color(1, 1, 1, 0.8))
 
 func _flash(msg: String) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
@@ -1856,6 +1874,13 @@ func _draw() -> void:
 	_draw_duck()
 	_draw_atmosphere()
 
+	# the in-run menu escape hatch (translucent, corner, ignorable)
+	if alive and not drafting:
+		draw_circle(GAME_MENU_BTN.get_center(), 23.0, Color(0.05, 0.09, 0.13, 0.5))
+		draw_arc(GAME_MENU_BTN.get_center(), 23.0, 0, TAU, 24, Color(1, 1, 1, 0.3), 1.5)
+		draw_string(font, Vector2(GAME_MENU_BTN.position.x, GAME_MENU_BTN.position.y + 33), "✕",
+			HORIZONTAL_ALIGNMENT_CENTER, GAME_MENU_BTN.size.x, 24, Color(1, 1, 1, 0.55))
+
 	if not alive:
 		_draw_death()
 		return
@@ -1925,12 +1950,12 @@ func _draw_ducklings() -> void:
 		var dx := dp.x
 		var dy := dp.y
 		var h := _duckling_h(i)
-		var pos := Vector2(dx, dy - h * 80.0)
-		var sc := 2.0 * (1.0 + 0.3 * h)
+		var pos := Vector2(dx, dy - h * 115.0)
+		var sc := 2.0 * (1.0 + 0.45 * h)
 		if tex_shadow != null:
-			var ss: Vector2 = tex_shadow.get_size() * 1.2 * (1.0 - 0.4 * h)
+			var ss: Vector2 = tex_shadow.get_size() * 1.2 * (1.0 - 0.5 * h)
 			draw_texture_rect(tex_shadow, Rect2(Vector2(dx, dy + 6) - ss * 0.5, ss),
-				false, Color(1, 1, 1, 0.8 - 0.3 * h))
+				false, Color(1, 1, 1, 0.8 - 0.45 * h))
 		var frames: Array = tex_duckling["hop"] if h > 0.05 else tex_duckling["idle"]
 		var fr: Texture2D = frames[int(anim_t * (14.0 if h > 0.05 else 4.0) + i) % 2]
 		var sz := fr.get_size() * sc
@@ -1944,8 +1969,8 @@ func _trail_x(ago: float) -> float:
 	return trail[0].x if trail.size() > 0 else duck_x
 
 func _duckling_h(i: int) -> float:
-	var delay := 0.05 * (i + 1)   # the whole conga pops up with you, in a quick wave
-	var dur := cur_hop_dur() * 0.85
+	var delay := 0.04 * (i + 1)   # the whole conga pops up with you, in a quick wave
+	var dur := cur_hop_dur()      # same hang time as the duck — clearly "with you"
 	for e in hop_events:
 		var p: float = (anim_t - e - delay) / dur
 		if p >= 0.0 and p < 1.0:
@@ -2068,7 +2093,7 @@ func _draw_menu() -> void:
 
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
-	_otext(Vector2(0, 700), "▶  tap to play  ◀", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
+	_otext(Vector2(0, 692), "▶  tap to play  ◀", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	# DUCKS + SHOP buttons
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
 	draw_string(font, Vector2(MENU_DUCKS_BTN.position.x, MENU_DUCKS_BTN.position.y + 33), "🦆  DUCKS",
@@ -2076,9 +2101,9 @@ func _draw_menu() -> void:
 	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
 	draw_string(font, Vector2(MENU_SHOP_BTN.position.x, MENU_SHOP_BTN.position.y + 33), "🪶  SHOP",
 		HORIZONTAL_ALIGNMENT_CENTER, MENU_SHOP_BTN.size.x, 24, Color(1, 1, 1, 0.95))
-	_otext(Vector2(0, 900), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
-		18, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-	_otext(Vector2(0, 938), "DUCKODUCKO beta · made with one thumb", 13, Color(1, 1, 1, 0.35),
+	_otext(Vector2(0, 906), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
+		17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	_otext(Vector2(0, 940), "DUCKODUCKO beta · made with one thumb", 13, Color(1, 1, 1, 0.35),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _btn_sb() -> StyleBoxFlat:
