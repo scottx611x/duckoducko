@@ -13,7 +13,8 @@ const MEGA_DUR := 2.6
 const MEGA_LIFT := 540.0
 const AIR_THRESHOLD := 0.15
 const BASE_SPEED := 215.0       # px/s scroll
-const SPEED_RAMP := 7.0         # px/s added per second survived (ramps quicker now)
+const SPEED_MAX_BONUS := 520.0  # asymptotic ramp: top speed ~735 px/s, never unplayable
+const DRIFT_START := 12000.0    # past 1200m, logs start drifting sideways instead
 const STEER_LERP := 14.0
 const LOG_START_DIST := 160.0   # logs start soon after launch
 const HERON_START := 900.0      # the heron shows up once you're warmed up
@@ -194,6 +195,7 @@ var picked := {}                # upgrade id -> stacks taken this run
 var shield_charges := 0
 var air_hops := 0               # double-hops spent since last landing
 var hyper := false              # current MEGA is a spring-log hyper jump
+var hop_lift_bonus := 1.0       # DOUBLE HOP stacks the arc higher, seamlessly
 
 # the duckling conga line (WHIMSY §4): derived from a position/hop history
 var ducklings_n := 0
@@ -210,6 +212,7 @@ var prop_timer := 5.0
 
 var loft := 0.0
 var loft_ready := false
+var loft_ready_t := 0.0         # sit on a full meter too long and it goes off by itself
 
 # milestone chime: every 100m, pitch climbing a pentatonic scale (WHIMSY §8)
 const PENTA := [0, 2, 4, 7, 9, 12, 14, 16]
@@ -919,6 +922,7 @@ func reset_game() -> void:
 	shield_charges = 0
 	air_hops = 0
 	hyper = false
+	hop_lift_bonus = 1.0
 	squash = 0.0
 	ducklings_n = 0
 	trail.clear()
@@ -932,6 +936,8 @@ func reset_game() -> void:
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 	center_label.visible = false
+	if loft_bar != null and not in_menu and not in_select:
+		loft_bar.visible = true             # back on for the retry
 
 # ---- input -------------------------------------------------------------------
 func _input(event: InputEvent) -> void:
@@ -1066,6 +1072,7 @@ func hop() -> void:
 	if state == St.GROUNDED:
 		state = St.HOPPING
 		hop_t = 0.0
+		hop_lift_bonus = 1.0
 		hop_count += 1
 		hop_events.append(anim_t)                  # the ducklings are watching
 		if hop_count == 100:
@@ -1078,10 +1085,20 @@ func hop() -> void:
 		else:
 			_sfx("hop", randf_range(0.95, 1.1))
 	elif state == St.HOPPING and air_hops < _up("double"):
-		air_hops += 1                              # DOUBLE HOP: relaunch mid-air
-		hop_t = 0.0
+		# DOUBLE HOP: don't restart the arc — extend it. The new, taller arc is
+		# re-entered at the current height (rising), so the duck visibly surges
+		# upward off a mid-air flap instead of playing two identical jumps.
+		air_hops += 1
+		var cur_h := sin((hop_t / cur_hop_dur()) * PI)
+		var old_bonus := hop_lift_bonus
+		hop_lift_bonus = old_bonus * 1.45
+		var ratio := clampf(cur_h * old_bonus / hop_lift_bonus, 0.0, 0.999)
+		hop_t = (asin(ratio) / PI) * cur_hop_dur()
 		hop_events.append(anim_t)
-		_sfx("hop", 1.2)
+		var fy := BASE_Y - cur_h * HOP_LIFT * _hop_boost() * duck_hop_mul * old_bonus
+		_spawn_parts(duck_x, fy + 20.0, 10, Color(1, 1, 1, 0.9), 130.0)   # feather burst
+		_sfx("hop", 1.3)
+		_sfx("collect", 1.4, -10.0)
 
 func mega_hop() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0:
@@ -1136,6 +1153,7 @@ func die(msg: String) -> void:
 	best_m = maxi(best_m, dead_m)
 	_save()
 	center_label.visible = false            # the death screen draws itself
+	loft_bar.visible = false                # no MEGA/LASER pills over the eulogy
 
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
@@ -1157,7 +1175,9 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _update_play(delta: float) -> void:
-	speed = BASE_SPEED + SPEED_RAMP * (distance / 200.0) * pow(0.75, _up("zen"))
+	# speed climbs forever but flattens out — late game gets harder via drifting
+	# logs and hungrier herons, not raw scroll speed
+	speed = BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))
 	distance += speed * delta * (1.0 + 0.08 * ducklings_n)   # the conga pays
 	idle_timer += delta
 
@@ -1188,10 +1208,10 @@ func _update_play(delta: float) -> void:
 					_collect(it)
 					_sfx("peep", randf_range(1.1, 1.3), -6.0)
 
-	# CRUMB CANNON: pew pew (but bread)
+	# CRUMB CANNON: pew pew (but bread) — only while paddling; no mid-air spitting
 	if _up("cannon") > 0:
 		crumb_timer -= delta
-		if crumb_timer <= 0.0:
+		if crumb_timer <= 0.0 and state == St.GROUNDED:
 			crumbs.append({"x": duck_x, "y": BASE_Y - 36.0})
 			_sfx("collect", 0.65, -12.0)
 			crumb_timer = 0.9 / _up("cannon")
@@ -1240,6 +1260,14 @@ func _update_play(delta: float) -> void:
 			_float_text(duck_x, BASE_Y - 120.0, "+%d 🪶" % (2 * _up("nestegg")), Color(1, 0.85, 0.35))
 		milestone_step += 1
 		next_milestone += 100
+
+	# hoard a full LOFT meter too long and it deploys itself (duck's choice)
+	if loft_ready and anim_t - loft_ready_t > 6.0 and state == St.GROUNDED and laser_t <= 0.0:
+		_flash("auto-deploy!")
+		if randf() < 0.5:
+			mega_hop()
+		else:
+			fire_laser()
 
 	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck)
 	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0:
@@ -1320,6 +1348,7 @@ func is_invincible() -> bool:
 
 func _land(mega: bool) -> void:
 	air_hops = 0
+	hop_lift_bonus = 1.0
 	squash = 1.0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
@@ -1356,9 +1385,13 @@ func _spawn(delta: float) -> void:
 	if log_timer <= 0.0 and distance > LOG_START_DIST:
 		var w := randf_range(110.0, 230.0)
 		var is_spring := randf() < SPRING_LOG_CHANCE * (2.0 if _up("springy") > 0 else 1.0)
+		# late game: logs drift sideways, slowly at first, up to ±75 px/s
+		var drift := 0.0
+		if distance > DRIFT_START:
+			drift = randf_range(-1.0, 1.0) * 75.0 * clampf((distance - DRIFT_START) / 40000.0, 0.15, 1.0)
 		logs.append({
 			"x": randf_range(w * 0.5 + BANK_W, VIEW.x - w * 0.5 - BANK_W),
-			"y": -60.0, "w": w, "h": 46.0, "missed": false, "spring": is_spring,
+			"y": -60.0, "w": w, "h": 46.0, "missed": false, "spring": is_spring, "vx": drift,
 			"phase": randf() * TAU, "frog": (not is_spring) and randf() < 0.35, "frog_gone": false,
 		})
 		log_timer = randf_range(0.65, 1.15) * (BASE_SPEED / speed) + 0.25
@@ -1372,7 +1405,8 @@ func _spawn(delta: float) -> void:
 	if heron_timer <= 0.0 and distance > HERON_START:
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0})
-		heron_timer = randf_range(4.5, 8.0)
+		# herons get hungrier deep in the run (down to ~60% of the early gap)
+		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0)
 
 func _pick_kind() -> int:
 	var total := 0
@@ -1389,6 +1423,13 @@ func _move_world(delta: float) -> void:
 	var dy := speed * delta
 	for l in logs:
 		l.y += dy
+		var lvx: float = l.get("vx", 0.0)
+		if lvx != 0.0:
+			l.x += lvx * delta
+			# drifting logs bounce off the banks
+			if l.x < l.w * 0.5 + BANK_W or l.x > VIEW.x - l.w * 0.5 - BANK_W:
+				l.vx = -lvx
+				l.x = clampf(l.x, l.w * 0.5 + BANK_W, VIEW.x - l.w * 0.5 - BANK_W)
 	for it in items:
 		it.y += dy
 	logs = logs.filter(func(l): return l.y < VIEW.y + 80.0)
@@ -1505,6 +1546,7 @@ func _add_loft(amount: float) -> void:
 	loft = clampf(loft + amount * (1.0 + 0.3 * _up("loft")), 0.0, 1.0)
 	if loft >= 1.0 and not loft_ready:
 		loft_ready = true
+		loft_ready_t = anim_t
 		_sfx("chime", 1.5)                         # LOFT ready fanfare
 
 func _update_ripples(delta: float) -> void:
@@ -1869,7 +1911,7 @@ func _draw_atmosphere() -> void:
 func _draw_duck() -> void:
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if duck_shake > 0.0 else 0.0
-	var lift: float = (HOP_LIFT * _hop_boost() if state != St.MEGA else (400.0 if hyper else MEGA_LIFT)) * duck_hop_mul
+	var lift: float = (HOP_LIFT * _hop_boost() * hop_lift_bonus if state != St.MEGA else (400.0 if hyper else MEGA_LIFT)) * duck_hop_mul
 	var duck_pos := Vector2(duck_x + shake_x, BASE_Y - h * lift)
 	var duck_scale := 1.0 + (0.35 if state != St.MEGA else 1.2) * h
 
