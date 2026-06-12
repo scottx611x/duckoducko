@@ -37,8 +37,10 @@ SPECIES = dict(
     mallard=dict(dark_rump=True),
     hen=dict(hen=True, bill_saddle=True),
     wood=dict(crest=True, face_paint="wood", red_eye=True, chest_speckles=True, flank_bars=True),
-    bufflehead=dict(head_scale=1.22, bill_len=14, face_paint="bufflehead", size=0.85),
+    # head_scale must leave the stubby bill poking out past the head ellipsoid
+    bufflehead=dict(head_scale=1.18, bill_len=16, face_paint="bufflehead", size=0.85),
     pintail=dict(pin_tail=True, face_paint="pintail", long_neck=True, bill_stripe=True),
+    hoodie=dict(crest=True, face_paint="hoodie", eye_col=(244, 196, 60)),
 )
 
 
@@ -81,6 +83,19 @@ def palette(sp):
             wing=(46, 44, 52), wingd=(34, 32, 40), primary=(26, 24, 30),
             specw=(238, 238, 240), spec=(226, 226, 230), specd=(186, 186, 194),
             tail=(92, 94, 102), tailhi=(132, 134, 142), eye=(18, 16, 20),
+        )
+    if sp == "hoodie":  # hooded merganser: black head, white fan hood, rusty flanks
+        return dict(
+            back=(30, 28, 34), body=(154, 92, 56), belly=(214, 198, 174),
+            verm_d=(126, 72, 42), verm_l=(176, 112, 70),
+            nape=(34, 30, 40), head=(30, 28, 36), headh=(58, 50, 66),
+            crown=(24, 22, 30), glint=(82, 72, 92),
+            chest=(238, 236, 230), chestd=(206, 204, 198), chestl=(248, 246, 240),
+            bill=(64, 66, 74), billd=(44, 46, 52), nail=(30, 32, 36), nostril=(52, 54, 62),
+            white=(246, 244, 240), collar=(246, 244, 240),
+            wing=(42, 40, 48), wingd=(32, 30, 38), primary=(24, 22, 28),
+            specw=(238, 238, 240), spec=(214, 214, 218), specd=(180, 180, 186),
+            tail=(74, 58, 44), tailhi=(112, 92, 70), eye=(20, 18, 22),
         )
     if sp == "pintail":  # the gymnast: chocolate head, white neck stripe, long pin tail
         return dict(
@@ -236,6 +251,19 @@ def build(sp="mallard", wings="folded"):
         for (x, y, z) in list(V.keys()):
             if V[(x, y, z)] in (P["head"], P["headh"], P["glint"]) and z <= 9.5 and y >= 5.0:
                 V[(x, y, z)] = P["white"]
+    elif fp == "hoodie":
+        # THE HOOD: a white fan on the rear of the black head, black-bordered
+        # (the window leaves black crown above and black border all around)
+        for (x, y, z) in list(V.keys()):
+            if V[(x, y, z)] in (P["head"], P["headh"], P["glint"], P["crown"], P["nape"]) \
+                    and z <= 9.0 and 5.5 <= y <= 8.5:
+                V[(x, y, z)] = P["white"]
+        # two black spur bars between the white chest and rusty flank
+        for s in (1, -1):
+            for y in range(-1, 3):
+                for z in (4, 5):
+                    if (3 * s, y, z) in V:
+                        V[(3 * s, y, z)] = (26, 24, 30)
     elif fp == "pintail":
         # white breast finger running up each side of the neck toward the head
         for y in range(1, 7 + NY):
@@ -268,7 +296,7 @@ def build(sp="mallard", wings="folded"):
             put(0, 5 + NY, z, P["nail"])
     # ---- eyes (+ glint) ----
     ex = 3 if hs <= 1.0 else 4                        # bigger head -> eyes sit wider
-    eye = (196, 44, 32) if spec.get("red_eye") else P["eye"]
+    eye = spec.get("eye_col", (196, 44, 32) if spec.get("red_eye") else P["eye"])
     for sx in (ex, -ex):
         put(sx, 7 + NY, 10, eye); put(sx, 8 + NY, 10, eye); put(sx, 7 + NY, 11, eye)
         put(sx, 8 + NY, 11, P["white"], only_empty=True)
@@ -435,46 +463,66 @@ def _vox_helpers(V):
 def build_heron(flap=0):
     """Great blue heron in a strike dive, seen from above. Head points +z
     (rendered yaw=0 so it dives DOWN the screen toward the duck)."""
-    BODY = (122, 136, 154); BODYD = (94, 106, 124); COVERT = (108, 122, 140)
-    PRIM = (40, 44, 54); WHITE = (240, 242, 244); CREST = (26, 28, 36)
-    BILL = (228, 182, 72); RUST = (148, 94, 62); LEG = (62, 54, 46)
+    BODY = (134, 150, 170); BODYD = (100, 114, 134); COVERT = (120, 136, 156)
+    COVERT2 = (110, 124, 144); SEC = (74, 84, 102); PRIM = (34, 38, 50)
+    WHITE = (246, 248, 250); CREST = (20, 22, 30)
+    BILL = (240, 198, 86); BILLD = (198, 152, 54)
+    RUST = (162, 100, 60); LEG = (70, 60, 50); EYE = (252, 212, 70)
     V = {}
     put, ellip, box = _vox_helpers(V)
-    # slim body, darker mantle
-    ellip(0, 0, 0, 3.2, 2.6, 5.5, BODY)
-    ellip(0, 1.4, -0.5, 2.6, 1.8, 4.8, BODYD, only_empty=True)
-    ellip(0, -1.6, 1.0, 2.4, 1.4, 4.0, WHITE, only_empty=True)   # pale belly
-    # huge spread wings, primaries black, slight sweep-back; flap lifts/droops tips
+    # body: sleeker, pale belly, dark mantle line down the spine
+    ellip(0, 0, 0, 3.4, 2.7, 6.0, BODY)
+    ellip(0, 1.5, -0.5, 2.7, 1.8, 5.2, BODYD, only_empty=True)
+    ellip(0, -1.7, 1.0, 2.6, 1.5, 4.4, WHITE, only_empty=True)
+    for z in range(-5, 4):
+        put(0, 3, z, CREST, only_empty=True)               # spine stripe
+    # rust shoulder patches where the wings meet the body
     for s in (1, -1):
-        for w in range(11):
+        put(3 * s, 2, 2, RUST); put(3 * s, 2, 1, RUST); put(4 * s, 2, 1, RUST)
+    # huge spread wings: covert gradient -> slate secondaries -> black primaries,
+    # a thin white wing-bar along the leading edge; flap raises/droops the tips
+    for s in (1, -1):
+        for w in range(12):
             x = (3 + w) * s
             lift = (1 if flap == 0 else 2) + (w // 4) - (w // 5 if flap else 0)
             z0 = -4 + (w // 2)          # trailing edge sweeps forward
             z1 = 3 - (w // 4)           # leading edge sweeps back
-            col = PRIM if w >= 8 else (COVERT if w % 2 else BODY)
+            if w >= 9:
+                col = PRIM
+            elif w >= 6:
+                col = SEC
+            else:
+                col = COVERT if w % 2 else COVERT2
             box(x, x, lift, lift + 1, z0, z1, col)
-            if w < 8 and w % 3 == 0:    # covert rows
-                box(x, x, lift + 1, lift + 1, z0 + 1, z1 - 1, BODYD)
-    # extended strike neck: white throat, slate sides
+            if w < 9:
+                put(x, lift + 1, z1, WHITE)                # white wing-bar
+            if w >= 9:                                     # feather notches on tips
+                put(x, lift, z0 - 1, PRIM)
+    # extended strike neck: white with slate side-stripes, slight S-kink
     box(-1, 1, 1, 2, 5, 8, BODY)
-    box(0, 0, 0, 1, 6, 9, WHITE)
+    box(0, 0, 0, 1, 5, 9, WHITE)
     box(0, 0, 1, 2, 9, 11, WHITE)
-    # head: white crown, black brow stripes sweeping to a trailing plume
-    ellip(0, 2.6, 12, 1.9, 1.7, 2.1, WHITE)
+    put(1, 2, 9, RUST); put(-1, 2, 9, RUST)                # rusty neck streak
+    # head: white crown, bold black brow band sweeping to a long trailing plume
+    ellip(0, 2.8, 12, 2.0, 1.8, 2.2, WHITE)
     for z in (11, 12, 13):
         put(1, 4, z, CREST); put(-1, 4, z, CREST)
-    put(0, 4, 10, CREST); put(0, 5, 9, CREST); put(0, 5, 8, CREST)   # the plume
-    # dagger bill
+        put(1, 5, z, CREST, only_empty=True); put(-1, 5, z, CREST, only_empty=True)
+    for i, z in enumerate((10, 9, 8, 7)):                  # the plume, trailing up
+        put(0, 4 + (i + 1) // 2, z, CREST)
+    # dagger bill: bright yellow, dark tip
     box(0, 0, 2, 3, 14, 18, BILL)
-    put(0, 2, 19, BILL)
-    # fierce little eyes
-    put(2, 3, 12, (244, 204, 60)); put(-2, 3, 12, (244, 204, 60))
+    box(0, 0, 2, 2, 17, 18, BILLD)
+    put(0, 2, 19, BILLD)
+    # fierce yellow eyes, black pupil forward
+    put(2, 3, 12, EYE); put(-2, 3, 12, EYE)
     put(2, 3, 13, CREST); put(-2, 3, 13, CREST)
-    # rusty thighs + trailing legs
+    # rusty thighs + long trailing legs with toes
     for s in (1, -1):
-        put(s, -1, -5, RUST)
-        for z in range(-11, -5):
-            put(s, 0 if z > -9 else 1, z, LEG)
+        put(s, -1, -5, RUST); put(s, 0, -6, RUST)
+        for z in range(-12, -6):
+            put(s, 0 if z > -10 else 1, z, LEG)
+        put(s * 2, 1, -12, LEG); put(0, 1, -13, LEG)       # toes
     return V
 
 
@@ -513,7 +561,7 @@ def generate_critters(art_dir):
     # heron: dive pose, two flap frames, rendered larger than a duck
     for f in (0, 1):
         SH = shade(build_heron(f))
-        save(render(SH, math.radians(0), math.radians(55), out=72, scale=1.5),
+        save(render(SH, math.radians(0), math.radians(55), out=76, scale=1.55),
              "heron_%d.png" % f)
     # duckling: back view to match gameplay camera
     gy = math.radians(GAME_YAW)

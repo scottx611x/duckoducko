@@ -61,6 +61,8 @@ const FACTS := [
 	"rubber duckies are always watching.",
 	"hop #100 is legendary. keep count.",
 	"try tapping the big duck. he loves it.",
+	"the hooded merganser wears the hood. always.",
+	"frogs ribbit in lowercase.",
 ]
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
@@ -93,6 +95,7 @@ const ROSTER := [
 	{"name": "Wood Duck", "species": "wood", "hop": 0.75, "steer": 0.5, "trait": "floaty show-off", "cost": 25},
 	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.6, "steer": 0.75, "trait": "tiny & twitchy", "cost": 50, "size": 0.85},
 	{"name": "Pintail", "species": "pintail", "hop": 0.45, "steer": 0.85, "trait": "the best steerer", "cost": 90},
+	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.7, "steer": 0.6, "trait": "the crested diver", "cost": 140},
 ]
 
 # ---- state -------------------------------------------------------------------
@@ -151,6 +154,11 @@ var hop_events: Array = []      # hop start times — ducklings mirror them late
 
 # particles: splashes, sparkles, fluff
 var parts: Array = []           # {x, y, vx, vy, t, life, col}
+var floaties: Array = []        # rising mini-texts: {x, y, txt, t, col}
+
+# floating nonsense (WHIMSY §5): sailboat, bottle, flip-flop drift by, judging no one
+var props: Array = []           # {x, y, kind, phase}
+var prop_timer := 5.0
 
 var loft := 0.0
 var loft_ready := false
@@ -210,6 +218,8 @@ var has_art := false
 
 var duck_name := ""             # beta tester's duck, for bragging rights
 var name_edit: LineEdit
+var tex_props := []
+var music_player: AudioStreamPlayer
 
 # menu easter egg: the big drake likes being tapped
 var menu_spin_vel := 0.0
@@ -241,6 +251,10 @@ func _ready() -> void:
 			"idle": [load("res://art/duckling_idle_0.png"), load("res://art/duckling_idle_1.png")],
 			"hop": [load("res://art/duckling_hop_0.png"), load("res://art/duckling_hop_1.png")],
 		}
+	for pn in ["boat", "bottle", "flipflop"]:
+		var pp := "res://art/prop_%s.png" % pn
+		if ResourceLoader.exists(pp):
+			tex_props.append(load(pp))
 	for kind in ITEM_DEFS:
 		tex_items[kind.name] = load("res://art/%s.png" % kind.name)
 	has_art = ducks.has("mallard") and ducks["mallard"]["idle"][0] != null and tex_water != null
@@ -274,7 +288,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -282,6 +296,18 @@ func _ready() -> void:
 		var pl := AudioStreamPlayer.new()
 		add_child(pl)
 		sfx_pool.append(pl)
+
+	# music: a seamless pluck loop; tempo leans forward as the river speeds up
+	if ResourceLoader.exists("res://sfx/music.wav"):
+		var ms: AudioStreamWAV = load("res://sfx/music.wav")
+		ms.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		ms.loop_begin = 0
+		ms.loop_end = ms.data.size() / 2          # 16-bit mono: 2 bytes per frame
+		music_player = AudioStreamPlayer.new()
+		music_player.stream = ms
+		music_player.volume_db = -11.0
+		add_child(music_player)
+		music_player.play()
 
 	name_edit = LineEdit.new()
 	name_edit.placeholder_text = "name your duck"
@@ -492,6 +518,8 @@ func _open_select() -> void:
 func start_game() -> void:
 	in_menu = false
 	in_select = false
+	if not _is_unlocked(sel_index):
+		sel_index = 0                          # previewing a locked duck ≠ owning it
 	var r: Dictionary = ROSTER[sel_index]
 	if r.species != "" and ducks.has(r.species):
 		species = r.species
@@ -590,6 +618,7 @@ func _add_ducklings(n: int) -> void:
 	ducklings_n = mini(ducklings_n + n, MAX_DUCKLINGS)
 	for i in n:
 		_sfx("peep", randf_range(0.9, 1.2))
+	_float_text(duck_x, BASE_Y + 44.0, "peep!", Color(0.97, 0.87, 0.45))
 	_spawn_parts(duck_x, BASE_Y + 40.0, 10, Color(0.97, 0.87, 0.45), 120.0)
 
 func _lose_duckling() -> void:
@@ -612,6 +641,8 @@ func _landing_blast(radius: float) -> void:
 			_spawn_parts(l.x, l.y, 11, Color(0.62, 0.42, 0.24), 190.0)
 			_add_loft(0.06)
 			if l.frog and not l.frog_gone:
+				_sfx("ribbit", randf_range(0.85, 1.1))
+				_float_text(l.x - l.w * 0.3, l.y - 18.0, "ribbit!", Color(0.65, 0.9, 0.55))
 				ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
 		else:
 			survivors.append(l)
@@ -628,6 +659,9 @@ func hyper_jump() -> void:
 	_sfx("mega", 1.4)
 	_flash("BOING!")
 	_spawn_parts(duck_x, BASE_Y, 12, Color(1.0, 0.9, 0.4), 220.0)
+
+func _float_text(x: float, y: float, txt: String, col := Color(1, 1, 1)) -> void:
+	floaties.append({"x": x, "y": y, "txt": txt, "t": 0.0, "col": col})
 
 # ---- particles -----------------------------------------------------------------
 func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
@@ -692,6 +726,11 @@ func reset_game() -> void:
 	trail.clear()
 	hop_events.clear()
 	parts.clear()
+	floaties.clear()
+	props.clear()
+	prop_timer = 5.0
+	if music_player != null:
+		music_player.pitch_scale = 1.0
 	cam.zoom = Vector2.ONE
 	cam.offset = Vector2.ZERO
 	center_label.visible = false
@@ -873,6 +912,9 @@ func die(msg: String) -> void:
 	var m := int(distance / 10.0)
 	feathers += run_feathers
 	var record := m > best_m
+	if record and best_m > 0:               # confetti for the new best
+		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 36, Color(1.0, 0.86, 0.35), 300.0)
+		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 22, Color(0.55, 0.85, 1.0), 260.0)
 	best_m = maxi(best_m, m)
 	_save()
 	var sub := "NEW BEST!" if record else "best: %d m" % best_m
@@ -897,6 +939,12 @@ func _process(delta: float) -> void:
 		select_yaw += delta * 0.7
 	if not in_menu and not in_select and alive and not drafting:
 		_update_play(delta)
+	if not in_menu and not in_select:
+		_update_parts(delta)               # confetti/sparkle keep falling when dead
+		for f in floaties:
+			f.t += delta
+			f.y -= 42.0 * delta
+		floaties = floaties.filter(func(f): return f.t < 0.9)
 	_update_ripples(delta)
 	queue_redraw()
 
@@ -910,11 +958,35 @@ func _update_play(delta: float) -> void:
 		trail.pop_front()
 	while hop_events.size() > 0 and anim_t - hop_events[0] > 3.0:
 		hop_events.pop_front()
-	_update_parts(delta)
+
+	# floating nonsense drifts by along the banks
+	prop_timer -= delta
+	if prop_timer <= 0.0 and not tex_props.is_empty():
+		var left := randf() < 0.5
+		props.append({"x": (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0)),
+			"y": -30.0, "kind": randi() % tex_props.size(), "phase": randf() * TAU})
+		prop_timer = randf_range(7.0, 14.0)
+	for pr in props:
+		pr.y += speed * delta * 0.82
+		pr.x += sin(anim_t * 0.8 + pr.phase) * 6.0 * delta
+	props = props.filter(func(pr): return pr.y < VIEW.y + 40.0)
+
+	# music leans forward with the river
+	if music_player != null:
+		music_player.pitch_scale = 1.0 + clampf((speed - BASE_SPEED) / 2400.0, 0.0, 0.08)
+
+	# idle long enough and the duck sneezes. nobody is safe from pollen.
+	if idle_timer > 14.0 and state == St.GROUNDED:
+		duck_shake = 0.3
+		_float_text(duck_x, BASE_Y - 70.0, "achoo.")
+		_sfx("quack", 1.45, -4.0)
+		ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 60.0})
+		idle_timer = 4.0
 
 	# milestone chime every 100m, climbing a pentatonic scale
 	if int(distance / 10.0) >= next_milestone:
 		_sfx("chime", pow(2.0, PENTA[milestone_step % PENTA.size()] / 12.0), -4.0)
+		_float_text(duck_x, BASE_Y - 95.0, "%d m" % next_milestone, Color(1, 0.92, 0.45))
 		milestone_step += 1
 		next_milestone += 100
 
@@ -997,8 +1069,8 @@ func is_invincible() -> bool:
 func _land(mega: bool) -> void:
 	air_hops = 0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
-	_landing_blast(280.0 if mega else 120.0)
 	if mega:
+		_landing_blast(280.0)                  # only the big jumps detonate
 		_sfx("splash_big")
 		_flash("BOING." if hyper else "WHEE.")
 		_spawn_parts(duck_x, BASE_Y, 18, Color(0.9, 0.97, 1.0), 260.0)
@@ -1098,8 +1170,11 @@ func _collide() -> void:
 					l.missed = true
 					duck_shake = 0.18
 					_add_loft(0.10)
+					_float_text(duck_x, BASE_Y - 72.0, "+loft", Color(0.5, 0.85, 1.0))
 					if l.frog and not l.frog_gone:
 						l.frog_gone = true
+						_sfx("ribbit", randf_range(0.9, 1.15))
+						_float_text(l.x - l.w * 0.3, l.y - 18.0, "ribbit.", Color(0.65, 0.9, 0.55))
 						ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
 			elif l.get("spring", false):
 				smashed = l                      # golden log: it's a trampoline
@@ -1251,6 +1326,16 @@ func _draw() -> void:
 		var rp: float = r.t / 0.6
 		draw_arc(Vector2(r.x, r.y), r.max * rp, 0, TAU, 28, Color(1, 1, 1, 0.5 * (1.0 - rp)), 3.0)
 
+	# floating nonsense (sailboat, bottle, flip-flop): purely decorative, gently swaying
+	for pr in props:
+		if pr.kind < tex_props.size():
+			var ptex: Texture2D = tex_props[pr.kind]
+			var psway: float = sin(anim_t * 1.1 + pr.phase) * 0.12
+			draw_set_transform(Vector2(pr.x, pr.y), psway, Vector2.ONE)
+			var psz: Vector2 = ptex.get_size() * 2.0
+			draw_texture_rect(ptex, Rect2(-psz * 0.5, psz), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 	# logs (bob + sway) with frog passenger; golden spring logs pulse + glow
 	for l in logs:
 		var bob: float = sin(anim_t * 2.0 + l.phase) * 3.0
@@ -1281,6 +1366,12 @@ func _draw() -> void:
 	for p in parts:
 		var pa: float = 1.0 - p.t / p.life
 		draw_circle(Vector2(p.x, p.y), 1.5 + 2.5 * pa, Color(p.col.r, p.col.g, p.col.b, 0.85 * pa))
+
+	# rising mini-texts ("+loft", "ribbit.", "100 m", "achoo.")
+	for f in floaties:
+		var fa: float = 1.0 - f.t / 0.9
+		draw_string(font, Vector2(f.x - 90.0, f.y), f.txt, HORIZONTAL_ALIGNMENT_CENTER, 180, 20,
+			Color(f.col.r, f.col.g, f.col.b, fa))
 
 	# collectibles
 	for it in items:

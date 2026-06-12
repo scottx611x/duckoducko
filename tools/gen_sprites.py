@@ -426,6 +426,50 @@ def make_berry():
     return add_outline(img)
 
 
+def make_boat():
+    """A tiny lost sailboat (floating nonsense, WHIMSY §5)."""
+    img = Image.new("RGBA", (18, 18), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    HULL = (140, 92, 54, 255)
+    HULLD = (104, 66, 38, 255)
+    SAIL = (240, 238, 228, 255)
+    d.polygon([(2, 12), (15, 12), (12, 16), (5, 16)], fill=HULL)
+    d.line([(2, 12), (15, 12)], fill=HULLD)
+    d.line([(8, 2), (8, 12)], fill=HULLD)                  # mast
+    d.polygon([(9, 2), (14, 9), (9, 9)], fill=SAIL)        # main sail
+    d.polygon([(7, 4), (3, 9), (7, 9)], fill=SAIL)         # jib
+    return add_outline(img)
+
+
+def make_bottle():
+    """A message in a bottle. The message is unreadable. Probably 'quack'."""
+    img = Image.new("RGBA", (8, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    GLASS = (118, 178, 156, 230)
+    GLASSD = (84, 140, 120, 255)
+    CORK = (172, 130, 78, 255)
+    NOTE = (236, 226, 198, 255)
+    d.rectangle([2, 0, 5, 2], fill=CORK)
+    d.rounded_rectangle([1, 3, 6, 14], radius=2, fill=GLASS)
+    d.rectangle([2, 6, 5, 11], fill=NOTE)
+    d.line([(1, 4), (1, 13)], fill=GLASSD)
+    return add_outline(img)
+
+
+def make_flipflop():
+    """A single rogue flip-flop. Nobody knows whose."""
+    img = Image.new("RGBA", (9, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    SOLE = (238, 130, 150, 255)
+    SOLED = (198, 92, 112, 255)
+    STRAP = (250, 244, 240, 255)
+    d.rounded_rectangle([1, 1, 7, 14], radius=3, fill=SOLE)
+    d.ellipse([2, 9, 6, 14], fill=SOLED)
+    d.line([(4, 3), (1, 7)], fill=STRAP)
+    d.line([(4, 3), (7, 7)], fill=STRAP)
+    return add_outline(img)
+
+
 def make_ducky():
     """The rubber ducky. It squeaks. It judges."""
     img = Image.new("RGBA", (16, 14), (0, 0, 0, 0))
@@ -571,6 +615,9 @@ save(make_bread(), "bread.png")
 save(make_berry(), "berry.png")
 save(make_frog(), "frog.png")
 save(make_ducky(), "ducky.png")
+save(make_boat(), "prop_boat.png")
+save(make_bottle(), "prop_bottle.png")
+save(make_flipflop(), "prop_flipflop.png")
 save(make_water(), "water.png")
 save(make_bank("left"), "bank_left.png")
 save(make_bank("right"), "bank_right.png")

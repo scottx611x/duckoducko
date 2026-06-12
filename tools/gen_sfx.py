@@ -192,6 +192,22 @@ def unlock():
     return out
 
 
+def ribbit():
+    """A startled frog. Low, wet, brief."""
+    dur = 0.16
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        f = 96.0 * (1.0 + 0.18 * math.sin(TAU * 11.0 * t)) * (1.0 - 0.2 * p)
+        s = 0.0
+        for k in range(1, 6):
+            s += math.sin(TAU * f * k * t) / k
+        s *= 0.5 * (0.6 + 0.4 * math.sin(TAU * 42.0 * t))
+        out.append(s * env(t, dur, 0.008, 1.4) * 0.65)
+    return out
+
+
 def crunch():
     """Woody log-splinter thunk for the landing shockwave."""
     dur = 0.22
@@ -242,4 +258,5 @@ if __name__ == "__main__":
     save("click.wav", click())
     save("peep.wav", peep())
     save("crunch.wav", crunch())
+    save("ribbit.wav", ribbit())
     print("done.")
