@@ -48,10 +48,15 @@ const UPGRADES := [
 	{"id": "buffet", "name": "LOG BUFFET", "desc": "lasered logs each drop a snack", "rarity": 1},
 	{"id": "school", "name": "DUCKLING SCHOOL", "desc": "your ducklings fetch snacks they pass", "rarity": 2},
 	{"id": "thunder", "name": "THUNDER FEET", "desc": "EVERY landing detonates", "rarity": 2},
+	# the 1942 tier: legendaries that change what the game IS
+	{"id": "cannon", "name": "CRUMB CANNON", "desc": "auto-fire crumbs: smash herons, chip logs", "rarity": 3},
+	{"id": "wingducks", "name": "WINGDUCKS", "desc": "two escorts smash whatever they touch", "rarity": 3},
+	{"id": "nova", "name": "SONIC QUACK", "desc": "your LASER becomes a screen-clearing QUACK", "rarity": 3},
+	{"id": "hotwheels", "name": "HOT WHEELS", "desc": "steer at full tilt to IGNITE and melt logs", "rarity": 3},
 ]
-const RARITY_W := [1.0, 0.5, 0.2]
-const RARITY_COL := [Color(0.85, 0.88, 0.92), Color(0.45, 0.75, 1.0), Color(1.0, 0.84, 0.3)]
-const RARITY_NAME := ["", "RARE", "EPIC"]
+const RARITY_W := [1.0, 0.5, 0.2, 0.08]
+const RARITY_COL := [Color(0.85, 0.88, 0.92), Color(0.45, 0.75, 1.0), Color(1.0, 0.84, 0.3), Color(1.0, 0.45, 0.22)]
+const RARITY_NAME := ["", "RARE", "EPIC", "LEGENDARY"]
 
 # which upgrades amplify each other — owning one tags the other ★ in a draft
 const SYNERGY := {
@@ -69,9 +74,13 @@ const SYNERGY := {
 	"gold": ["nestegg", "snacks", "buffet"],
 	"nestegg": ["gold"],
 	"school": ["duckling", "trio", "snacks"],
-	"duckling": ["school", "trio"],
-	"trio": ["school", "duckling"],
-	"shield": ["thunder"],
+	"duckling": ["school", "trio", "wingducks"],
+	"trio": ["school", "duckling", "wingducks"],
+	"shield": ["thunder", "wingducks"],
+	"cannon": ["buffet", "gold"],
+	"wingducks": ["shield", "duckling", "trio"],
+	"nova": ["loft", "buffet"],
+	"hotwheels": ["thunder", "aftershock"],
 }
 const MAX_DUCKLINGS := 8
 const BANK_W := 26.0            # reed-lined banks frame the river
@@ -174,6 +183,13 @@ var drafting := false
 var draft_choices: Array = []
 var draft_open_t := 0.0         # taps are ignored briefly after a draft opens
 var next_draft := DRAFT_EVERY
+var draft_count := 0            # intervals grow: each checkpoint is more earned
+
+# the 1942 tier
+var crumbs: Array = []          # cannon shots: {x, y}
+var crumb_timer := 0.0
+var wingducks := 0              # live escorts (0-2)
+var heat := 0.0                 # HOT WHEELS: 1.0 = on fire
 var picked := {}                # upgrade id -> stacks taken this run
 var shield_charges := 0
 var air_hops := 0               # double-hops spent since last landing
@@ -425,6 +441,17 @@ func _smoke() -> void:
 	distance = 4990.0                                  # cross a theme boundary
 	await get_tree().create_timer(0.6).timeout
 	print("SMOKE theme=", THEMES[theme_idx].name, " sweep=", theme_sweep)
+	# the 1942 tier: nova clears the screen, cannon fires, wingducks deploy
+	_pick_upgrade(UPGRADES[21])                        # SONIC QUACK
+	logs.append({"x": 200.0, "y": 300.0, "w": 150.0, "h": 46.0, "missed": false,
+		"spring": false, "phase": 0.0, "frog": false, "frog_gone": false})
+	loft = 1.0; loft_ready = true
+	fire_laser()
+	print("SMOKE nova: logs=", logs.size(), " enemies=", enemies.size())
+	_pick_upgrade(UPGRADES[19])                        # CRUMB CANNON
+	_pick_upgrade(UPGRADES[20])                        # WINGDUCKS
+	await get_tree().create_timer(1.2).timeout
+	print("SMOKE cannon crumbs=", crumbs.size() > 0 or crumb_timer > 0.0, " wingducks=", wingducks)
 	loft = 1.0; loft_ready = true
 	mega_hop()
 	await get_tree().create_timer(cur_mega_dur() + 0.3).timeout
@@ -622,7 +649,9 @@ func _size_mul() -> float:
 func _open_draft() -> void:
 	drafting = true
 	draft_open_t = anim_t
-	next_draft += DRAFT_EVERY
+	draft_count += 1
+	# each checkpoint is further out than the last: 400m, 500m, 625m, 781m...
+	next_draft += DRAFT_EVERY * pow(1.25, draft_count)
 	draft_choices = _deal_draft()
 	center_label.visible = false
 	_sfx("chime", 1.25)
@@ -651,8 +680,14 @@ func _upgrade_icon(id: String):
 	match id:
 		"spring", "double":
 			return ducks[species]["hop"][0]
-		"magnet", "buffet":
+		"magnet", "buffet", "cannon":
 			return tex_items.get("bread")
+		"wingducks":
+			return ducks[species]["hop"][0]
+		"nova":
+			return tex_items.get("ducky")
+		"hotwheels":
+			return tex_items.get("berry")
 		"snacks":
 			return tex_items.get("berry")
 		"zen":
@@ -684,6 +719,8 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_add_ducklings(1)
 	elif u.id == "trio":
 		_add_ducklings(3)
+	elif u.id == "wingducks":
+		wingducks = 2                          # (re-)deploy the escorts
 	drafting = false
 	_sfx("unlock")
 	if combo:
@@ -706,6 +743,61 @@ func _lose_duckling() -> void:
 	_sfx("peep", 0.7)
 	_flash("PEEP!\n(he's fine. probably.)")
 	_spawn_parts(duck_x, BASE_Y + 38.0 * (ducklings_n + 1), 14, Color(0.97, 0.87, 0.45), 150.0)
+
+func _wingduck_pos(side: int) -> Vector2:
+	return Vector2(clampf(duck_x + 76.0 * side, BANK_W + 20.0, VIEW.x - BANK_W - 20.0),
+		BASE_Y + 10.0 + sin(anim_t * 3.0 + side) * 5.0)
+
+func _wingduck_hits() -> void:
+	var sides: Array = [-1, 1].slice(0, wingducks)
+	for side in sides:
+		var wp := _wingduck_pos(side)
+		var smashed = null
+		for l in logs:
+			if not l.get("spring", false) and absf(l.x - wp.x) < l.w * 0.5 + 16.0 \
+					and absf(l.y - wp.y) < l.h * 0.5 + 16.0:
+				smashed = l
+				break
+		if smashed != null:
+			ripples.append({"x": smashed.x, "y": smashed.y, "t": 0.0, "max": 80.0})
+			_spawn_parts(smashed.x, smashed.y, 9, Color(0.62, 0.42, 0.24), 170.0)
+			_sfx("crunch", 1.15, -4.0)
+			logs.erase(smashed)
+		for e in enemies:
+			if absf(e.x - wp.x) < 42.0 and absf(e.y - wp.y) < 42.0:
+				# the escort takes the heron down with it. o7
+				ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 100.0})
+				_spawn_parts(wp.x, wp.y, 14, Color(0.97, 0.87, 0.45), 200.0)
+				_float_text(wp.x, wp.y - 30.0, "o7", Color(1, 1, 1, 0.9))
+				_sfx("quack", 1.3)
+				enemies.erase(e)
+				wingducks -= 1
+				return
+
+func _crumb_hits() -> void:
+	for c in crumbs:
+		for e in enemies:
+			if absf(e.x - c.x) < 36.0 and absf(e.y - c.y) < 36.0:
+				c["hit"] = true
+				ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 90.0})
+				_spawn_parts(e.x, e.y, 10, Color(0.7, 0.75, 0.85), 190.0)
+				_float_text(e.x, e.y - 24.0, "bonk.", Color(1, 0.9, 0.5))
+				_add_loft(0.08)
+				enemies.erase(e)
+				break
+		if c.get("hit", false):
+			continue
+		for l in logs:
+			if not l.get("spring", false) and absf(l.x - c.x) < l.w * 0.5 + 8.0 \
+					and absf(l.y - c.y) < l.h * 0.5 + 8.0:
+				c["hit"] = true
+				l.w -= 64.0                    # crumbs chip logs down to nothing
+				ripples.append({"x": c.x, "y": c.y, "t": 0.0, "max": 36.0})
+				_spawn_parts(c.x, c.y, 5, Color(0.62, 0.42, 0.24), 130.0)
+				if l.w < 70.0:
+					_sfx("crunch", 1.3, -4.0)
+					logs.erase(l)
+				break
 
 # landings detonate: the splash shockwave splinters logs under you, so a brave
 # hop or mega is never punished by whatever floated in beneath the arc
@@ -803,6 +895,11 @@ func reset_game() -> void:
 	drafting = false
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
+	draft_count = 0
+	crumbs.clear()
+	crumb_timer = 0.0
+	wingducks = 0
+	heat = 0.0
 	picked.clear()
 	shield_charges = 0
 	air_hops = 0
@@ -985,10 +1082,31 @@ func mega_hop() -> void:
 func fire_laser() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA:
 		return
-	laser_t = LASER_DUR
 	loft = 0.0
 	loft_ready = false
+	if _up("nova") > 0:
+		_sonic_quack()                         # the laser grew up
+		return
+	laser_t = LASER_DUR
 	_sfx("laser")
+
+# SONIC QUACK: one quack. zero survivors.
+func _sonic_quack() -> void:
+	_sfx("quack", 0.55)
+	_sfx("splash_big", 0.75)
+	_flash("QUACK.")
+	duck_shake = 0.35
+	for l in logs:
+		ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 80.0})
+		_spawn_parts(l.x, l.y, 8, Color(0.62, 0.42, 0.24), 170.0)
+		if _up("buffet") > 0:
+			items.append({"x": l.x, "y": l.y, "got": false, "kind": _pick_kind()})
+	for e in enemies:
+		ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 90.0})
+		_spawn_parts(e.x, e.y, 10, Color(0.7, 0.75, 0.85), 200.0)
+	logs.clear()
+	enemies.clear()
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 640.0})
 
 func die(msg: String) -> void:
 	alive = false
@@ -1055,6 +1173,37 @@ func _update_play(delta: float) -> void:
 				if not it.got and Vector2(it.x - dlx, it.y - dly).length() < 30.0:
 					_collect(it)
 					_sfx("peep", randf_range(1.1, 1.3), -6.0)
+
+	# CRUMB CANNON: pew pew (but bread)
+	if _up("cannon") > 0:
+		crumb_timer -= delta
+		if crumb_timer <= 0.0:
+			crumbs.append({"x": duck_x, "y": BASE_Y - 36.0})
+			_sfx("collect", 0.65, -12.0)
+			crumb_timer = 0.9 / _up("cannon")
+	if not crumbs.is_empty():
+		for c in crumbs:
+			c.y -= 460.0 * delta
+		_crumb_hits()
+		crumbs = crumbs.filter(func(c): return c.y > -30.0 and not c.get("hit", false))
+
+	# WINGDUCKS: the escorts clear their lanes
+	if wingducks > 0:
+		_wingduck_hits()
+
+	# HOT WHEELS: full-tilt steering builds heat; at 1.0 you are ON FIRE
+	if _up("hotwheels") > 0:
+		if absf(duck_vx) > 260.0:
+			heat = minf(1.0, heat + delta * 2.6)
+		else:
+			heat = maxf(0.0, heat - delta * 1.8)
+		if heat >= 1.0:
+			parts.append({"x": duck_x + randf_range(-14, 14), "y": BASE_Y + randf_range(-6, 10),
+				"vx": -duck_vx * 0.2, "vy": randf_range(-40, 10), "t": 0.0,
+				"life": randf_range(0.25, 0.45),
+				"col": Color(1.0, randf_range(0.35, 0.65), 0.12)})
+	else:
+		heat = 0.0
 
 	# music leans forward with the river
 	if music_player != null:
@@ -1274,6 +1423,13 @@ func _collide() -> void:
 				smashed = l                      # golden log: it's a trampoline
 				hyper_jump()
 				break
+			elif heat >= 1.0 and _up("hotwheels") > 0:
+				smashed = l                      # ON FIRE: the log simply melts
+				_sfx("crunch", 1.2)
+				_float_text(l.x, l.y - 22.0, "MELTED.", Color(1.0, 0.55, 0.2))
+				_spawn_parts(l.x, l.y, 15, Color(1.0, 0.5, 0.15), 210.0)
+				_add_loft(0.08)
+				break
 			elif shield_charges > 0:
 				shield_charges -= 1              # THICK FEATHERS soaks the bonk
 				smashed = l
@@ -1408,6 +1564,8 @@ func _refresh_hud() -> void:
 		score_label.text += "  ×%.2f" % (1.0 + 0.08 * ducklings_n)
 	if shield_charges > 0:
 		score_label.text += "   🛡 %d" % shield_charges
+	if heat >= 1.0:
+		score_label.text += "   🔥"
 	loft_bar.value = loft
 	loft_bar.is_ready = loft_ready
 
@@ -1535,6 +1693,13 @@ func _draw() -> void:
 		else:
 			_draw_diamond(Vector2(it.x, it.y), 12.0, Color(1.0, 0.92, 0.45))
 
+	# cannon crumbs in flight
+	if not crumbs.is_empty() and has_art:
+		var btex: Texture2D = tex_items.get("bread")
+		for c in crumbs:
+			var bsz: Vector2 = btex.get_size() * 1.3
+			draw_texture_rect(btex, Rect2(Vector2(c.x, c.y) - bsz * 0.5, bsz), false)
+
 	# heron telegraph shadow + heron
 	for e in enemies:
 		if e.y < BASE_Y and has_art:
@@ -1555,6 +1720,18 @@ func _draw() -> void:
 		draw_rect(Rect2(duck_x - LASER_W * 0.7, 0, LASER_W * 1.4, BASE_Y), Color(1, 0.3, 0.3, 0.14 * flick))
 		draw_rect(Rect2(duck_x - LASER_W * 0.5, 0, LASER_W, BASE_Y), Color(1, 0.5, 0.4, 0.42 * flick))
 		draw_rect(Rect2(duck_x - LASER_W * 0.18, 0, LASER_W * 0.36, BASE_Y), Color(1, 1, 1, 0.85 * flick))
+
+	# wingduck escorts, hovering in formation
+	if wingducks > 0 and has_art:
+		for side in ([-1, 1].slice(0, wingducks)):
+			var wp := _wingduck_pos(side)
+			var wfr: Texture2D = ducks[species]["hop"][int(anim_t * 16.0 + side) % 2]
+			if tex_shadow != null:
+				var wss: Vector2 = tex_shadow.get_size() * 1.3
+				draw_texture_rect(tex_shadow, Rect2(Vector2(wp.x, BASE_Y + 16.0) - wss * 0.5, wss),
+					false, Color(1, 1, 1, 0.6))
+			var wsz: Vector2 = wfr.get_size() * 1.3
+			draw_texture_rect(wfr, Rect2(wp - wsz * 0.5 - Vector2(0, 14.0), wsz), false)
 
 	_draw_ducklings()
 	_draw_duck()
