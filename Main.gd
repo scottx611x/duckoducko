@@ -717,6 +717,9 @@ func _input(event: InputEvent) -> void:
 			mega_hop()
 		elif event.keycode == KEY_L:
 			fire_laser()
+		elif event.keycode == KEY_ESCAPE and not in_menu:
+			_sfx("click")
+			_enter_menu()
 
 func _on_press(pos: Vector2) -> void:
 	idle_timer = 0.0
@@ -881,7 +884,7 @@ func die(msg: String) -> void:
 	if build != "":
 		build = "\n" + build
 	var who := duck_name if duck_name != "" else "you"
-	center_label.text = "%s\n\n%s paddled %d m · %s\n+%d 🪶%s\n\ntap to retry" % [msg, who, m, sub, run_feathers, build]
+	center_label.text = "%s\n\n%s paddled %d m · %s\n+%d 🪶%s\n\ntap to retry · esc for menu" % [msg, who, m, sub, run_feathers, build]
 	center_label.visible = true
 
 # ---- per-frame ---------------------------------------------------------------
