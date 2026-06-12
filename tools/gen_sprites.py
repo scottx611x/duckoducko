@@ -595,6 +595,21 @@ def make_bank(side="left"):
     return img
 
 
+def make_vignette():
+    """Soft radial corner-darkening, stretched over the whole screen at low alpha."""
+    S_ = 192
+    img = Image.new("RGBA", (S_, S_), (0, 0, 0, 0))
+    px = img.load()
+    cx = cy = (S_ - 1) / 2.0
+    maxd = math.hypot(cx, cy)
+    for y in range(S_):
+        for x in range(S_):
+            r = math.hypot(x - cx, y - cy) / maxd
+            a = max(0.0, (r - 0.55) / 0.45) ** 2
+            px[x, y] = (8, 10, 16, int(a * 120))
+    return img
+
+
 def save(img, name):
     img.save(os.path.join(ART, name))
 
@@ -621,4 +636,5 @@ save(make_flipflop(), "prop_flipflop.png")
 save(make_water(), "water.png")
 save(make_bank("left"), "bank_left.png")
 save(make_bank("right"), "bank_right.png")
+save(make_vignette(), "vignette.png")
 print("done.")

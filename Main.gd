@@ -132,6 +132,9 @@ var speed := BASE_SPEED
 var distance := 0.0
 var alive := true
 var dead_msg := ""
+var dead_m := 0                 # frozen stats for the death screen
+var dead_record := false
+var squash := 0.0               # landing squash-and-stretch (1 -> 0)
 
 var theme_idx := 0
 var theme_prev := 0
@@ -268,9 +271,20 @@ func _ready() -> void:
 	hud = CanvasLayer.new()
 	add_child(hud)
 
+	# vignette: one TextureRect at the bottom of the HUD stack, over the world
+	if ResourceLoader.exists("res://art/vignette.png"):
+		var vig := TextureRect.new()
+		vig.texture = load("res://art/vignette.png")
+		vig.stretch_mode = TextureRect.STRETCH_SCALE
+		vig.size = VIEW
+		vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hud.add_child(vig)
+
 	score_label = Label.new()
 	score_label.position = Vector2(20, 18)
 	score_label.add_theme_font_size_override("font_size", 34)
+	score_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
+	score_label.add_theme_constant_override("outline_size", 10)
 	hud.add_child(score_label)
 
 	center_label = Label.new()
@@ -279,6 +293,8 @@ func _ready() -> void:
 	center_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	center_label.add_theme_font_size_override("font_size", 44)
+	center_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
+	center_label.add_theme_constant_override("outline_size", 12)
 	center_label.visible = false
 	hud.add_child(center_label)
 
@@ -315,6 +331,18 @@ func _ready() -> void:
 	name_edit.size = Vector2(250, 42)
 	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 838)
 	name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var nsb := StyleBoxFlat.new()
+	nsb.bg_color = Color(0.07, 0.13, 0.19, 0.9)
+	nsb.set_corner_radius_all(12)
+	nsb.set_border_width_all(2)
+	nsb.border_color = Color(1, 1, 1, 0.3)
+	var nsf := nsb.duplicate()
+	nsf.border_color = Color(1, 0.9, 0.4, 0.9)
+	name_edit.add_theme_stylebox_override("normal", nsb)
+	name_edit.add_theme_stylebox_override("focus", nsf)
+	name_edit.add_theme_color_override("font_color", Color.WHITE)
+	name_edit.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.4))
+	name_edit.add_theme_color_override("caret_color", Color(1, 0.9, 0.4))
 	name_edit.text_changed.connect(func(t: String) -> void:
 		duck_name = t.strip_edges()
 		_save())
@@ -489,6 +517,16 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_mega.png")
+	# the death screen (with a build to show off the chips)
+	state = St.GROUNDED
+	cam.zoom = Vector2.ONE
+	picked = {"spring": 2, "duckling": 1, "gold": 1}
+	run_feathers = 7
+	die("that's a log.")
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_dead.png")
+	reset_game()
 	# select screen: a locked duck (pintail) with cost text
 	_enter_menu()
 	_open_select()
@@ -722,6 +760,7 @@ func reset_game() -> void:
 	shield_charges = 0
 	air_hops = 0
 	hyper = false
+	squash = 0.0
 	ducklings_n = 0
 	trail.clear()
 	hop_events.clear()
@@ -908,26 +947,15 @@ func die(msg: String) -> void:
 	alive = false
 	dead_msg = msg
 	_sfx("bonk")
-	center_label.add_theme_font_size_override("font_size", 32)
-	var m := int(distance / 10.0)
+	dead_m = int(distance / 10.0)
 	feathers += run_feathers
-	var record := m > best_m
-	if record and best_m > 0:               # confetti for the new best
+	dead_record = dead_m > best_m
+	if dead_record and best_m > 0:          # confetti for the new best
 		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 36, Color(1.0, 0.86, 0.35), 300.0)
 		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 22, Color(0.55, 0.85, 1.0), 260.0)
-	best_m = maxi(best_m, m)
+	best_m = maxi(best_m, dead_m)
 	_save()
-	var sub := "NEW BEST!" if record else "best: %d m" % best_m
-	var build := ""                     # the run's draft picks, eulogized
-	for u in UPGRADES:
-		var n: int = picked.get(u.id, 0)
-		if n > 0:
-			build += ("" if build == "" else " · ") + u.name + ("" if n == 1 else " ×%d" % n)
-	if build != "":
-		build = "\n" + build
-	var who := duck_name if duck_name != "" else "you"
-	center_label.text = "%s\n\n%s paddled %d m · %s\n+%d 🪶%s\n\ntap to retry · esc for menu" % [msg, who, m, sub, run_feathers, build]
-	center_label.visible = true
+	center_label.visible = false            # the death screen draws itself
 
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
@@ -1011,6 +1039,7 @@ func _update_play(delta: float) -> void:
 	elif idle_timer < 4.0:
 		quacked = false
 
+	squash = maxf(0.0, squash - delta * 5.5)
 	duck_x = lerpf(duck_x, target_x, clampf(delta * STEER_LERP * duck_steer_mul, 0.0, 1.0))
 	duck_vx = (duck_x - last_duck_x) / maxf(delta, 0.0001)
 	last_duck_x = duck_x
@@ -1068,6 +1097,7 @@ func is_invincible() -> bool:
 
 func _land(mega: bool) -> void:
 	air_hops = 0
+	squash = 1.0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
 		_landing_blast(280.0)                  # only the big jumps detonate
@@ -1243,6 +1273,59 @@ func _update_ripples(delta: float) -> void:
 		r.t += delta
 	ripples = ripples.filter(func(r): return r.t < 0.6)
 
+# outlined text: readable over any water
+func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
+		align := HORIZONTAL_ALIGNMENT_CENTER, osize := 6) -> void:
+	var w := width if width > 0.0 else VIEW.x
+	draw_string_outline(font, pos, txt, align, w, size, osize, Color(0.07, 0.09, 0.13, 0.85 * col.a))
+	draw_string(font, pos, txt, align, w, size, col)
+
+# the run's eulogy: panel, stats, build chips, retry
+func _draw_death() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
+	var panel := Rect2(56.0, 240.0, VIEW.x - 112.0, 440.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.11, 0.17, 0.93)
+	sb.set_corner_radius_all(22)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(1, 1, 1, 0.22)
+	draw_style_box(sb, panel)
+	_otext(Vector2(0, 322), dead_msg, 46, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	var who := duck_name if duck_name != "" else "you"
+	_otext(Vector2(0, 374), "%s paddled %d m" % [who, dead_m], 26, Color.WHITE)
+	if dead_record:
+		_otext(Vector2(0, 410), "★ NEW BEST ★", 24, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
+	else:
+		_otext(Vector2(0, 410), "best: %d m" % best_m, 19, Color(1, 1, 1, 0.6))
+	_otext(Vector2(0, 448), "+%d 🪶 · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9))
+	# the build, as rarity-colored chips (flow layout)
+	var chips: Array = []
+	for u in UPGRADES:
+		var n: int = picked.get(u.id, 0)
+		if n > 0:
+			chips.append({"txt": u.name + ("" if n == 1 else " ×%d" % n), "col": RARITY_COL[u.rarity]})
+	if chips.is_empty():
+		_otext(Vector2(0, 512), "no upgrades. raw talent only.", 16, Color(1, 1, 1, 0.5))
+	else:
+		var cy := 488.0
+		var x := panel.position.x + 22.0
+		for c in chips:
+			var w: float = font.get_string_size(c.txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
+			if x + w > panel.position.x + panel.size.x - 22.0:
+				x = panel.position.x + 22.0
+				cy += 34.0
+			var crect := Rect2(x, cy, w, 26.0)
+			var csb := StyleBoxFlat.new()
+			csb.bg_color = Color(0.10, 0.17, 0.24, 0.95)
+			csb.set_corner_radius_all(13)
+			csb.set_border_width_all(1)
+			csb.border_color = c.col
+			draw_style_box(csb, crect)
+			draw_string(font, Vector2(x + 10.0, cy + 19.0), c.txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, c.col)
+			x += w + 8.0
+	_otext(Vector2(0, 626), "tap to retry", 30, Color(1, 1, 1, 0.55 + 0.45 * sin(anim_t * 4.0)))
+	_otext(Vector2(0, 658), "esc — menu", 15, Color(1, 1, 1, 0.45))
+
 func _flash(msg: String) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
 	center_label.text = msg
@@ -1370,8 +1453,8 @@ func _draw() -> void:
 	# rising mini-texts ("+loft", "ribbit.", "100 m", "achoo.")
 	for f in floaties:
 		var fa: float = 1.0 - f.t / 0.9
-		draw_string(font, Vector2(f.x - 90.0, f.y), f.txt, HORIZONTAL_ALIGNMENT_CENTER, 180, 20,
-			Color(f.col.r, f.col.g, f.col.b, fa))
+		_otext(Vector2(f.x - 90.0, f.y), f.txt, 20,
+			Color(f.col.r, f.col.g, f.col.b, fa), 180.0, HORIZONTAL_ALIGNMENT_CENTER, 5)
 
 	# collectibles
 	for it in items:
@@ -1409,14 +1492,18 @@ func _draw() -> void:
 	_draw_duck()
 	_draw_atmosphere()
 
+	if not alive:
+		_draw_death()
+		return
+
 	# draft overlay: the river waits while you choose (cards deal themselves in,
 	# and taps are ignored for the first beat so hop-spam can't click through)
 	if drafting:
 		var ot := anim_t - draft_open_t
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6 * minf(ot / 0.25, 1.0)))
-		draw_string(font, Vector2(0, 232), "CHOOSE AN UPGRADE", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 38, Color(1, 0.92, 0.45))
-		draw_string(font, Vector2(0, 264), "checkpoint %d m — the river waits" % int(distance / 10.0),
-			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.55))
+		_otext(Vector2(0, 232), "CHOOSE AN UPGRADE", 38, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
+		_otext(Vector2(0, 264), "checkpoint %d m — the river waits" % int(distance / 10.0),
+			17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 		for i in draft_choices.size():
 			var ap := clampf((ot - 0.08 - i * 0.13) / 0.3, 0.0, 1.0)
 			if ap <= 0.0:
@@ -1454,8 +1541,7 @@ func _draw() -> void:
 	if alive and state == St.GROUNDED and idle_timer > 4.0:
 		var dp := Vector2(duck_x, BASE_Y)
 		var nag := "the duck is judging you." if idle_timer > 9.0 else "quack?"
-		draw_string(font, dp + Vector2(-160, -DUCK_R - 40), nag,
-			HORIZONTAL_ALIGNMENT_CENTER, 320, 24, Color(1, 1, 1, 0.9))
+		_otext(dp + Vector2(-160, -DUCK_R - 40), nag, 24, Color(1, 1, 1, 0.9), 320.0, HORIZONTAL_ALIGNMENT_CENTER, 5)
 
 # the conga line: each duckling follows the duck's wake and hops a beat late
 func _draw_ducklings() -> void:
@@ -1533,6 +1619,12 @@ func _draw_duck() -> void:
 		else:
 			var fr := _duck_frame(h)
 			var ds := fr.get_size() * DUCK_DRAW * duck_scale * pow(0.9, float(_up("tiny")))
+			# juice: stretch tall on takeoff, squash wide on landing
+			if state == St.HOPPING and hop_t < cur_hop_dur() * 0.22:
+				ds = Vector2(ds.x * 0.92, ds.y * 1.14)
+			elif squash > 0.0 and state == St.GROUNDED:
+				var sq := squash * squash
+				ds = Vector2(ds.x * (1.0 + 0.24 * sq), ds.y * (1.0 - 0.28 * sq))
 			if fancy and state == St.HOPPING:
 				# the fancy hop: a full unannounced barrel roll, spinning into the steer
 				var dir: float = signf(duck_vx) if absf(duck_vx) > 20.0 else 1.0
@@ -1577,10 +1669,10 @@ func _draw_menu() -> void:
 	var cx := VIEW.x * 0.5
 	# title
 	var tbob := sin(anim_t * 2.0) * 6.0
-	draw_string(font, Vector2(0, 200 + tbob), "DUCKODUCKO", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 66, Color(1, 0.92, 0.45))
-	draw_string(font, Vector2(0, 246 + tbob), "a whimsical duck hopper", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 24, Color(0.95, 0.97, 1.0, 0.85))
+	_otext(Vector2(0, 200 + tbob), "DUCKODUCKO", 66, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	_otext(Vector2(0, 246 + tbob), "a whimsical duck hopper", 24, Color(0.95, 0.97, 1.0, 0.85))
 	var fact: String = FACTS[int(anim_t / 5.0) % FACTS.size()]
-	draw_string(font, Vector2(0, 284), "duck fact: " + fact, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.5))
+	_otext(Vector2(0, 284), "duck fact: " + fact, 17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
 	if has_art:
 		# orbiting collectibles around the centered hero
@@ -1595,23 +1687,24 @@ func _draw_menu() -> void:
 		_blit_centered(_spin_frame("hen", anim_t * 0.55 + 2.6 + menu_spin * 0.4), Vector2(cx + 150, 482.0 + sin(anim_t * 2.5 + 0.6) * 9.0), 2.8)
 		_blit_centered(_spin_frame("mallard", anim_t * 0.55 + menu_spin), Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
 		if anim_t - menu_msg_t < 3.0:
-			draw_string(font, Vector2(0, 575), menu_msg, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 21,
+			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
 
 	# wallet + best run
 	if feathers > 0 or best_m > 0:
-		draw_string(font, Vector2(0, 640), "🪶 %d   ·   best %d m" % [feathers, best_m],
-			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 22, Color(1, 0.92, 0.45, 0.9))
+		_otext(Vector2(0, 640), "🪶 %d   ·   best %d m" % [feathers, best_m], 22, Color(1, 0.92, 0.45, 0.9))
 
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
-	draw_string(font, Vector2(0, 700), "▶  tap to play  ◀", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 36, Color(1, 1, 1, pulse))
+	_otext(Vector2(0, 700), "▶  tap to play  ◀", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	# DUCKS button (opens the select screen)
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
 	draw_string(font, Vector2(MENU_DUCKS_BTN.position.x, MENU_DUCKS_BTN.position.y + 33), "🦆  DUCKS  ▸",
 		HORIZONTAL_ALIGNMENT_CENTER, MENU_DUCKS_BTN.size.x, 24, Color(1, 1, 1, 0.95))
-	draw_string(font, Vector2(0, 900), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
-		HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 18, Color(1, 1, 1, 0.6))
+	_otext(Vector2(0, 900), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
+		18, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	_otext(Vector2(0, 938), "DUCKODUCKO beta · made with one thumb", 13, Color(1, 1, 1, 0.35),
+		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _btn_sb() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -1645,7 +1738,7 @@ func _thumb_rect(i: int) -> Rect2:
 
 func _draw_select() -> void:
 	var cx := VIEW.x * 0.5
-	draw_string(font, Vector2(0, 110), "CHOOSE YOUR DUCK", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 40, Color(1, 0.92, 0.45))
+	_otext(Vector2(0, 110), "CHOOSE YOUR DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
 
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	draw_string(font, Vector2(SEL_BACK_BTN.position.x, SEL_BACK_BTN.position.y + 33), "< back",
@@ -1665,12 +1758,12 @@ func _draw_select() -> void:
 	else:
 		# locked: same spinnable shape, dark silhouette — keep the mystery
 		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
-		draw_string(font, Vector2(0, 355.0), "LOCKED", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 28, Color(1, 1, 1, 0.7))
-	draw_string(font, Vector2(0, 432.0), "◂ drag to spin ▸", HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 17, Color(1, 1, 1, 0.45))
+		_otext(Vector2(0, 355.0), "LOCKED", 28, Color(1, 1, 1, 0.7))
+	_otext(Vector2(0, 432.0), "◂ drag to spin ▸", 17, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
 	# name + trait + stat bars
-	draw_string(font, Vector2(0, 466.0), duck.name, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 34, Color.WHITE)
-	draw_string(font, Vector2(0, 498.0), duck.trait, HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 20, Color(1, 1, 1, 0.7))
+	_otext(Vector2(0, 466.0), duck.name, 34, Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
+	_otext(Vector2(0, 498.0), duck.trait, 20, Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	_stat_bar("HOP", duck.hop, 536.0)
 	_stat_bar("STEER", duck.steer, 572.0)
 
@@ -1683,8 +1776,8 @@ func _draw_select() -> void:
 		draw_string(font, Vector2(SEL_PLAY_BTN.position.x, SEL_PLAY_BTN.position.y + 38), "UNLOCK · %d 🪶" % duck.cost,
 			HORIZONTAL_ALIGNMENT_CENTER, SEL_PLAY_BTN.size.x, 26, Color(1, 0.92, 0.45))
 	else:
-		draw_string(font, Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d 🪶 to unlock — you have %d" % [duck.cost, feathers],
-			HORIZONTAL_ALIGNMENT_CENTER, VIEW.x, 20, Color(1, 1, 1, 0.5))
+		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d 🪶 to unlock — you have %d" % [duck.cost, feathers],
+			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
 	# roster thumbnails (locked ones ghosted to a silhouette)
 	for i in ROSTER.size():
@@ -1705,6 +1798,8 @@ func _draw_select() -> void:
 			_blit_centered(th, r.get_center(), 1.4)
 		else:
 			_blit_modulated(th, r.get_center(), 1.4, Color(0.34, 0.37, 0.44, 1.0))
+			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "%d🪶" % rd.cost,
+				HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 13, Color(1, 0.9, 0.45, 0.9))
 
 func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	if tex == null:
