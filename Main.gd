@@ -1257,8 +1257,9 @@ func _update_play(delta: float) -> void:
 		for i in ducklings_n:
 			var dlp := _duckling_pos(i)
 			for it in items:
-				if not it.got and Vector2(it.x - dlp.x, it.y - dlp.y).length() < 30.0:
+				if not it.got and Vector2(it.x - dlp.x, it.y - dlp.y).length() < 42.0:
 					_collect(it)
+					_float_text(dlp.x, dlp.y - 24.0, "peep!", Color(0.97, 0.87, 0.45))
 					_sfx("peep", randf_range(1.1, 1.3), -6.0)
 
 	# CRUMB CANNON: pew pew (but bread) — only while paddling; no mid-air spitting
