@@ -22,7 +22,8 @@ const LASER_DUR := 0.7
 const LASER_W := 78.0
 
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.",
-	"a HERON!", "physics.", "the audacity.", "log: 1 — duck: 0", "*sad quack*"]
+	"physics.", "the audacity.", "log: 1 — duck: 0", "*sad quack*"]
+const HERON_DECK := ["a HERON!", "GERALD?!", "death from above.", "the sky is rude."]
 
 # roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades.
 # rarity: 0=common, 1=rare (blue), 2=epic (gold) — weighted deal, colored cards.
@@ -1243,7 +1244,7 @@ func _collide() -> void:
 					ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 110.0})
 					enemies.erase(e)
 					return
-				die("a HERON!")
+				die(HERON_DECK[randi() % HERON_DECK.size()])
 				return
 
 func _collect(it: Dictionary) -> void:
