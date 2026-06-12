@@ -349,7 +349,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -366,7 +366,7 @@ func _ready() -> void:
 		ms.loop_end = ms.data.size() / 2          # 16-bit mono: 2 bytes per frame
 		music_player = AudioStreamPlayer.new()
 		music_player.stream = ms
-		music_player.volume_db = -11.0
+		music_player.volume_db = -15.0
 		add_child(music_player)
 		music_player.play()
 
@@ -801,7 +801,18 @@ func _crumb_hits() -> void:
 
 # landings detonate: the splash shockwave splinters logs under you, so a brave
 # hop or mega is never punished by whatever floated in beneath the arc
-func _landing_blast(radius: float) -> void:
+func _landing_blast(radius: float, fiery := false) -> void:
+	if fiery:
+		# FWOOSH: expanding fire rings + a circle of flame thrown outward
+		_sfx("fwoosh")
+		ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": radius * 1.15, "col": Color(1.0, 0.55, 0.18)})
+		ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": radius * 0.75, "col": Color(1.0, 0.32, 0.08)})
+		for k in 26:
+			var a := TAU * k / 26.0
+			parts.append({"x": duck_x + cos(a) * 28.0, "y": BASE_Y + sin(a) * 16.0,
+				"vx": cos(a) * randf_range(180.0, 330.0), "vy": sin(a) * randf_range(110.0, 220.0) - 70.0,
+				"t": 0.0, "life": randf_range(0.35, 0.6),
+				"col": Color(1.0, randf_range(0.3, 0.65), 0.1)})
 	var smashed_n := 0
 	var survivors: Array = []
 	for l in logs:
@@ -809,7 +820,11 @@ func _landing_blast(radius: float) -> void:
 				and not l.get("spring", false):
 			smashed_n += 1
 			ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 95.0})
-			_spawn_parts(l.x, l.y, 11, Color(0.62, 0.42, 0.24), 190.0)
+			if fiery:
+				_spawn_parts(l.x, l.y, 14, Color(1.0, 0.5, 0.12), 220.0)   # logs burn
+				_spawn_parts(l.x, l.y, 6, Color(0.25, 0.22, 0.2), 140.0)   # char
+			else:
+				_spawn_parts(l.x, l.y, 11, Color(0.62, 0.42, 0.24), 190.0)
 			_add_loft(0.06)
 			if l.frog and not l.frog_gone:
 				_sfx("ribbit", randf_range(0.85, 1.1))
@@ -1167,10 +1182,9 @@ func _update_play(delta: float) -> void:
 	# DUCKLING SCHOOL: the conga line fetches snacks it waddles over
 	if _up("school") > 0 and ducklings_n > 0:
 		for i in ducklings_n:
-			var dlx := _trail_x(0.22 * (i + 1))
-			var dly := BASE_Y + 40.0 * (i + 1)
+			var dlp := _duckling_pos(i)
 			for it in items:
-				if not it.got and Vector2(it.x - dlx, it.y - dly).length() < 30.0:
+				if not it.got and Vector2(it.x - dlp.x, it.y - dlp.y).length() < 30.0:
 					_collect(it)
 					_sfx("peep", randf_range(1.1, 1.3), -6.0)
 
@@ -1309,7 +1323,8 @@ func _land(mega: bool) -> void:
 	squash = 1.0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
-		_landing_blast(280.0)                  # only the big jumps detonate
+		# both big jumps detonate in fire — the MEGA hop hits a class harder
+		_landing_blast(220.0 if hyper else 340.0, true)
 		_sfx("splash_big")
 		_flash("BOING." if hyper else "WHEE.")
 		_spawn_parts(duck_x, BASE_Y, 18, Color(0.9, 0.97, 1.0), 260.0)
@@ -1630,10 +1645,12 @@ func _draw() -> void:
 		var a: float = 1.0 - p.t / 1.1
 		draw_circle(Vector2(p.x + p.side * p.t * 26.0, p.y), 2.0 + p.t * 6.0, Color(1, 1, 1, 0.22 * a))
 
-	# landing ripples
+	# landing ripples (fire rings ride the same system, just orange and thicker)
 	for r in ripples:
 		var rp: float = r.t / 0.6
-		draw_arc(Vector2(r.x, r.y), r.max * rp, 0, TAU, 28, Color(1, 1, 1, 0.5 * (1.0 - rp)), 3.0)
+		var rcol: Color = r.get("col", Color(1, 1, 1))
+		draw_arc(Vector2(r.x, r.y), r.max * rp, 0, TAU, 28,
+			Color(rcol.r, rcol.g, rcol.b, 0.5 * (1.0 - rp)), 5.0 if r.has("col") else 3.0)
 
 	# floating nonsense (sailboat, bottle, flip-flop): purely decorative, gently swaying
 	for pr in props:
@@ -1792,15 +1809,19 @@ func _draw() -> void:
 		var nag := "the duck is judging you." if idle_timer > 9.0 else "quack?"
 		_otext(dp + Vector2(-160, -DUCK_R - 40), nag, 24, Color(1, 1, 1, 0.9), 320.0, HORIZONTAL_ALIGNMENT_CENTER, 5)
 
+# the conga line compresses as it grows so every duckling stays on screen
+func _duckling_pos(i: int) -> Vector2:
+	var spacing := minf(40.0, 220.0 / maxf(1.0, float(ducklings_n)))
+	return Vector2(_trail_x(0.22 * (i + 1)), BASE_Y + spacing * (i + 1))
+
 # the conga line: each duckling follows the duck's wake and hops a beat late
 func _draw_ducklings() -> void:
 	if ducklings_n <= 0 or tex_duckling.is_empty():
 		return
 	for i in ducklings_n:
-		var dx := _trail_x(0.22 * (i + 1))
-		var dy := BASE_Y + 40.0 * (i + 1)
-		if dy > VIEW.y - 50.0:
-			break
+		var dp := _duckling_pos(i)
+		var dx := dp.x
+		var dy := dp.y
 		var h := _duckling_h(i)
 		var pos := Vector2(dx, dy - h * 80.0)
 		var sc := 2.0 * (1.0 + 0.3 * h)

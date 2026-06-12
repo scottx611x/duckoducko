@@ -192,6 +192,21 @@ def unlock():
     return out
 
 
+def fwoosh():
+    """Fireball whump for the mega-landing blast."""
+    dur = 0.55
+    out = []
+    lp = 0.0
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        lp += (random.uniform(-1, 1) - lp) * (0.10 + 0.28 * (1.0 - p))
+        rumble = sine(62.0 * (1.0 - 0.3 * p), t) * 0.5
+        a = env(t, dur, 0.015, 1.8)
+        out.append((lp * 1.1 + rumble) * a * 0.9)
+    return out
+
+
 def ribbit():
     """A startled frog. Low, wet, brief."""
     dur = 0.16
@@ -259,4 +274,5 @@ if __name__ == "__main__":
     save("peep.wav", peep())
     save("crunch.wav", crunch())
     save("ribbit.wav", ribbit())
+    save("fwoosh.wav", fwoosh())
     print("done.")
