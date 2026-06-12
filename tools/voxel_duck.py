@@ -40,7 +40,10 @@ SPECIES = dict(
     # head_scale must leave the stubby bill poking out past the head ellipsoid
     bufflehead=dict(head_scale=1.18, bill_len=16, face_paint="bufflehead", size=0.85),
     pintail=dict(pin_tail=True, face_paint="pintail", long_neck=True, bill_stripe=True),
-    hoodie=dict(crest=True, face_paint="hoodie", eye_col=(244, 196, 60)),
+    hoodie=dict(crest=True, big_crest=True, face_paint="hoodie", eye_col=(244, 196, 60), bill_thin=True),
+    canvasback=dict(red_eye=True, dark_rump=True),
+    eider=dict(face_paint="eider", bill_len=15),
+    golden=dict(chest_speckles=True, dark_rump=True),
 )
 
 
@@ -96,6 +99,45 @@ def palette(sp):
             wing=(42, 40, 48), wingd=(32, 30, 38), primary=(24, 22, 28),
             specw=(238, 238, 240), spec=(214, 214, 218), specd=(180, 180, 186),
             tail=(74, 58, 44), tailhi=(112, 92, 70), eye=(20, 18, 22),
+        )
+    if sp == "canvasback":  # the racer: chestnut head, black chest, canvas body
+        return dict(
+            back=(198, 196, 188), body=(218, 216, 208), belly=(234, 232, 226),
+            verm_d=(190, 188, 180), verm_l=(232, 230, 222),
+            nape=(106, 38, 26), head=(148, 54, 36), headh=(182, 78, 52),
+            crown=(122, 44, 30), glint=(198, 98, 66),
+            chest=(34, 32, 36), chestd=(24, 22, 26), chestl=(46, 44, 50),
+            bill=(38, 36, 40), billd=(26, 24, 28), nail=(20, 18, 22), nostril=(48, 46, 50),
+            white=(240, 238, 232), collar=(240, 238, 232),
+            wing=(182, 180, 172), wingd=(152, 150, 144), primary=(112, 110, 106),
+            tail=(62, 60, 58), tailhi=(110, 108, 104),
+            specw=(238, 236, 230), spec=(168, 166, 158), specd=(140, 138, 132), eye=(20, 18, 22),
+        )
+    if sp == "eider":  # the king: pearl crown, green cheeks, orange shield, black body
+        return dict(
+            back=(30, 28, 32), body=(38, 36, 40), belly=(52, 50, 54),
+            verm_d=(24, 22, 26), verm_l=(50, 48, 52),
+            nape=(122, 170, 126), head=(226, 224, 216), headh=(152, 178, 198),
+            crown=(140, 168, 190), glint=(192, 212, 226),
+            chest=(242, 234, 216), chestd=(224, 210, 186), chestl=(250, 246, 236),
+            bill=(240, 140, 60), billd=(202, 102, 42), nail=(60, 40, 28), nostril=(170, 90, 40),
+            white=(246, 244, 238), collar=(246, 244, 238),
+            wing=(34, 32, 38), wingd=(26, 24, 30), primary=(20, 18, 24),
+            specw=(238, 238, 240), spec=(214, 214, 218), specd=(180, 180, 186),
+            tail=(28, 26, 30), tailhi=(70, 68, 72), eye=(20, 18, 22),
+        )
+    if sp == "golden":  # the myth. do not question the golden mallard.
+        return dict(
+            back=(182, 150, 66), body=(206, 176, 92), belly=(232, 212, 142),
+            verm_d=(160, 128, 52), verm_l=(226, 200, 120),
+            nape=(150, 110, 30), head=(214, 164, 42), headh=(238, 198, 74),
+            crown=(178, 132, 34), glint=(252, 232, 142),
+            chest=(192, 142, 42), chestd=(160, 112, 30), chestl=(216, 170, 64),
+            bill=(255, 216, 92), billd=(220, 174, 56), nail=(170, 130, 40), nostril=(190, 146, 48),
+            white=(252, 244, 200), collar=(252, 244, 200),
+            wing=(196, 166, 82), wingd=(168, 138, 60), primary=(132, 104, 42),
+            specw=(252, 246, 210), spec=(58, 108, 172), specd=(40, 76, 128),
+            tail=(150, 116, 44), tailhi=(244, 226, 150), eye=(24, 20, 16),
         )
     if sp == "pintail":  # the gymnast: chocolate head, white neck stripe, long pin tail
         return dict(
@@ -235,6 +277,9 @@ def build(sp="mallard", wings="folded"):
         ellip(0, 7.4, 7.2, 2.4, 2.6, 2.6, P["crown"])
         ellip(0, 5.4, 5.6, 1.7, 1.9, 1.9, P["crown"])
         ellip(0, 8.8, 8.4, 1.9, 1.6, 2.2, P["nape"], only_empty=True)
+    if spec.get("big_crest"):
+        # hooded merganser: the raised FAN — a tall round disc atop/behind the head
+        ellip(0, 9.0, 8.2, 2.3, 3.2, 3.4, P["crown"])
     fp = spec.get("face_paint")
     if fp == "wood":
         # two thin white face lines: over the eye to the crest tip + white throat
@@ -252,11 +297,11 @@ def build(sp="mallard", wings="folded"):
             if V[(x, y, z)] in (P["head"], P["headh"], P["glint"]) and z <= 9.5 and y >= 5.0:
                 V[(x, y, z)] = P["white"]
     elif fp == "hoodie":
-        # THE HOOD: a white fan on the rear of the black head, black-bordered
-        # (the window leaves black crown above and black border all around)
+        # THE HOOD: a big white fan centered in the raised crest, black rim on
+        # every side (the paint window stops short of the crest's edges)
         for (x, y, z) in list(V.keys()):
             if V[(x, y, z)] in (P["head"], P["headh"], P["glint"], P["crown"], P["nape"]) \
-                    and z <= 9.0 and 5.5 <= y <= 8.5:
+                    and 5.0 <= z <= 9.5 and 6.0 <= y <= 10.5 and abs(x) <= 2:
                 V[(x, y, z)] = P["white"]
         # two black spur bars between the white chest and rusty flank
         for s in (1, -1):
@@ -264,6 +309,16 @@ def build(sp="mallard", wings="folded"):
                 for z in (4, 5):
                     if (3 * s, y, z) in V:
                         V[(3 * s, y, z)] = (26, 24, 30)
+    elif fp == "eider":
+        # the king's orange-yellow frontal shield, black-rimmed, atop the bill base
+        for x in range(-1, 2):
+            for y in (6, 7):
+                for z in (10, 11, 12):
+                    V[(x, y, z)] = (250, 192, 72)
+        for x in range(-2, 3):
+            for z in (9, 13):
+                if (x, 6, z) in V:
+                    V[(x, 6, z)] = (30, 28, 32)
     elif fp == "pintail":
         # white breast finger running up each side of the neck toward the head
         for y in range(1, 7 + NY):
@@ -279,9 +334,10 @@ def build(sp="mallard", wings="folded"):
             y = round(3.4 + 2.9 * math.sin(math.radians(a)))
             if (x, y, 7) in V:
                 put(x, y, 7, P["collar"])
-    # ---- bill: long, flat, spatulate (short + stubby on a bufflehead) ----
+    # ---- bill: long, flat, spatulate (stubby on a bufflehead, a spike on a merganser) ----
     bl = spec.get("bill_len", 17)
-    box(-2, 2, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
+    bw = 1 if spec.get("bill_thin") else 2
+    box(-bw, bw, 4 + NY, 5 + NY, 11, bl - 1, P["bill"])
     box(-1, 1, 4 + NY, 5 + NY, bl, bl, P["bill"])     # rounded tip
     box(-2, 2, 6 + NY, 6 + NY, 10, 12, P["billd"], only_empty=True)  # base shade under head
     box(-2, 2, 5 + NY, 5 + NY, 12, bl - 1, P["billd"], only_empty=True)  # top ridge
@@ -480,11 +536,17 @@ def build_heron(flap=0):
     for s in (1, -1):
         put(3 * s, 2, 2, RUST); put(3 * s, 2, 1, RUST); put(4 * s, 2, 1, RUST)
     # huge spread wings: covert gradient -> slate secondaries -> black primaries,
-    # a thin white wing-bar along the leading edge; flap raises/droops the tips
+    # a thin white wing-bar along the leading edge. Three flap poses for a slow,
+    # SWOOPING beat: 0 = glide, 1 = upstroke (raised high), 2 = downstroke (bowed under)
     for s in (1, -1):
         for w in range(12):
             x = (3 + w) * s
-            lift = (1 if flap == 0 else 2) + (w // 4) - (w // 5 if flap else 0)
+            if flap == 1:
+                lift = 2 + (w // 3)         # wings swept up and out
+            elif flap == 2:
+                lift = 1 - (w // 3)         # wings bowed beneath the body
+            else:
+                lift = 1 + (w // 5)         # level glide
             z0 = -4 + (w // 2)          # trailing edge sweeps forward
             z1 = 3 - (w // 4)           # leading edge sweeps back
             if w >= 9:
@@ -558,8 +620,8 @@ def generate_critters(art_dir):
     def save(img, name):
         img.save(os.path.join(art_dir, name))
 
-    # heron: dive pose, two flap frames, rendered larger than a duck
-    for f in (0, 1):
+    # heron: dive pose, three flap poses (glide / upstroke / downstroke)
+    for f in (0, 1, 2):
         SH = shade(build_heron(f))
         save(render(SH, math.radians(0), math.radians(55), out=76, scale=1.55),
              "heron_%d.png" % f)

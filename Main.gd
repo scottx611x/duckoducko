@@ -123,24 +123,41 @@ const ITEM_DEFS := [
 	{"name": "ducky",   "score": 10.0, "loft": 0.30, "weight": 1},   # it squeaks.
 ]
 
+# the meta shop: permanent unlocks bought with feathers (the reason to come back)
+const META := [
+	{"id": "jacket", "name": "DOWN JACKET", "desc": "start every run with a shield", "cost": 150},
+	{"id": "warmup", "name": "WARM-UP LAPS", "desc": "start every run with 40% LOFT", "cost": 100},
+	{"id": "earlybird", "name": "EARLY BIRD", "desc": "your first draft arrives at 200m", "cost": 120},
+	{"id": "egghead", "name": "EGG HEAD", "desc": "start every run with a duckling", "cost": 200},
+	{"id": "pockets", "name": "DEEP POCKETS", "desc": "feathers you bank count DOUBLE", "cost": 250},
+]
+const SHOP_ROW_H := 96.0
+
 # duck-select screen
-const MENU_DUCKS_BTN := Rect2(160.0, 770.0, 220.0, 56.0)
+const MENU_DUCKS_BTN := Rect2(55.0, 770.0, 200.0, 56.0)
+const MENU_SHOP_BTN := Rect2(285.0, 770.0, 200.0, 56.0)
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
+# the cost ladder is a power ladder: more feathers = objectively better duck
 const ROSTER := [
 	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "trait": "the balanced drake", "cost": 0},
-	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.55, "trait": "the clever hen", "cost": 0},
-	{"name": "Wood Duck", "species": "wood", "hop": 0.75, "steer": 0.5, "trait": "floaty show-off", "cost": 25},
-	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.6, "steer": 0.75, "trait": "tiny & twitchy", "cost": 50, "size": 0.85},
-	{"name": "Pintail", "species": "pintail", "hop": 0.45, "steer": 0.85, "trait": "the best steerer", "cost": 90},
-	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.7, "steer": 0.6, "trait": "the crested diver", "cost": 140},
+	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "trait": "the clever hen", "cost": 0},
+	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "trait": "floaty show-off", "cost": 60},
+	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "trait": "tiny & twitchy", "cost": 120, "size": 0.85},
+	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "trait": "the best steerer", "cost": 200},
+	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "trait": "the crested diver", "cost": 280},
+	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "trait": "the redhead racer", "cost": 450},
+	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 700},
+	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 1200},
 ]
 
 # ---- state -------------------------------------------------------------------
 enum St { GROUNDED, HOPPING, MEGA }
 var in_menu := true
 var in_select := false
+var in_shop := false
+var meta_owned: Array = []      # persistent shop purchases (ids)
 var sel_index := 0
 var select_yaw := 0.0
 var spin_prev_x := 0.0
@@ -293,6 +310,8 @@ func _ready() -> void:
 	tex_log = load("res://art/log.png")
 	tex_frog = load("res://art/frog.png")
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
+	if ResourceLoader.exists("res://art/heron_2.png"):
+		tex_heron.append(load("res://art/heron_2.png"))
 	tex_water = load("res://art/water.png")
 	if ResourceLoader.exists("res://art/bank_left.png"):
 		tex_bank_l = load("res://art/bank_left.png")
@@ -410,13 +429,18 @@ func _ready() -> void:
 func _smoke() -> void:
 	await get_tree().create_timer(0.3).timeout
 	print("SMOKE menu ok, has_art=", has_art, " sfx=", sfx.size())
+	feathers = 500
+	_open_shop()
+	_shop_press(_shop_row(0).get_center())             # buy DOWN JACKET
+	_enter_menu()
+	print("SMOKE shop jacket=", _meta("jacket"), " feathers=", feathers)
 	_open_select()
 	sel_index = 2
 	feathers = 100
 	_select_press(SEL_PLAY_BTN.get_center())          # buys the wood duck
 	print("SMOKE unlock wood=", _is_unlocked(2), " feathers=", feathers)
 	_select_press(SEL_PLAY_BTN.get_center())          # plays it
-	print("SMOKE playing species=", species, " hop_mul=", duck_hop_mul, " steer_mul=", duck_steer_mul)
+	print("SMOKE playing species=", species, " hop_mul=", duck_hop_mul, " shield(jacket)=", shield_charges)
 	await get_tree().create_timer(0.4).timeout
 	hop()
 	await get_tree().create_timer(0.7).timeout
@@ -490,6 +514,7 @@ func _load_save() -> void:
 		best_m = cfg.get_value("save", "best_m", 0)
 		unlocked_extra = cfg.get_value("save", "unlocked", [])
 		duck_name = cfg.get_value("save", "duck_name", "")
+		meta_owned = cfg.get_value("save", "meta", [])
 
 func _save() -> void:
 	var cfg := ConfigFile.new()
@@ -497,7 +522,11 @@ func _save() -> void:
 	cfg.set_value("save", "best_m", best_m)
 	cfg.set_value("save", "unlocked", unlocked_extra)
 	cfg.set_value("save", "duck_name", duck_name)
+	cfg.set_value("save", "meta", meta_owned)
 	cfg.save("user://save.cfg")
+
+func _meta(id: String) -> bool:
+	return id in meta_owned
 
 func _is_unlocked(i: int) -> bool:
 	return ROSTER[i].cost == 0 or ROSTER[i].species in unlocked_extra
@@ -598,6 +627,7 @@ func _dbg() -> void:
 func _enter_menu() -> void:
 	in_menu = true
 	in_select = false
+	in_shop = false
 	score_label.visible = false
 	loft_bar.visible = false
 	center_label.visible = false
@@ -609,7 +639,14 @@ func _enter_menu() -> void:
 func _open_select() -> void:
 	in_menu = false
 	in_select = true
+	in_shop = false
 	select_yaw = 0.0
+	name_edit.visible = false
+
+func _open_shop() -> void:
+	in_menu = false
+	in_select = false
+	in_shop = true
 	name_edit.visible = false
 
 func start_game() -> void:
@@ -624,6 +661,15 @@ func start_game() -> void:
 	duck_steer_mul = 0.85 + 0.3 * r.steer
 	duck_size_mul = r.get("size", 1.0)
 	reset_game()
+	# permanent unlocks kick in at the waterline
+	if _meta("jacket"):
+		shield_charges = 1
+	if _meta("egghead"):
+		ducklings_n = 1
+	if _meta("earlybird"):
+		next_draft = 2000.0
+	if _meta("warmup"):
+		loft = 0.4
 	score_label.visible = true
 	loft_bar.visible = true
 	name_edit.visible = false
@@ -990,11 +1036,16 @@ func _on_press(pos: Vector2) -> void:
 		_sfx("click")
 		if MENU_DUCKS_BTN.has_point(pos):
 			_open_select()
+		elif MENU_SHOP_BTN.has_point(pos):
+			_open_shop()
 		else:
 			start_game()
 		return
 	if in_select:
 		_select_press(pos)
+		return
+	if in_shop:
+		_shop_press(pos)
 		return
 	if not alive:
 		_sfx("click")
@@ -1145,6 +1196,8 @@ func die(msg: String) -> void:
 	dead_msg = msg
 	_sfx("bonk")
 	dead_m = int(distance / 10.0)
+	if _meta("pockets"):
+		run_feathers *= 2                   # DEEP POCKETS pays at the bank
 	feathers += run_feathers
 	dead_record = dead_m > best_m
 	if dead_record and best_m > 0:          # confetti for the new best
@@ -1163,9 +1216,9 @@ func _process(delta: float) -> void:
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
 	if in_select:
 		select_yaw += delta * 0.7
-	if not in_menu and not in_select and alive and not drafting:
+	if not in_menu and not in_select and not in_shop and alive and not drafting:
 		_update_play(delta)
-	if not in_menu and not in_select:
+	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
 		for f in floaties:
 			f.t += delta
@@ -1682,6 +1735,10 @@ func _draw() -> void:
 		_draw_select()
 		return
 
+	if in_shop:
+		_draw_shop()
+		return
+
 	# water trail / wake
 	for p in wake:
 		var a: float = 1.0 - p.t / 1.1
@@ -1766,7 +1823,9 @@ func _draw() -> void:
 			var hs := tex_shadow.get_size() * DUCK_DRAW * (0.6 + prox)
 			draw_texture_rect(tex_shadow, Rect2(Vector2(e.x, BASE_Y) - hs * 0.5, hs), false, Color(1, 1, 1, prox))
 	for e in enemies:
-		var hf: Texture2D = tex_heron[int(anim_t * 11.0) % 2] if has_art else null
+		# slow majestic swoop: up -> glide -> down -> glide, ~1.3s per full beat
+		var hseq := [1, 0, 2, 0] if tex_heron.size() >= 3 else [0, 1]
+		var hf: Texture2D = tex_heron[hseq[int(anim_t * 3.0) % hseq.size()]] if has_art else null
 		if hf != null:
 			var ez: Vector2 = hf.get_size() * DUCK_DRAW
 			draw_texture_rect(hf, Rect2(Vector2(e.x, e.y) - ez * 0.5, ez), false)
@@ -1884,7 +1943,7 @@ func _trail_x(ago: float) -> float:
 	return trail[0].x if trail.size() > 0 else duck_x
 
 func _duckling_h(i: int) -> float:
-	var delay := 0.16 * (i + 1)
+	var delay := 0.05 * (i + 1)   # the whole conga pops up with you, in a quick wave
 	var dur := cur_hop_dur() * 0.85
 	for e in hop_events:
 		var p: float = (anim_t - e - delay) / dur
@@ -2009,10 +2068,13 @@ func _draw_menu() -> void:
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
 	_otext(Vector2(0, 700), "▶  tap to play  ◀", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
-	# DUCKS button (opens the select screen)
+	# DUCKS + SHOP buttons
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
-	draw_string(font, Vector2(MENU_DUCKS_BTN.position.x, MENU_DUCKS_BTN.position.y + 33), "🦆  DUCKS  ▸",
+	draw_string(font, Vector2(MENU_DUCKS_BTN.position.x, MENU_DUCKS_BTN.position.y + 33), "🦆  DUCKS",
 		HORIZONTAL_ALIGNMENT_CENTER, MENU_DUCKS_BTN.size.x, 24, Color(1, 1, 1, 0.95))
+	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
+	draw_string(font, Vector2(MENU_SHOP_BTN.position.x, MENU_SHOP_BTN.position.y + 33), "🪶  SHOP",
+		HORIZONTAL_ALIGNMENT_CENTER, MENU_SHOP_BTN.size.x, 24, Color(1, 1, 1, 0.95))
 	_otext(Vector2(0, 900), "drag to steer · tap to hop · fill LOFT for MEGA HOP / LASER",
 		18, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	_otext(Vector2(0, 938), "DUCKODUCKO beta · made with one thumb", 13, Color(1, 1, 1, 0.35),
@@ -2041,12 +2103,72 @@ func _spin_frame(sp: String, yaw: float):
 		return hero if hero != null else cur["idle"][0]
 	return spin[int(floor(fposmod(yaw, TAU) / TAU * spin.size())) % spin.size()]
 
+# ---- the feather shop ----------------------------------------------------------
+func _shop_row(i: int) -> Rect2:
+	return Rect2(50.0, 210.0 + i * (SHOP_ROW_H + 14.0), VIEW.x - 100.0, SHOP_ROW_H)
+
+func _shop_press(pos: Vector2) -> void:
+	if SEL_BACK_BTN.has_point(pos):
+		_sfx("click")
+		_enter_menu()
+		return
+	for i in META.size():
+		if _shop_row(i).has_point(pos):
+			var m: Dictionary = META[i]
+			if _meta(m.id):
+				_sfx("click", 0.8)                 # already yours
+			elif feathers >= m.cost:
+				feathers -= m.cost
+				meta_owned.append(m.id)
+				_save()
+				_sfx("unlock")
+				_spawn_parts(VIEW.x * 0.5, _shop_row(i).get_center().y, 14, Color(1, 0.86, 0.35), 200.0)
+			else:
+				_sfx("bonk", 1.4, -8.0)
+			return
+
+func _draw_shop() -> void:
+	_otext(Vector2(0, 104), "FEATHER SHOP", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
+	_otext(Vector2(0, 140), "permanent. every run. very duck.", 16, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	draw_string(font, Vector2(VIEW.x - 190, 60), "🪶 %d" % feathers, HORIZONTAL_ALIGNMENT_RIGHT, 170, 26, Color(1, 0.92, 0.45))
+	draw_style_box(_btn_sb(), SEL_BACK_BTN)
+	draw_string(font, Vector2(SEL_BACK_BTN.position.x, SEL_BACK_BTN.position.y + 33), "< back",
+		HORIZONTAL_ALIGNMENT_CENTER, SEL_BACK_BTN.size.x, 22, Color.WHITE)
+	for i in META.size():
+		var rc := _shop_row(i)
+		var m: Dictionary = META[i]
+		var owned := _meta(m.id)
+		var affordable: bool = feathers >= m.cost
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.13, 0.19, 0.93)
+		sb.set_corner_radius_all(16)
+		sb.set_border_width_all(2)
+		if owned:
+			sb.border_color = Color(0.45, 0.85, 0.5, 0.9)
+		elif affordable:
+			sb.border_color = Color(1, 0.86, 0.35, 0.7 + 0.3 * sin(anim_t * 4.0 + i))
+		else:
+			sb.border_color = Color(1, 1, 1, 0.18)
+		draw_style_box(sb, rc)
+		var tcol := Color.WHITE if (owned or affordable) else Color(1, 1, 1, 0.55)
+		draw_string(font, Vector2(rc.position.x + 22, rc.position.y + 40), m.name,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 140, 25, tcol)
+		draw_string(font, Vector2(rc.position.x + 22, rc.position.y + 70), m.desc,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 140, 17, Color(1, 1, 1, 0.65))
+		if owned:
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 56), "OWNED ✓",
+				HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 20, 20, Color(0.45, 0.85, 0.5))
+		else:
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 56), "%d 🪶" % m.cost,
+				HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 20, 22,
+				Color(1, 0.86, 0.35) if affordable else Color(1, 1, 1, 0.45))
+
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
 	var n := ROSTER.size()
-	var tw := 86.0
+	var tw := minf(86.0, (VIEW.x - 16.0) / float(n))   # the roster grew; thumbs shrink to fit
 	var x0 := VIEW.x * 0.5 - n * tw * 0.5
-	return Rect2(x0 + i * tw + 6.0, 770.0, tw - 12.0, 86.0)
+	return Rect2(x0 + i * tw + 4.0, 770.0, tw - 8.0, 86.0)
 
 func _draw_select() -> void:
 	var cx := VIEW.x * 0.5
@@ -2106,12 +2228,13 @@ func _draw_select() -> void:
 		var th = rcur.get("hero")
 		if th == null:
 			th = rcur["idle"][0]
+		var tsc := r.size.x / 62.0                 # thumbs scale with the row
 		if _is_unlocked(i):
-			_blit_centered(th, r.get_center(), 1.4)
+			_blit_centered(th, r.get_center(), tsc)
 		else:
-			_blit_modulated(th, r.get_center(), 1.4, Color(0.34, 0.37, 0.44, 1.0))
-			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "%d🪶" % rd.cost,
-				HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 13, Color(1, 0.9, 0.45, 0.9))
+			_blit_modulated(th, r.get_center(), tsc, Color(0.34, 0.37, 0.44, 1.0))
+			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "%d" % rd.cost,
+				HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 12, Color(1, 0.9, 0.45, 0.9))
 
 func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	if tex == null:
