@@ -2,19 +2,20 @@
 
 A whimsical top-down tap-to-hop duck roguelike. See `DESIGN.md` and `WHIMSY.md`.
 
-## 🌐 Play it (beta)
+## 📦 Beta builds
 
-**https://scottx611x.github.io/duckoducko-web/** — runs in any browser, sound on.
-Name your duck on the menu; feathers, unlocks, and your best distance persist in
-the browser (per-device localStorage — a shared online leaderboard needs a tiny
-backend and is parked for now).
+**https://github.com/scottx611x/duckoducko-web/releases** — grab the latest:
+- **Android:** download `duckoducko.apk` on the phone, allow "install unknown
+  apps", open it.
+- Feathers, unlocks, and best distance persist per device (a shared online
+  leaderboard needs a tiny backend and is parked for now).
 
-Ship a new build to the beta testers:
+Cut a new release (builds the APK + web bundle, uploads both):
 ```
-tools/deploy_web.sh
+tools/release.sh v0.10-beta
 ```
-(rebuilds the Web export into `docs/` and pushes it to the public
-`scottx611x/duckoducko-web` Pages repo — this source repo stays private)
+(requires `gh` authed as scottx611x; the public repo holds only releases —
+this source repo stays private)
 
 ## M1 prototype (this)
 
