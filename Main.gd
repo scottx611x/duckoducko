@@ -660,12 +660,16 @@ func _load_duck(sp: String) -> Dictionary:
 	var qp := "res://art/%s_quack.png" % sp                # mid-QUACK hero (menu tap reaction)
 	d["quack"] = load(qp) if ResourceLoader.exists(qp) else null
 	var spin := []                                         # 24-angle turntable (duck-select)
+	var spinq := []                                        # beak-open twin of each angle
 	for si in range(24):
 		var sf := "res://art/%s_spin_%02d.png" % [sp, si]
 		if not ResourceLoader.exists(sf):
 			break
 		spin.append(load(sf))
+		var sq := "res://art/%s_spinq_%02d.png" % [sp, si]
+		spinq.append(load(sq) if ResourceLoader.exists(sq) else load(sf))
 	d["spin"] = spin
+	d["spinq"] = spinq
 	var st := []
 	for zi in range(64):
 		var p := "res://art/%s_stack_%02d.png" % [sp, zi]
@@ -1436,6 +1440,12 @@ func _select_press(pos: Vector2) -> void:
 				_sfx("click", 1.2)
 			sel_index = i                          # locked ducks can be previewed
 			return
+	if pos.y < 440.0 and _is_unlocked(sel_index):  # tap the turntable duck -> it quacks
+		menu_quack_t = anim_t
+		if ROSTER[sel_index].species == "rubberduck":
+			_sfx("squeak", randf_range(0.95, 1.05))
+		else:
+			_sfx("quack", randf_range(0.95, 1.1))
 
 func _on_release() -> void:
 	if not pressed:
@@ -2903,10 +2913,10 @@ func _draw_menu() -> void:
 		# the star: whichever duck you last ran, alone on the turntable.
 		# tapping it spins it (easter-egg momentum) AND it QUACKS, beak open.
 		var star := last_species if ducks.has(last_species) else "mallard"
-		if anim_t - menu_quack_t < 0.45 and ducks[star].get("quack") != null:
-			_blit_centered(ducks[star]["quack"], Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
-		else:
-			_blit_centered(_spin_frame(star, anim_t * 0.55 + menu_spin), Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
+		# beak opens AT the current spin angle — no more snapping to a frozen front pose
+		var quacking := anim_t - menu_quack_t < 0.45
+		_blit_centered(_spin_frame(star, anim_t * 0.55 + menu_spin, quacking),
+			Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0), 4.6)
 		if anim_t - menu_msg_t < 3.0:
 			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
@@ -2954,9 +2964,11 @@ func _blit_centered(tex, pos: Vector2, scale: float) -> void:
 	draw_texture_rect(tex, Rect2(pos - sz * 0.5, sz), false)
 
 # pick the turntable frame for a yaw (radians); falls back to the static hero
-func _spin_frame(sp: String, yaw: float):
+func _spin_frame(sp: String, yaw: float, beak_open := false):
 	var cur = ducks.get(sp, ducks["mallard"])
-	var spin: Array = cur.get("spin", [])
+	var spin: Array = cur.get("spinq", []) if beak_open else cur.get("spin", [])
+	if spin.is_empty():
+		spin = cur.get("spin", [])
 	if spin.is_empty():
 		var hero = cur.get("hero")
 		return hero if hero != null else cur["idle"][0]
@@ -3048,8 +3060,9 @@ func _draw_select() -> void:
 	var unlocked := _is_unlocked(sel_index)
 	var sp: String = duck.species
 	var bob := sin(anim_t * 2.5) * 8.0
-	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise
-	var fr = _spin_frame(sp, select_yaw)
+	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise.
+	# tapping it opens the beak AT the current angle (a quack in any orientation)
+	var fr = _spin_frame(sp, select_yaw, anim_t - menu_quack_t < 0.45)
 	if unlocked:
 		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
 	else:

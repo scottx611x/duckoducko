@@ -564,8 +564,11 @@ def generate_ducks(art_dir):
         save(render(shade(build(sp, "folded", beak_open=True)),
                     math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_quack.png" % sp)
         # 24-frame turntable at hero pitch: free rotation on the duck-select screen
+        SHq = shade(build(sp, "folded", beak_open=True))   # same body, beak agape
         for i in range(24):
             save(render(SH, math.radians(i * 15), math.radians(HERO_PITCH), scale=sc), "%s_spin_%02d.png" % (sp, i))
+            # beak-open twin of every angle, so a quack reads in ANY orientation
+            save(render(SHq, math.radians(i * 15), math.radians(HERO_PITCH), scale=sc), "%s_spinq_%02d.png" % (sp, i))
         # 7-frame banking sweep (offsets from the back-view base)
         for i, off in enumerate(BANK_OFF):
             save(render(SH, math.radians(GAME_YAW + off), PITCH, scale=sc), "%s_bank_%d.png" % (sp, i))
