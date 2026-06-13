@@ -57,7 +57,7 @@ const UPGRADES := [
 	{"id": "double", "name": "DOUBLE HOP", "desc": "hop again in mid-air", "rarity": 2},
 	{"id": "trio", "name": "DUCKLING PARADE", "desc": "+3 little buddies, peeping", "rarity": 2},
 	{"id": "gold", "name": "GOLDEN BILL", "desc": "snacks score double (score & feathers)", "rarity": 2},
-	{"id": "nestegg", "name": "NEST EGG", "desc": "+2 feathers at every 100m milestone", "rarity": 0},
+	{"id": "nestegg", "name": "NEST EGG", "desc": "+2 feathers every 100 ft", "rarity": 0},
 	{"id": "snackhawk", "name": "SNACK HAWK", "desc": "snacks grabbed mid-air: double LOFT", "rarity": 1},
 	{"id": "aftershock", "name": "AFTERSHOCK", "desc": "each log your blast smashes: +12% LOFT", "rarity": 1},
 	{"id": "bounce", "name": "BOUNCE CHARGE", "desc": "spring-log bounces refill +35% LOFT", "rarity": 1},
@@ -186,6 +186,16 @@ var in_menu := true
 var in_select := false
 var in_shop := false
 var paused := false
+
+# GERALD THE IMMENSE: a colossal heron boss at fixed distance marks (feet), each
+# tougher than the last. river darkens, music ducks, you duel him with specials and
+# by hopping his dive-shockwaves back at him.
+const BOSS_MARKS := [5000, 15000, 30000]   # feet
+var next_boss_idx := 0
+var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
+var boss_waves: Array = []  # shockwave rings from his dives: {x, r, hopped}
+var boss_flash := 0.0       # white hit-flash on Gerald
+
 var menu_enter_t := -10.0       # brief tap-grace after landing on the menu
 var meta_owned: Array = []      # persistent shop purchases (ids)
 var sel_index := 0
@@ -326,6 +336,7 @@ var tex_shadow: Texture2D
 var tex_log: Texture2D
 var tex_frog: Texture2D
 var tex_heron := []
+var tex_gerald := []            # GERALD THE IMMENSE boss frames
 var tex_items := {}
 var tex_water: Texture2D
 var tex_bank_l: Texture2D
@@ -361,6 +372,8 @@ func _ready() -> void:
 	tex_log = load("res://art/log.png")
 	tex_frog = load("res://art/frog.png")
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
+	if ResourceLoader.exists("res://art/gerald_0.png"):
+		tex_gerald = [load("res://art/gerald_0.png"), load("res://art/gerald_1.png"), load("res://art/gerald_2.png")]
 	if ResourceLoader.exists("res://art/sadie_0.png"):
 		tex_sadie = [load("res://art/sadie_0.png"), load("res://art/sadie_1.png")]
 		tex_chuckit = load("res://art/chuckit.png")
@@ -913,6 +926,9 @@ func _spawn_sadie() -> void:
 	_float_text(sadie.x + dir * 80.0, sadie.y - 56.0, "*boof!*", Color(0.85, 0.62, 0.4))
 
 func _update_sadie(delta: float) -> void:
+	if boss != null:                               # Sadie sits the boss fight out
+		sadie = null
+		return
 	if sadie == null:
 		if distance > 3000.0:                      # the dog park is past the 300m bend
 			sadie_timer -= delta
@@ -1126,6 +1142,11 @@ func reset_game() -> void:
 	enemies.clear()
 	ripples.clear()
 	wake.clear()
+	boss = null
+	boss_waves.clear()
+	next_boss_idx = 0
+	if music_player != null:
+		music_player.volume_db = 0.0
 	log_timer = 0.8
 	item_timer = 0.4
 	heron_timer = 6.0
@@ -1385,6 +1406,8 @@ func mega_hop() -> void:
 	loft_ready = false
 	hop_events.append(anim_t)                  # the ducklings launch too
 	_sfx("mega")
+	if boss != null and boss.phase == "fight":  # you launched yourself right at him
+		_hit_boss(1)
 
 func fire_laser() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA:
@@ -1396,6 +1419,8 @@ func fire_laser() -> void:
 		return
 	laser_t = LASER_DUR
 	_sfx("laser")
+	if boss != null and boss.phase == "fight" and absf(boss.x - duck_x) < LASER_W * 0.85:
+		_hit_boss(1)                           # the beam catches him — line it up!
 
 # SONIC QUACK: one quack. zero survivors.
 func _sonic_quack() -> void:
@@ -1414,6 +1439,7 @@ func _sonic_quack() -> void:
 	logs.clear()
 	enemies.clear()
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 640.0})
+	_hit_boss(2)                               # a screen-clearing QUACK staggers Gerald hard
 
 func die(msg: String) -> void:
 	alive = false
@@ -1577,7 +1603,7 @@ func _update_play(delta: float) -> void:
 			milestone_step += 1
 		else:
 			_sfx("chime", 0.75, -18.0)
-		_float_text(duck_x, BASE_Y - 95.0, "%d m" % next_milestone, Color(1, 0.92, 0.45))
+		_float_text(duck_x, BASE_Y - 95.0, "%d ft" % next_milestone, Color(1, 0.92, 0.45))
 		if _up("nestegg") > 0:                     # NEST EGG pays out on the chime
 			run_feathers += 2 * _up("nestegg")
 			_float_text(duck_x, BASE_Y - 120.0, "+%d feathers" % (2 * _up("nestegg")), Color(1, 0.85, 0.35))
@@ -1590,8 +1616,9 @@ func _update_play(delta: float) -> void:
 		else:
 			fire_laser()
 
-	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck)
-	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0:
+	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck;
+	# never mid-boss — Gerald does not pause for shopping)
+	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0 and boss == null:
 		_open_draft()
 
 	# themed stretches: new palette washes down the screen, the duck approves
@@ -1622,6 +1649,12 @@ func _update_play(delta: float) -> void:
 	_update_hop(delta)
 	_update_wake(delta)
 	_update_enemies(delta)
+	# GERALD descends at each boss mark (once the duck is grounded and the lane's clear-ish)
+	if boss == null and next_boss_idx < BOSS_MARKS.size() \
+			and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] and state == St.GROUNDED:
+		_start_boss()
+	if boss != null:
+		_update_boss(delta)
 	_spawn(delta)
 	_move_world(delta)
 	if laser_t > 0.0:
@@ -1706,7 +1739,125 @@ func _update_enemies(delta: float) -> void:
 		e.y += e.vy * delta
 	enemies = enemies.filter(func(e): return e.y < VIEW.y + 100.0)
 
+# ---- GERALD THE IMMENSE ------------------------------------------------------
+func _start_boss() -> void:
+	var idx := next_boss_idx
+	enemies.clear()
+	logs.clear()
+	boss_waves.clear()
+	boss = {
+		"hp": 3 + idx, "max_hp": 3 + idx, "x": VIEW.x * 0.5, "y": -160.0,
+		"phase": "enter", "t": 0.0, "idx": idx,
+		"dive_gap": 2.6 - 0.5 * idx,          # harder Geralds dive more often
+		"dive_t": 2.6 - 0.5 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
+	}
+	_flash("GERALD THE IMMENSE")
+	_sfx("mega", 0.45)
+	_sfx("splash_big", 0.5)
+	if music_player != null:
+		music_player.volume_db = -16.0       # duck the music for the duel
+
+func _boss_leave() -> void:
+	boss.phase = "leave"
+	boss.t = 0.0
+	_flash("GERALD RETREATS")
+	_sfx("quack", 0.5, 2.0)
+	# the spoils: a feather shower scaling with which Gerald you bested
+	var reward: int = 15 + 10 * int(boss.idx)
+	run_feathers += reward
+	_float_text(duck_x, BASE_Y - 110.0, "+%d feathers!" % reward, Color(1, 0.9, 0.4))
+	for i in 26:
+		_spawn_parts(randf_range(60, VIEW.x - 60), randf_range(120, 360), 1, Color(1, 0.9, 0.4), 130.0)
+
+func _hit_boss(n: int) -> void:
+	if boss == null or boss.phase != "fight":
+		return
+	boss.hp -= n
+	boss_flash = 0.35
+	duck_shake = maxf(duck_shake, 0.3)
+	_sfx("crunch", 0.7)
+	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
+	if boss.hp <= 0:
+		next_boss_idx += 1
+		_boss_leave()
+	else:
+		_flash("HIT! %d left" % boss.hp)
+
+func _update_boss(delta: float) -> void:
+	boss_flash = maxf(0.0, boss_flash - delta * 2.5)
+	boss.t += delta
+	boss.hit_cool = maxf(0.0, boss.hit_cool - delta)
+	# shockwave rings ride outward; a ring hopped over reflects up and stings Gerald
+	for w in boss_waves:
+		w.r += 420.0 * delta
+		if not w.hopped and is_airborne() and absf(absf(duck_x - w.x) - w.r) < 22.0:
+			w.hopped = true
+			_hit_boss(1)
+			_float_text(duck_x, BASE_Y - 90.0, "REFLECTED!", Color(0.6, 0.9, 1.0))
+			_sfx("fwoosh", 1.5)
+	boss_waves = boss_waves.filter(func(w): return w.r < VIEW.x * 0.9 and not w.hopped)
+
+	match boss.phase:
+		"enter":
+			boss.y = lerpf(-160.0, 150.0, clampf(boss.t / 1.6, 0.0, 1.0))
+			if boss.t >= 1.7:
+				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
+		"fight":
+			if boss.dive_stage == "":
+				boss.x = VIEW.x * 0.5 + sin(anim_t * 0.7) * 140.0
+				boss.y = 150.0 + sin(anim_t * 1.6) * 12.0
+				boss.dive_t -= delta
+				if boss.dive_t <= 0.0:
+					boss.dive_stage = "tele"; boss.t = 0.0
+					boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+			elif boss.dive_stage == "tele":      # 0.7s telegraph: target locks on the duck
+				if boss.t >= 0.7:
+					boss.dive_stage = "down"; boss.t = 0.0
+					_sfx("fwoosh", 0.7)
+			elif boss.dive_stage == "down":
+				var p := clampf(boss.t / 0.32, 0.0, 1.0)
+				boss.x = lerpf(boss.x, boss.dive_x, p)
+				boss.y = lerpf(150.0, BASE_Y - 6.0, p)
+				if p >= 1.0:
+					boss.dive_stage = "up"; boss.t = 0.0
+					boss_waves.append({"x": boss.dive_x, "r": 18.0, "hopped": false})
+					ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
+					_sfx("splash_big", 0.8)
+					duck_shake = maxf(duck_shake, 0.4)
+					# caught on the water (not airborne / invincible) = you take the hit
+					if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+						boss.hit_cool = 1.0
+						_boss_hits_player()
+			elif boss.dive_stage == "up":
+				boss.y = lerpf(BASE_Y - 6.0, 150.0, clampf(boss.t / 0.45, 0.0, 1.0))
+				if boss.t >= 0.5:
+					boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+		"leave":
+			boss.y -= 360.0 * delta
+			if boss.y < -180.0:
+				boss = null
+				boss_waves.clear()
+				if music_player != null:
+					music_player.volume_db = 0.0
+
+func _boss_hits_player() -> void:
+	if shield_charges > 0:
+		shield_charges -= 1
+		_flash("POOF.")
+		_sfx("bonk", 1.3, -6.0)
+	elif ducklings_n > 0:
+		_lose_duckling()
+	else:
+		die("GERALD got you.")
+
 func _spawn(delta: float) -> void:
+	# during the boss the river is cleared for the duel — only snacks fall (to feed LOFT)
+	if boss != null:
+		item_timer -= delta
+		if item_timer <= 0.0:
+			items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
+			item_timer = randf_range(0.5, 1.0)
+		return
 	log_timer -= delta
 	if log_timer <= 0.0 and distance > LOG_START_DIST:
 		var w := randf_range(110.0, 230.0)
@@ -1973,7 +2124,7 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
 	_otext(Vector2(0, 360), "PAUSED", 64, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
-	_otext(Vector2(0, 416), "%d m · %s" % [int(distance / 10.0), THEMES[theme_idx].name],
+	_otext(Vector2(0, 416), "%d ft · %s" % [int(distance / 10.0), THEMES[theme_idx].name],
 		20, Color(1, 1, 1, 0.7))
 	draw_style_box(_btn_sb(), PAUSE_RESUME_BTN)
 	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
@@ -1996,11 +2147,11 @@ func _draw_death() -> void:
 	draw_style_box(sb, panel)
 	_otext(Vector2(0, 322), dead_msg, 46, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
 	var who := duck_name if duck_name != "" else "you"
-	_otext(Vector2(0, 374), "%s paddled %d m" % [who, dead_m], 26, Color.WHITE)
+	_otext(Vector2(0, 374), "%s paddled %d ft" % [who, dead_m], 26, Color.WHITE)
 	if dead_record:
 		_otext(Vector2(0, 410), "★ NEW BEST ★", 24, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
 	else:
-		_otext(Vector2(0, 410), "best: %d m" % best_m, 19, Color(1, 1, 1, 0.6))
+		_otext(Vector2(0, 410), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
 	_feather_text(Vector2(VIEW.x * 0.5, 448), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
 	# the build, as rarity-colored chips (flow layout)
 	var chips: Array = []
@@ -2045,7 +2196,7 @@ func _flash(msg: String) -> void:
 		center_label.visible = false
 
 func _refresh_hud() -> void:
-	score_label.text = "%d m" % int(distance / 10.0)
+	score_label.text = "%d ft" % int(distance / 10.0)
 	if ducklings_n > 0:
 		score_label.text += "  ×%.2f" % (1.0 + 0.08 * ducklings_n)
 	# (shield + fire are drawn as sprites in _draw_status_icons — emoji die on Android)
@@ -2252,8 +2403,12 @@ func _draw() -> void:
 			if randf() < 0.5:
 				_spawn_parts(m.x, m.y + 10.0, 1, Color(0.97, 0.87, 0.45), 60.0)
 
+	if boss != null:
+		_draw_boss_ground()          # telegraph + shockwaves, on the water under everyone
 	_draw_ducklings()
 	_draw_duck()
+	if boss != null:
+		_draw_boss_gerald()          # Gerald himself, over the duck (a dive comes down ON you)
 	_draw_atmosphere()
 
 	# the in-run menu escape hatch + pause button (translucent, corner, ignorable)
@@ -2282,7 +2437,7 @@ func _draw() -> void:
 		var ot := anim_t - draft_open_t
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6 * minf(ot / 0.25, 1.0)))
 		_otext(Vector2(0, 232), "CHOOSE AN UPGRADE", 38, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
-		_otext(Vector2(0, 264), "checkpoint %d m — the river waits" % int(distance / 10.0),
+		_otext(Vector2(0, 264), "checkpoint %d ft — the river waits" % int(distance / 10.0),
 			17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 		for i in draft_choices.size():
 			var ap := clampf((ot - 0.08 - i * 0.13) / 0.3, 0.0, 1.0)
@@ -2377,6 +2532,57 @@ func _duckling_h(i: int) -> float:
 		if p >= 0.0 and p < 1.0:
 			return sin(p * PI)
 	return 0.0
+
+# GERALD: telegraph target + dive shockwaves, drawn on the water (under the duck)
+func _draw_boss_ground() -> void:
+	# darken the river for the duel
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.02, 0.08, 0.34))
+	# dive telegraph: a red targeting reticle locks onto where Gerald will strike
+	if boss.dive_stage == "tele":
+		var tp := clampf(boss.t / 0.7, 0.0, 1.0)
+		var rr := lerpf(70.0, 30.0, tp)
+		var col := Color(1.0, 0.25, 0.2, 0.4 + 0.4 * tp)
+		draw_arc(Vector2(boss.dive_x, BASE_Y), rr, 0, TAU, 28, col, 3.0)
+		draw_line(Vector2(boss.dive_x, BASE_Y - rr), Vector2(boss.dive_x, BASE_Y + rr), col, 2.0)
+		draw_line(Vector2(boss.dive_x - rr, BASE_Y), Vector2(boss.dive_x + rr, BASE_Y), col, 2.0)
+	# shockwave rings expanding outward — hop one to reflect it
+	for w in boss_waves:
+		var a: float = clampf(1.0 - w.r / (VIEW.x * 0.7), 0.0, 1.0)
+		draw_arc(Vector2(w.x, BASE_Y), w.r, PI * 0.05, PI * 0.95, 20, Color(0.7, 0.85, 1.0, 0.5 * a), 4.0)
+		draw_arc(Vector2(w.x, BASE_Y), w.r, PI * 1.05, PI * 1.95, 20, Color(0.7, 0.85, 1.0, 0.5 * a), 4.0)
+
+# GERALD himself: the colossal heron + his HP pips
+func _draw_boss_gerald() -> void:
+	var gpos := Vector2(boss.x, boss.y)
+	if not tex_gerald.is_empty():
+		var fr: int = 0 if boss.dive_stage in ["down", "up"] else (int(anim_t * 6.0) % 2)
+		var gt: Texture2D = tex_gerald[fr]
+		var gsz := gt.get_size() * 1.7
+		# shadow he casts on the water grows as he dives
+		var sh := clampf((boss.y - 100.0) / (BASE_Y - 100.0), 0.0, 1.0)
+		if tex_shadow != null and boss.phase == "fight":
+			var shs := tex_shadow.get_size() * (3.0 + 3.0 * sh)
+			draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, BASE_Y + 6) - shs * 0.5, shs),
+				false, Color(0, 0, 0, 0.18 + 0.22 * sh))
+		var mod := Color(1, 1, 1)
+		if boss_flash > 0.0:
+			mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)   # white hit-flash
+		draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+	# title card during the entrance
+	if boss.phase == "enter":
+		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
+		_otext(Vector2(0, 250), "GERALD THE IMMENSE", 40, Color(1, 0.3, 0.25, ta), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+		_otext(Vector2(0, 296), ["he remembers you.", "round two.", "the final heron."][boss.idx],
+			20, Color(1, 1, 1, 0.8 * ta))
+	# HP pips, top center
+	var pips: int = boss.max_hp
+	var pw := 30.0
+	var x0 := VIEW.x * 0.5 - pips * pw * 0.5
+	for i in pips:
+		var filled: bool = i < boss.hp
+		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), 11.0,
+			Color(0.9, 0.2, 0.18) if filled else Color(0.3, 0.3, 0.36, 0.6))
+		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), 11.0, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
 
 # theme atmosphere: bog fog drifts, aurora ribbons breathe
 func _draw_atmosphere() -> void:
@@ -2536,7 +2742,7 @@ func _draw_menu() -> void:
 
 	# wallet + best run
 	if feathers > 0 or best_m > 0:
-		_feather_text(Vector2(VIEW.x * 0.5, 640), "%d   ·   best %d m" % [feathers, best_m], 22, Color(1, 0.92, 0.45, 0.9), "center")
+		_feather_text(Vector2(VIEW.x * 0.5, 640), "%d   ·   best %d ft" % [feathers, best_m], 22, Color(1, 0.92, 0.45, 0.9), "center")
 
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)

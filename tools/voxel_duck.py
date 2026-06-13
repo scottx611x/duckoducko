@@ -847,6 +847,10 @@ def generate_critters(art_dir):
         SH = shade(build_heron(f))
         save(render(SH, math.radians(0), math.radians(55), out=76, scale=1.55),
              "heron_%d.png" % f)
+    # GERALD THE IMMENSE: the boss heron, rendered big & crisp at a fiercer head-on tilt
+    for f in (0, 1, 2):
+        save(render(shade(build_heron(f)), math.radians(0), math.radians(42), out=132, scale=2.7),
+             "gerald_%d.png" % f)
     # duckling: back view to match gameplay camera
     gy = math.radians(GAME_YAW)
     SHd = shade(build_duckling("folded"))
