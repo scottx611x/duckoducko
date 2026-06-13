@@ -48,6 +48,8 @@ SPECIES = dict(
     ruddy=dict(pin_tail=True, face_paint="ruddy"),
     harlequin=dict(face_paint="harlequin"),
     rubberduck=dict(size=0.95),
+    disco=dict(chest_speckles=True, dark_rump=True),     # SECRET unlocks
+    shadow=dict(dark_rump=True, red_eye=False),
 )
 
 
@@ -207,6 +209,32 @@ def palette(sp):
             wing=(142, 142, 140), wingd=(110, 110, 108), primary=(72, 72, 70),
             specw=(228, 222, 192), spec=(96, 120, 76), specd=(66, 86, 54),
             tail=(36, 36, 40), tailhi=(92, 92, 98), eye=(20, 18, 22),
+        )
+    if sp == "disco":  # SECRET: a neon party duck, all boogie
+        return dict(
+            back=(120, 40, 150), body=(214, 48, 154), belly=(250, 150, 210),
+            verm_d=(96, 32, 128), verm_l=(244, 120, 196),
+            nape=(40, 150, 170), head=(40, 196, 214), headh=(140, 244, 255),
+            crown=(30, 140, 160), glint=(190, 250, 255),
+            chest=(250, 176, 40), chestd=(220, 130, 28), chestl=(255, 210, 90),
+            bill=(255, 214, 60), billd=(220, 170, 36), nail=(180, 130, 28), nostril=(210, 150, 30),
+            white=(250, 235, 255), collar=(255, 240, 120),
+            wing=(60, 180, 160), wingd=(40, 140, 124), primary=(150, 60, 190),
+            specw=(255, 240, 120), spec=(230, 60, 160), specd=(150, 40, 120),
+            tail=(96, 40, 140), tailhi=(214, 120, 230), eye=(20, 16, 24),
+        )
+    if sp == "shadow":  # SECRET: a midnight drake with a cold glowing stare
+        return dict(
+            back=(26, 26, 34), body=(40, 40, 52), belly=(64, 64, 80),
+            verm_d=(20, 20, 28), verm_l=(58, 58, 76),
+            nape=(30, 28, 44), head=(38, 34, 56), headh=(78, 70, 110),
+            crown=(22, 20, 34), glint=(120, 110, 170),
+            chest=(46, 44, 58), chestd=(30, 30, 40), chestl=(62, 60, 78),
+            bill=(64, 70, 84), billd=(44, 48, 60), nail=(28, 30, 38), nostril=(40, 44, 54),
+            white=(150, 160, 190), collar=(70, 74, 92),
+            wing=(34, 34, 46), wingd=(22, 22, 32), primary=(14, 14, 20),
+            specw=(120, 200, 230), spec=(40, 120, 150), specd=(28, 80, 104),
+            tail=(20, 20, 28), tailhi=(80, 78, 104), eye=(120, 230, 255),
         )
     return dict(  # mallard drake
         back=(132, 126, 110), body=(170, 164, 148), belly=(214, 208, 192),

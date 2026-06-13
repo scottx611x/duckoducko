@@ -162,6 +162,9 @@ const META := [
 	{"id": "earlybird", "name": "EARLY BIRD", "desc": "your first draft arrives at 200m", "cost": 120},
 	{"id": "egghead", "name": "EGG HEAD", "desc": "start every run with a duckling", "cost": 200},
 	{"id": "pockets", "name": "DEEP POCKETS", "desc": "feathers you bank count DOUBLE", "cost": 250},
+	{"id": "basket", "name": "BREAD BASKET", "desc": "snacks fall ~18% more often", "cost": 180},
+	{"id": "flyer", "name": "FREQUENT FLYER", "desc": "upgrade drafts arrive sooner", "cost": 160},
+	{"id": "thermal", "name": "THERMAL VENT", "desc": "a permanent +5% pace, every run", "cost": 220},
 ]
 const SHOP_ROW_H := 96.0
 const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mobile has no Esc)
@@ -191,6 +194,9 @@ const ROSTER := [
 	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 700},
 	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "trait": "squeaks. the endgame flex.", "cost": 999, "size": 0.95},
 	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 1200},
+	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
+	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
+	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
 ]
 
 # ---- state -------------------------------------------------------------------
@@ -530,6 +536,7 @@ func _ready() -> void:
 	name_edit.add_theme_color_override("caret_color", Color(1, 0.9, 0.4))
 	name_edit.text_changed.connect(func(t: String) -> void:
 		duck_name = t.strip_edges()
+		_check_name_secrets()
 		_save())
 	hud.add_child(name_edit)
 
@@ -665,7 +672,41 @@ func _meta(id: String) -> bool:
 	return id in meta_owned
 
 func _is_unlocked(i: int) -> bool:
+	if ROSTER[i].get("secret", false):
+		return ROSTER[i].species in unlocked_extra   # secrets must be EARNED, never free
 	return ROSTER[i].cost == 0 or ROSTER[i].species in unlocked_extra
+
+# Grant a secret duck (or anything in unlocked_extra). Returns true if it was NEW.
+func _unlock_secret(species: String, label: String) -> bool:
+	if species in unlocked_extra:
+		return false
+	unlocked_extra.append(species)
+	_save()
+	_flash("NEW DUCK!\n%s" % label)
+	_sfx("unlock", 1.0)
+	_sfx("chime", 1.5)
+	return true
+
+# Naming your duck certain things does... things. (WHIMSY — secret backdoors)
+func _check_name_secrets() -> void:
+	match duck_name.to_lower().strip_edges():
+		"scootybooty":
+			# the master key: unlock every duck AND every shop item, on the house
+			var any := false
+			for r in ROSTER:
+				if not (r.species in unlocked_extra):
+					unlocked_extra.append(r.species); any = true
+			for m in META:
+				if not (m.id in meta_owned):
+					meta_owned.append(m.id); any = true
+			if any:
+				_save()
+				_flash("SCOOTYBOOTY.\nEVERYTHING UNLOCKED.")
+				_sfx("unlock", 1.2); _sfx("chime", 2.0)
+		"disco":
+			_unlock_secret("disco", "Disco Duck")
+		"shadow", "goth":
+			_unlock_secret("shadow", "Shadow Drake")
 
 func _load_duck(sp: String) -> Dictionary:
 	var d := {}
@@ -779,6 +820,17 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_locked.png")
+	# the feather shop (now 8 items — check the adaptive rows fit)
+	_open_shop()
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_shop.png")
+	# a SECRET duck in select (should read "??? SECRET ???", hidden name)
+	_open_select()
+	sel_index = ROSTER.size() - 2          # disco (locked secret)
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_secret.png")
 	# the ancient duck shrine (beard + boon cards)
 	reset_game()
 	_enter_menu()
@@ -946,7 +998,7 @@ func _open_draft() -> void:
 	draft_open_t = anim_t
 	draft_count += 1
 	# each checkpoint is further out than the last: 400m, 500m, 625m, 781m...
-	next_draft += DRAFT_EVERY * pow(1.25, draft_count)
+	next_draft += DRAFT_EVERY * pow(1.25, draft_count) * (0.8 if _meta("flyer") else 1.0)  # FREQUENT FLYER
 	draft_choices = _deal_draft()
 	center_label.visible = false
 	_sfx("chime", 1.25)
@@ -1488,6 +1540,9 @@ func _select_press(pos: Vector2) -> void:
 		if _is_unlocked(sel_index):
 			_sfx("click")
 			start_game()
+		elif ROSTER[sel_index].get("secret", false):
+			_sfx("bonk", 1.4, -8.0)                # secret ducks aren't for sale — earn them
+			_flash("a secret. not for sale.")
 		elif feathers >= ROSTER[sel_index].cost:
 			feathers -= ROSTER[sel_index].cost     # buy the duck
 			unlocked_extra.append(ROSTER[sel_index].species)
@@ -1534,6 +1589,8 @@ func hop() -> void:
 			_flash(["25 hops. warmed up.", "50 hops. springy.",
 				"hop #100.\nLEGENDARY.", "250 hops. unstoppable."][[25, 50, 100, 250].find(hop_count)])
 			_sfx("chime", 1.6 + 0.15 * [25, 50, 100, 250].find(hop_count))
+		if hop_count == 100:
+			_unlock_secret("disco", "Disco Duck")     # SECRET: hop #100 -> the boogie duck
 	elif state == St.HOPPING and air_hops < _up("double"):
 		# DOUBLE HOP: don't restart the arc — extend it. The new, taller arc is
 		# re-entered at the current height (rising), so the duck visibly surges
@@ -1682,7 +1739,8 @@ func _update_play(delta: float) -> void:
 	# speed climbs forever but flattens out — late game gets harder via drifting
 	# logs and hungrier herons, not raw scroll speed
 	speed = BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))
-	distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace   # the conga (+ TAILWIND) pays
+	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
+	distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
 	idle_timer += delta
 
 	trail.append({"t": anim_t, "x": duck_x})
@@ -1983,6 +2041,7 @@ func _hit_boss(n: int) -> void:
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
 	if boss.hp <= 0:
 		next_boss_idx += 1
+		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
 	# half health: he gets ANGRY — faster dives, double feather volleys
@@ -2147,7 +2206,7 @@ func _spawn(delta: float) -> void:
 	item_timer -= delta
 	if item_timer <= 0.0:
 		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
-		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult
+		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0)
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START:
@@ -3156,7 +3215,10 @@ func _spin_frame(sp: String, yaw: float, beak_open := false):
 
 # ---- the feather shop ----------------------------------------------------------
 func _shop_row(i: int) -> Rect2:
-	return Rect2(50.0, 210.0 + i * (SHOP_ROW_H + 14.0), VIEW.x - 100.0, SHOP_ROW_H)
+	# pitch shrinks as the catalogue grows so the rows always fit on screen
+	var top := 196.0
+	var pitch: float = minf(SHOP_ROW_H + 14.0, (936.0 - top) / float(META.size()))
+	return Rect2(50.0, top + i * pitch, VIEW.x - 100.0, pitch - 14.0)
 
 func _shop_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.has_point(pos):
@@ -3215,9 +3277,9 @@ func _draw_shop() -> void:
 
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
-	# the roster outgrew one row: wrap into rows of 7, each row centered
+	# the roster outgrew one row: wrap into rows of 8, each row centered
 	var n := ROSTER.size()
-	var per_row := 7
+	var per_row := 8
 	var row := i / per_row
 	var col := i % per_row
 	var row_n := mini(per_row, n - row * per_row)
@@ -3238,6 +3300,7 @@ func _draw_select() -> void:
 
 	var duck = ROSTER[sel_index]
 	var unlocked := _is_unlocked(sel_index)
+	var is_secret: bool = duck.get("secret", false)
 	var sp: String = duck.species
 	var bob := sin(anim_t * 2.5) * 8.0
 	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise.
@@ -3246,20 +3309,26 @@ func _draw_select() -> void:
 	if unlocked:
 		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
 	else:
-		# locked: same spinnable shape, dark silhouette — keep the mystery
-		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, Color(0.32, 0.35, 0.42, 1.0))
-		_otext(Vector2(0, 355.0), "LOCKED", 28, Color(1, 1, 1, 0.7))
+		# locked: a dark silhouette — keep the mystery (pure black for secrets)
+		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)
+		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, tint)
+		_otext(Vector2(0, 355.0), "??? SECRET ???" if is_secret else "LOCKED", 28, Color(1, 1, 1, 0.7))
 	_otext(Vector2(0, 432.0), "< drag to spin >", 17, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
-	# name + trait + stat bars
-	_otext(Vector2(0, 466.0), duck.name, 34, Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
-	_otext(Vector2(0, 498.0), duck.trait, 20, Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-	_stat_bar("HOP", duck.hop, 536.0)
-	_stat_bar("STEER", duck.steer, 572.0)
+	# name + trait + stat bars (a locked secret hides its name and stats)
+	var show_secret: bool = is_secret and not unlocked
+	_otext(Vector2(0, 466.0), "? ? ?" if show_secret else duck.name, 34, Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
+	_otext(Vector2(0, 498.0), duck.trait, 20, Color(1, 0.85, 0.45, 0.85) if show_secret else Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	if not show_secret:
+		_stat_bar("HOP", duck.hop, 536.0)
+		_stat_bar("STEER", duck.steer, 572.0)
 
 	if unlocked:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
 		_btn_label(SEL_PLAY_BTN, "PLAY  >", 28)
+	elif is_secret:
+		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "a hidden duck. you'll know when.",
+			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	elif feathers >= duck.cost:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
 		_btn_label(SEL_PLAY_BTN, "UNLOCK · %d feathers" % duck.cost, 24, Color(1, 0.92, 0.45))
@@ -3285,6 +3354,11 @@ func _draw_select() -> void:
 		var tsc := r.size.x / 62.0                 # thumbs scale with the row
 		if _is_unlocked(i):
 			_blit_centered(th, r.get_center(), tsc)
+		elif rd.get("secret", false):
+			# secret: a pure-black mystery thumb with a "?" instead of a price
+			_blit_modulated(th, r.get_center(), tsc, Color(0.05, 0.05, 0.08, 1.0))
+			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "?",
+				HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 13, Color(1, 0.9, 0.45, 0.9))
 		else:
 			_blit_modulated(th, r.get_center(), tsc, Color(0.34, 0.37, 0.44, 1.0))
 			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "%d" % rd.cost,
