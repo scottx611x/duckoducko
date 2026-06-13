@@ -120,6 +120,19 @@ const FACTS := [
 	"every spring log was once a regular log that believed.",
 	"ducks have waterproof everything except feelings.",
 	"somewhere out there is a lake that's all bread. keep going.",
+	# the real ones, slipped in among the nonsense (all genuinely true):
+	"ducks have no nerves in their feet, so cold water never bothers them.",
+	"a duck's quack really does echo — the 'no echo' thing is a myth.",
+	"mallards can sleep with one eye open, resting half the brain at a time.",
+	"ducklings can walk, swim, and feed themselves within hours of hatching.",
+	"ducks waterproof their feathers with oil from a gland near the tail.",
+	"it's the female mallard that loudly quacks; the male's call is raspy and soft.",
+	"wood ducklings leap from their tree-hole nests the day they hatch.",
+	"ducks can see ultraviolet light that humans can't.",
+	"a male duck is a drake, and a group resting on water is a 'raft.'",
+	"some ducks migrate thousands of miles every single year.",
+	"eider ducks can dive over 60 feet down to feed.",
+	"ducks have three eyelids on each eye.",
 ]
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
