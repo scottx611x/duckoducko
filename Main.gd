@@ -206,14 +206,17 @@ var in_shrine := false
 var shrine_boons: Array = []
 var shrine_open_t := -10.0
 const BOONS := [
-	{"id": "clutch",     "name": "EGG CLUTCH",   "desc": "start with 3 ducklings",            "deal": false},
-	{"id": "preheat",    "name": "PREHEATED",     "desc": "start at 60% LOFT",                 "deal": false},
-	{"id": "goosedown",  "name": "GOOSE DOWN",    "desc": "start with 2 shields",              "deal": false},
-	{"id": "tailwind",   "name": "TAILWIND",      "desc": "+12% pace, the whole run",          "deal": false},
+	{"id": "clutch",     "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
+	{"id": "preheat",    "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
+	{"id": "goosedown",  "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
+	{"id": "tailwind",   "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
 	{"id": "lucky",      "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
+	{"id": "breadwinner","name": "BREADWINNER",   "desc": "every snack is worth +60% distance","deal": false},
+	{"id": "nestegg",    "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
 	{"id": "glasscannon","name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
-	{"id": "famine",     "name": "FAMINE FEAST",  "desc": "snacks give DOUBLE loft — but 40% fewer of them", "deal": true},
+	{"id": "famine",     "name": "FAMINE FEAST",  "desc": "snacks give TRIPLE loft — but 40% fewer of them", "deal": true},
 	{"id": "highstakes", "name": "HIGH STAKES",   "desc": "feathers earned ×2 — but every Gerald gains +1 HP", "deal": true},
+	{"id": "secondwind", "name": "SECOND WIND",   "desc": "cheat death once — but you pace 10% slower", "deal": true},
 ]
 # per-run boon modifiers (reset each run)
 var boon_pace := 1.0
@@ -221,6 +224,8 @@ var boon_feather_mult := 1
 var boon_heron_mult := 1.0
 var boon_snack_mult := 1.0
 var boon_loft_mult := 1.0
+var boon_score_mult := 1.0
+var boon_revive := false
 var boss_hp_bonus := 0
 
 # GERALD THE IMMENSE: a colossal heron boss at fixed distance marks (feet), each
@@ -375,6 +380,7 @@ var tex_log: Texture2D
 var tex_frog: Texture2D
 var tex_heron := []
 var tex_gerald := []            # GERALD THE IMMENSE boss frames
+var tex_elder: Texture2D        # the ancient bearded duck (shrine)
 var tex_items := {}
 var tex_water: Texture2D
 var tex_bank_l: Texture2D
@@ -412,6 +418,8 @@ func _ready() -> void:
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
 	if ResourceLoader.exists("res://art/gerald_0.png"):
 		tex_gerald = [load("res://art/gerald_0.png"), load("res://art/gerald_1.png"), load("res://art/gerald_2.png")]
+	if ResourceLoader.exists("res://art/elder.png"):
+		tex_elder = load("res://art/elder.png")
 	if ResourceLoader.exists("res://art/sadie_0.png"):
 		tex_sadie = [load("res://art/sadie_0.png"), load("res://art/sadie_1.png")]
 		tex_chuckit = load("res://art/chuckit.png")
@@ -771,6 +779,34 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_locked.png")
+	# the ancient duck shrine (beard + boon cards)
+	reset_game()
+	_enter_menu()
+	in_menu = false
+	in_select = false
+	_open_shrine()
+	await get_tree().create_timer(0.6).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_shrine.png")
+	_pick_boon(shrine_boons[0])
+	# the boss mid-fight, Gerald DAZED (stomp window)
+	start_game()
+	in_shrine = false                   # start_game re-opens the shrine; skip it
+	in_menu = false
+	alive = true
+	distance = 52000.0
+	next_boss_idx = 0
+	_start_boss()
+	boss.phase = "fight"
+	boss.dive_stage = "dazed"
+	boss.daze_t = 1.0
+	boss.stomped = false
+	boss.x = VIEW.x * 0.5
+	boss.y = BASE_Y + 18.0
+	boss_globs.append({"x": 150.0, "y": 300.0, "vx": -60.0, "vy": 180.0})  # one in flight to show
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
 	get_tree().quit()
 
 func _enter_menu() -> void:
@@ -844,24 +880,33 @@ func _open_shrine() -> void:
 	_sfx("chime", 0.8)
 
 func _shrine_rect(i: int) -> Rect2:
-	return Rect2(60.0, 330.0 + i * 130.0, VIEW.x - 120.0, 112.0)
+	return Rect2(60.0, 356.0 + i * 130.0, VIEW.x - 120.0, 116.0)
 
 func _pick_boon(b: Dictionary) -> void:
 	match b.id:
-		"clutch": _add_ducklings(3)
-		"preheat": loft = 0.6
-		"goosedown": shield_charges += 2
-		"tailwind": boon_pace = 1.12
+		"clutch": _add_ducklings(4)
+		"preheat":
+			loft = 1.0
+			loft_ready = true
+		"goosedown": shield_charges += 3
+		"tailwind": boon_pace = 1.18
 		"lucky": _grant_random_upgrade(1)
+		"breadwinner": boon_score_mult = 1.6
+		"nestegg":
+			run_feathers += 45
+			_float_text(duck_x, BASE_Y - 110.0, "+45 feathers!", Color(1, 0.9, 0.4))
 		"glasscannon":
 			_grant_random_upgrade(3)
 			boon_heron_mult = 1.5
 		"famine":
-			boon_loft_mult = 2.0
+			boon_loft_mult = 3.0
 			boon_snack_mult = 0.6
 		"highstakes":
 			boon_feather_mult = 2
 			boss_hp_bonus = 1
+		"secondwind":
+			boon_revive = true
+			boon_pace = 0.9
 	in_shrine = false
 	fade = 0.0
 	_sfx("unlock")
@@ -1237,6 +1282,8 @@ func reset_game() -> void:
 	boon_heron_mult = 1.0
 	boon_snack_mult = 1.0
 	boon_loft_mult = 1.0
+	boon_score_mult = 1.0
+	boon_revive = false
 	if music_player != null:
 		music_player.volume_db = 0.0
 	log_timer = 0.8
@@ -1581,6 +1628,16 @@ func _sonic_quack() -> void:
 	_hit_boss(2)                               # a screen-clearing QUACK staggers Gerald hard
 
 func die(msg: String) -> void:
+	# SECOND WIND: the ancient duck's blessing yanks you back from the brink once
+	if boon_revive:
+		boon_revive = false
+		shield_charges += 2                 # back on your feet, cushioned
+		enemies.clear()                     # clear what just got you
+		boss_globs.clear()
+		_flash("SECOND WIND!")
+		_sfx("unlock", 0.8)
+		_spawn_parts(duck_x, BASE_Y - 30.0, 26, Color(0.6, 1.0, 0.7), 240.0)
+		return
 	alive = false
 	dead_msg = msg
 	_sfx("bonk")
@@ -2242,7 +2299,7 @@ func _collect(it: Dictionary) -> void:
 	if is_airborne() and _up("snackhawk") > 0:     # SNACK HAWK: airborne grabs charge hard
 		loft_mult *= 1.0 + _up("snackhawk")
 		_float_text(it.x, it.y - 20.0, "hawk'd!", Color(0.5, 0.85, 1.0))
-	distance += def.score * 0.6 * mult
+	distance += def.score * 0.6 * mult * boon_score_mult
 	_add_loft(def.loft * loft_mult)
 	if _up("hotwheels") > 0 and fire_t <= 0.0:     # ON FIRE: snacks stoke the streak
 		_add_heat(0.16)
@@ -2342,10 +2399,22 @@ func _draw_shrine() -> void:
 	_otext(Vector2(0, 196), "offers you a blessing for the road", 19, Color(1, 1, 1, 0.7))
 	# the elder, a big golden-tinted hero duck bobbing above the choices
 	if has_art:
-		var elder = ducks.get("golden", ducks["mallard"]).get("hero")
-		if elder != null:
-			_blit_modulated(elder, Vector2(VIEW.x * 0.5, 270.0 + sin(anim_t * 1.6) * 6.0), 2.6,
-				Color(1.0, 0.95, 0.7))
+		var ey := 270.0 + sin(anim_t * 1.6) * 6.0
+		var ec := Vector2(VIEW.x * 0.5, ey)
+		# a soft halo of ancient wisdom
+		for g in 3:
+			draw_circle(ec, 70.0 + g * 14.0, Color(1.0, 0.92, 0.55, 0.05))
+		# floating golden runes orbit the elder (pure whimsy)
+		for r in 5:
+			var ra := anim_t * 0.6 + r * TAU / 5.0
+			var rp := ec + Vector2(cos(ra) * 96.0, sin(ra * 1.3) * 34.0)
+			draw_circle(rp, 3.0, Color(1.0, 0.9, 0.5, 0.5 + 0.4 * sin(anim_t * 3.0 + r)))
+		if tex_elder != null:
+			_blit_centered(tex_elder, ec, 3.4)
+		else:
+			var elder = ducks.get("golden", ducks["mallard"]).get("hero")
+			if elder != null:
+				_blit_modulated(elder, ec, 2.6, Color(1.0, 0.95, 0.7))
 	for i in shrine_boons.size():
 		var b: Dictionary = shrine_boons[i]
 		var rc := _shrine_rect(i)
@@ -2362,12 +2431,13 @@ func _draw_shrine() -> void:
 		sb.border_color = Color(bc.r, bc.g, bc.b, ap * pulse)
 		draw_style_box(sb, rc)
 		if deal:
-			draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 26), "RISK / REWARD",
-				HORIZONTAL_ALIGNMENT_LEFT, rc.size.x, 13, Color(1.0, 0.55, 0.3, ap))
-		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 56), b.name,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 30, 28, Color(1, 1, 1, ap))
-		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 90), b.desc,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 30, 18, Color(1, 1, 1, 0.75 * ap))
+			draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 24), "RISK / REWARD",
+				HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 13, Color(1.0, 0.55, 0.3, ap))
+		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 52), b.name,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 27, Color(1, 1, 1, ap))
+		# wrap the description so long blessings never clip off the card edge
+		draw_multiline_string(font, Vector2(rc.position.x + 20, rc.position.y + 78), b.desc,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 17, -1, Color(1, 1, 1, 0.75 * ap))
 
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))

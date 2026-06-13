@@ -223,7 +223,7 @@ def palette(sp):
 
 
 # ---- voxel model -------------------------------------------------------------
-def build(sp="mallard", wings="folded", beak_open=False):
+def build(sp="mallard", wings="folded", beak_open=False, elder=False):
     """Return {(x,y,z): rgb}.  x=right, y=up, z=head(+).  Shared duck geometry,
     species palette + flags (crest / head patch / pin tail / face paint)."""
     spec = SPECIES[sp]
@@ -444,6 +444,34 @@ def build(sp="mallard", wings="folded", beak_open=False):
     for sx in (ex, -ex):
         put(sx, 7 + NY, 10, eye); put(sx, 8 + NY, 10, eye); put(sx, 7 + NY, 11, eye)
         put(sx, 8 + NY, 11, P["white"], only_empty=True)
+
+    if elder:
+        # THE ANCIENT DUCK: a long flowing white beard draped from the chin over
+        # the chest to a forked tip, plus two bushy brows. Built last so it sits
+        # proud of the body.
+        BW = (238, 240, 248); BS = (198, 202, 218); BH = (254, 254, 255)
+        for yy in range(-13, 5):
+            p = (yy + 13) / 18.0               # 0 = dangling tip, 1 = up at the chin
+            cz = 8.0 + 5.0 * p                 # sits PROUD on the chest, up to the chin
+            rad = 1.1 + 3.8 * p                # broad mane at the face, tapering to a point
+            for xx in range(-6, 7):
+                for zz in range(int(cz - rad * 1.7), int(cz + rad * 1.7) + 1):
+                    if (xx / max(rad, 0.7)) ** 2 + ((zz - cz) / max(rad * 1.3, 0.7)) ** 2 <= 1.0:
+                        c = BW
+                        if xx <= -3:                       # soft form shadow on one side
+                            c = BS
+                        if abs(xx) <= 1 and yy >= -8:      # bright comb down the middle
+                            c = BH
+                        put(xx, yy, zz, c)
+        # a gently forked, curling tip dangling below
+        for (tx, ty, tz, tc) in [(-2, -13, 9, BW), (2, -14, 8, BW), (0, -12, 10, BH),
+                                  (-3, -12, 8, BS), (3, -13, 8, BS), (0, -15, 8, BW)]:
+            put(tx, ty, tz, tc)
+        # bushy white eyebrows perched over the eyes
+        for sx in (ex, -ex):
+            ellip(sx, 9 + NY, 11.0, 1.9, 1.0, 1.4, BW)
+            put(sx, 10 + NY, 11, BH)
+            put(sx - 1, 9 + NY, 12, BS)
     return V
 
 
@@ -587,6 +615,9 @@ def generate_ducks(art_dir):
         Vf = build(sp, "folded")
         for i, sl in enumerate(stack_slices(Vf, shade(Vf))):
             save(sl, "%s_stack_%02d.png" % (sp, i))
+    # THE ANCIENT DUCK: a golden elder with a flowing white beard, for the shrine
+    elder = shade(build("golden", "folded", elder=True))
+    save(render(elder, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=1.45), "elder.png")
     print("ducks generated ->", art_dir)
 
 
