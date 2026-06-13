@@ -244,6 +244,8 @@ var sadie = null                # null or {x, y, dir, t}
 var sadie_timer := 40.0
 var tex_sadie := []
 var tex_chuckit: Texture2D
+var tex_fire := []              # ON FIRE: voxel flame volume frames (behind the duck)
+var tex_lick := []              # ON FIRE: front licks that wrap OVER the sprite
 var heat := 0.0                 # ON FIRE: streak meter, 1.0 ignites
 var fire_t := 0.0               # ON FIRE: seconds of burn remaining
 var fire_max := 5.0             # ON FIRE: full burn length (for the flare-up ramp)
@@ -358,6 +360,11 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://art/sadie_0.png"):
 		tex_sadie = [load("res://art/sadie_0.png"), load("res://art/sadie_1.png")]
 		tex_chuckit = load("res://art/chuckit.png")
+	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
+		var fp := "res://art/fire_duck_%d.png" % fi
+		if ResourceLoader.exists(fp):
+			tex_fire.append(load(fp))
+			tex_lick.append(load("res://art/fire_lick_%d.png" % fi))
 	if ResourceLoader.exists("res://art/heron_2.png"):
 		tex_heron.append(load("res://art/heron_2.png"))
 	tex_water = load("res://art/water.png")
@@ -2340,59 +2347,33 @@ func _draw_atmosphere() -> void:
 			var acol := Color(0.35, 0.95, 0.6, 0.10) if b % 2 == 0 else Color(0.6, 0.5, 0.95, 0.11)
 			draw_polyline(pts, acol, 22.0)
 
-# ON FIRE: the NHL Hitz treatment. A volumetric flame plume built from fanned
-# tongues, each drawn in four shells (ember red -> orange -> yellow -> white-hot
-# core) with every inner shell lifted slightly — stacked like the voxel ducks,
-# so the fire reads 3D instead of confetti. Tongues flicker on their own phases
-# and the whole plume streams against the steer, Hitz-style.
-const FIRE_SHELLS := [
-	[Color(0.80, 0.14, 0.03, 0.60), 1.00, 0.0],
-	[Color(1.00, 0.42, 0.05, 0.80), 0.74, 4.0],
-	[Color(1.00, 0.80, 0.16, 0.90), 0.50, 8.0],
-	[Color(1.00, 0.97, 0.80, 0.95), 0.27, 11.0],
-]
-
-func _draw_fire(pos: Vector2, scale: float, intensity: float, n := 5, fan := 46.0,
-		glow := true, ydir := -1.0) -> void:
-	if intensity <= 0.0:
+# ON FIRE: the NHL Hitz treatment, done properly in 3D — a flame VOLUME grown from
+# the duck's own voxel model (tools/voxel_duck.py build_fire), rendered at the game
+# camera as a 6-frame loop. Drawn as a sandwich: full volume behind the sprite, a
+# bloom pass for glow, then "lick" frames over the sprite so the duck is ENGULFED.
+func _draw_fire_volume(pos: Vector2, scale: float, intensity: float) -> void:
+	if intensity <= 0.0 or tex_fire.is_empty():
 		return
-	var lean := clampf(-duck_vx / 520.0, -0.85, 0.85)     # the plume trails the steer
-	var flick := 0.85 + 0.15 * sin(anim_t * 23.0) * sin(anim_t * 7.7)
-	if glow:                                              # firelight pooling on the water
-		draw_circle(pos + Vector2(0, 14.0), (34.0 + 5.0 * sin(anim_t * 11.0)) * scale * intensity,
-			Color(1.0, 0.45, 0.08, 0.13 * intensity))
-		draw_circle(pos + Vector2(0, 12.0), 21.0 * scale * intensity,
-			Color(1.0, 0.70, 0.18, 0.18 * intensity))
-	for ti in n:
-		var tp := float(ti) / maxf(1.0, float(n - 1))     # 0..1 across the fan
-		var bx := (tp - 0.5) * fan * scale
-		var ph := float(ti) * 1.73
-		var hgt := (44.0 + 30.0 * sin(anim_t * 9.0 + ph) * sin(anim_t * 3.3 + ph * 2.1)) \
-			* scale * intensity * flick
-		hgt *= 1.25 - 0.55 * absf(tp - 0.5) * 2.0         # center of the fan burns tallest
-		for sh in FIRE_SHELLS:
-			var col: Color = sh[0]
-			var base := pos + Vector2(bx, (8.0 - sh[2] * scale * 0.45 * intensity) * -ydir)
-			_flame_tongue(base, 14.0 * scale * sh[1], hgt * maxf(sh[1], 0.42), lean,
-				anim_t * 10.0 + ph + sh[1] * 3.0,
-				Color(col.r, col.g, col.b, col.a * intensity), ydir)
+	# firelight pooling on the water
+	draw_circle(pos + Vector2(0, 20.0), (42.0 + 6.0 * sin(anim_t * 11.0)) * scale * intensity,
+		Color(1.0, 0.45, 0.08, 0.12 * intensity))
+	draw_circle(pos + Vector2(0, 16.0), 25.0 * scale * intensity,
+		Color(1.0, 0.70, 0.18, 0.16 * intensity))
+	var ff: Texture2D = tex_fire[int(anim_t * 13.0) % tex_fire.size()]
+	var fsz: Vector2 = ff.get_size() * scale
+	var wob := Vector2(sin(anim_t * 21.0) * 1.6, 0)
+	# bloom pass (same frame, fatter + faint), then the crisp volume
+	draw_texture_rect(ff, Rect2(pos - fsz * 0.56 + wob, fsz * 1.12), false,
+		Color(1.0, 0.9, 0.7, 0.30 * intensity))
+	draw_texture_rect(ff, Rect2(pos - fsz * 0.5 + wob, fsz), false,
+		Color(1, 1, 1, 0.95 * intensity))
 
-# one tongue of flame: a closed polygon that narrows from a round base to a single
-# tip point. Both edges ride the SAME sine sway (the tongue bends, the edges never
-# cross — crossed edges are bowties and Godot's triangulator refuses them).
-func _flame_tongue(base: Vector2, w: float, h: float, lean: float, ph: float,
-		col: Color, ydir := -1.0) -> void:
-	var pts := PackedVector2Array()
-	var segs := 5
-	for i in segs + 1:                                    # left edge, base -> tip
-		var t := float(i) / float(segs)
-		var cx := base.x + lean * h * t * t + sin(ph + t * 4.6) * w * 0.55 * t
-		pts.append(Vector2(cx - w * 0.5 * (1.0 - t * t), base.y + ydir * h * t))
-	for i in range(segs - 1, -1, -1):                     # right edge, tip already placed
-		var t := float(i) / float(segs)
-		var cx := base.x + lean * h * t * t + sin(ph + t * 4.6) * w * 0.55 * t
-		pts.append(Vector2(cx + w * 0.5 * (1.0 - t * t), base.y + ydir * h * t))
-	draw_colored_polygon(pts, col)
+func _draw_fire_licks(pos: Vector2, scale: float, intensity: float) -> void:
+	if intensity <= 0.0 or tex_lick.is_empty():
+		return
+	var lf: Texture2D = tex_lick[int(anim_t * 13.0) % tex_lick.size()]
+	var lsz: Vector2 = lf.get_size() * scale
+	draw_texture_rect(lf, Rect2(pos - lsz * 0.5, lsz), false, Color(1, 1, 1, 0.85 * intensity))
 
 func _draw_duck() -> void:
 	var h := hop_height()
@@ -2408,11 +2389,9 @@ func _draw_duck() -> void:
 		fire_i = clampf((fire_max - fire_t) / 0.3, 0.05, 1.0) * clampf(fire_t / 0.8, 0.0, 1.0)
 	elif heat >= 0.7:
 		fire_i = 0.2 * (heat - 0.7) / 0.3
+	var fire_scale := DUCK_DRAW * duck_scale * pow(0.8, float(_up("tiny")))
 	if fire_i > 0.0:
-		# the Hitz comet: a big plume streaming down-river behind the duck...
-		_draw_fire(duck_pos + Vector2(0, 26.0), (1.9 + 0.6 * h) * duck_scale, fire_i, 6, 54.0, true, 1.0)
-		# ...and a rising halo whose tips peek over the duck's head (the 3D volume)
-		_draw_fire(duck_pos + Vector2(0, -10.0), (1.5 + 0.5 * h) * duck_scale, fire_i * 0.9, 4, 40.0, false, -1.0)
+		_draw_fire_volume(duck_pos, fire_scale, fire_i)
 
 	if has_art:
 		var ss := tex_shadow.get_size() * DUCK_DRAW
@@ -2449,9 +2428,9 @@ func _draw_duck() -> void:
 		draw_circle(Vector2(duck_x, BASE_Y + 6), DUCK_R * (1.0 - 0.55 * h), Color(0, 0, 0, 0.22 * (1.0 - 0.4 * h)))
 		draw_circle(duck_pos, DUCK_R * duck_scale, Color(0.97, 0.84, 0.27))
 
-	# the front licks of the plume wrap over the sprite: properly engulfed
+	# the front licks of the volume wrap over the sprite: properly engulfed
 	if fire_i > 0.0:
-		_draw_fire(duck_pos + Vector2(0, 34.0), (0.8 + 0.3 * h) * duck_scale, fire_i, 3, 40.0, false, -1.0)
+		_draw_fire_licks(duck_pos, fire_scale, fire_i)
 
 func _duck_frame(h: float) -> Texture2D:
 	var cur = ducks[species]

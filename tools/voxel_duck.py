@@ -465,7 +465,7 @@ def shade(V):
 
 
 # ---- rendering ---------------------------------------------------------------
-def _crisp_outline(hi, out):
+def _crisp_outline(hi, out, outline=True):
     pal = list({hi.getpixel((a, b)) for b in range(hi.height) for a in range(hi.width)
                 if hi.getpixel((a, b))[3] == 255})
     if not pal:
@@ -484,6 +484,8 @@ def _crisp_outline(hi, out):
                 if dd < bd:
                     bd, best = dd, pc
             op[a, b] = (best[0], best[1], best[2], 255)
+    if not outline:                       # fire has no ink line — it's light, not a thing
+        return o
     o2 = o.copy()
     op2 = o2.load()
     for b in range(out):
@@ -497,7 +499,7 @@ def _crisp_outline(hi, out):
     return o2
 
 
-def render(SH, yaw, pitch, out=BODY_CANVAS, scale=1.45, cy_frac=0.5):
+def render(SH, yaw, pitch, out=BODY_CANVAS, scale=1.45, cy_frac=0.5, outline=True):
     cy_, sy_ = math.cos(yaw), math.sin(yaw)
     cp, sp_ = math.cos(pitch), math.sin(pitch)
     pts = []
@@ -516,7 +518,7 @@ def render(SH, yaw, pitch, out=BODY_CANVAS, scale=1.45, cy_frac=0.5):
     for _, x1, y2, c in pts:
         sx, syy = cx + x1 * vs, cyc - y2 * vs
         d.rectangle([sx - r, syy - r, sx + r, syy + r], fill=c + (255,))
-    return _crisp_outline(img, out)
+    return _crisp_outline(img, out, outline)
 
 
 def stack_slices(V, SH, canvas=30):
@@ -705,6 +707,66 @@ def build_duckling(wings="folded"):
     return V
 
 
+def _fhash(x, z, k=0):
+    """Deterministic per-column chaos for flame tongues (loops cleanly, no RNG)."""
+    h = (x * 374761393 + z * 668265263 + k * 1274126177) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1103515245) & 0xFFFFFFFF
+    return ((h >> 16) & 1023) / 1023.0
+
+
+def build_fire(frame, nf=6):
+    """ON FIRE, the Hitz way: a flame VOLUME grown from the duck's own voxels.
+    A 1-voxel shell cloaks the body, then per-column tongues lick upward with
+    looping noise; color runs ember red (base) to white-hot (tips). Emissive —
+    no shading, no outline. Returns (whole volume, front licks that wrap OVER
+    the sprite so the duck reads properly engulfed)."""
+    duck = set(build("mallard", "folded").keys())
+    ph = frame / float(nf) * 2.0 * math.pi
+    ys = [p[1] for p in duck]
+    ymin, ymax = min(ys), max(ys)
+    cols = {}
+    for (x, y, z) in duck:
+        cols[(x, z)] = max(y, cols.get((x, z), -99))
+    flame = {}
+    # the cloak: shell hugging the body (skip the underwater belly rows)
+    for (x, y, z) in duck:
+        for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, -1)):
+            p = (x + dx, y + dy, z + dz)
+            if p in duck or p[1] < ymin + 2:
+                continue
+            flame[p] = 0.15
+    # tongues: every column flickers to its own beat, swaying as it rises
+    for (x, z), top in cols.items():
+        n1 = _fhash(x, z, 1)
+        n2 = _fhash(x, z, 2)
+        hgt = max(1, int(2.0 + 4.5 * n1 + 3.5 * math.sin(ph + n2 * 6.283) * n1))
+        sway = math.sin(ph * 2.0 + n1 * 6.283)
+        for i in range(hgt):
+            t = (i + 1.0) / hgt
+            wx = x + int(round(sway * t * (1.0 + n2)))
+            p = (wx, top + 1 + i, z)
+            if p not in duck:
+                flame[p] = max(flame.get(p, 0.0), t)
+    # color by tip-ness + per-voxel jitter
+    V = {}
+    for (x, y, z), t in flame.items():
+        tt = min(1.0, t + _fhash(x, z, y) * 0.18)
+        if tt < 0.25:
+            c = (186, 32, 8)
+        elif tt < 0.5:
+            c = (234, 90, 10)
+        elif tt < 0.75:
+            c = (252, 158, 26)
+        elif tt < 0.9:
+            c = (255, 214, 70)
+        else:
+            c = (255, 248, 200)
+        V[(x, y, z)] = c
+    front = {p: c for p, c in V.items()
+             if p[2] <= 0 and p[1] <= ymin + (ymax - ymin) * 0.55}
+    return V, front
+
+
 def build_sadie(frame=0):
     """Sadie: chocolate lab, red collar, swimming with just head/shoulders/tail out of
     the water. Faces +z (game draws her in profile crossing the river). Built from the
@@ -798,6 +860,12 @@ def generate_critters(art_dir):
         save(render(shade(build_sadie(f)), math.radians(90), math.radians(40), out=64, scale=1.7),
              "sadie_%d.png" % f)
     make_chuckit().save(os.path.join(art_dir, "chuckit.png"))
+    # ON FIRE flame volume: 6-frame loop at the gameplay camera, emissive (no
+    # shade/outline). fire_duck = whole volume (behind), fire_lick = front wrap (over)
+    for f in range(6):
+        Vf, Vfront = build_fire(f, 6)
+        save(render(Vf, gy, PITCH, out=76, scale=1.45, outline=False), "fire_duck_%d.png" % f)
+        save(render(Vfront, gy, PITCH, out=76, scale=1.45, outline=False), "fire_lick_%d.png" % f)
     print("critters generated ->", art_dir)
 
 
