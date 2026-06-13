@@ -152,6 +152,9 @@ const META := [
 ]
 const SHOP_ROW_H := 96.0
 const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mobile has no Esc)
+const GAME_PAUSE_BTN := Rect2(VIEW.x - 124.0, 14.0, 50.0, 50.0) # ‖ pause, left of the ✕
+const PAUSE_RESUME_BTN := Rect2(120.0, 470.0, 300.0, 64.0)
+const PAUSE_MENU_BTN := Rect2(160.0, 552.0, 220.0, 52.0)
 const DEATH_MENU_BTN := Rect2(170.0, 636.0, 200.0, 44.0)
 
 # duck-select screen (menu buttons get breathing room on phone screens)
@@ -182,6 +185,7 @@ enum St { GROUNDED, HOPPING, MEGA }
 var in_menu := true
 var in_select := false
 var in_shop := false
+var paused := false
 var menu_enter_t := -10.0       # brief tap-grace after landing on the menu
 var meta_owned: Array = []      # persistent shop purchases (ids)
 var sel_index := 0
@@ -1101,6 +1105,7 @@ func _update_parts(delta: float) -> void:
 	parts = parts.filter(func(p): return p.t < p.life)
 
 func reset_game() -> void:
+	paused = false
 	state = St.GROUNDED
 	hop_t = 0.0
 	mega_t = 0.0
@@ -1193,14 +1198,20 @@ func _input(event: InputEvent) -> void:
 			return                                 # typing a duck name, not playing
 		if event.keycode == KEY_SPACE:
 			if in_menu: start_game()
-			else: hop()
+			elif not paused: hop()
 		elif event.keycode == KEY_M:
 			mega_hop()
 		elif event.keycode == KEY_L:
 			fire_laser()
+		elif event.keycode == KEY_P and not in_menu and not in_select and not in_shop and alive and not drafting:
+			paused = not paused                    # P toggles pause
+			_sfx("click")
 		elif event.keycode == KEY_ESCAPE and not in_menu:
 			_sfx("click")
-			_enter_menu()
+			if in_select or in_shop or not alive:
+				_enter_menu()
+			else:
+				paused = not paused                # Esc/back pauses mid-run, not quit
 
 func _on_press(pos: Vector2) -> void:
 	idle_timer = 0.0
@@ -1247,6 +1258,19 @@ func _on_press(pos: Vector2) -> void:
 			_enter_menu()
 		else:
 			reset_game()
+		return
+	if paused:                                     # paused: only the overlay buttons live
+		if PAUSE_RESUME_BTN.has_point(pos):
+			_sfx("click")
+			paused = false
+		elif PAUSE_MENU_BTN.has_point(pos):
+			_sfx("click")
+			paused = false
+			_enter_menu()
+		return
+	if GAME_PAUSE_BTN.has_point(pos) and not drafting and alive:
+		_sfx("click")
+		paused = true
 		return
 	if GAME_MENU_BTN.has_point(pos) and not drafting:
 		_sfx("click")
@@ -1416,7 +1440,7 @@ func _process(delta: float) -> void:
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
 	if in_select:
 		select_yaw += delta * 0.7
-	if not in_menu and not in_select and not in_shop and alive and not drafting:
+	if not in_menu and not in_select and not in_shop and alive and not drafting and not paused:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -1538,7 +1562,7 @@ func _update_play(delta: float) -> void:
 		music_player.pitch_scale = 1.0 + clampf((speed - BASE_SPEED) / 2400.0, 0.0, 0.08)
 
 	# idle long enough and the duck sneezes. nobody is safe from pollen.
-	if idle_timer > 14.0 and state == St.GROUNDED:
+	if idle_timer > 24.0 and state == St.GROUNDED:
 		duck_shake = 0.3
 		_float_text(duck_x, BASE_Y - 70.0, "achoo.")
 		_sfx("quack", 1.45, -4.0)
@@ -1582,10 +1606,10 @@ func _update_play(delta: float) -> void:
 
 	# the duck grows impatient (one judgmental quack per idle bout).
 	# rubber duckies do not quack. rubber duckies squeak.
-	if idle_timer > 4.0 and not quacked and state == St.GROUNDED:
+	if idle_timer > 8.0 and not quacked and state == St.GROUNDED:
 		_sfx("quack", 2.0 if species == "rubberduck" else 1.0)
 		quacked = true
-	elif idle_timer < 4.0:
+	elif idle_timer < 8.0:
 		quacked = false
 
 	squash = maxf(0.0, squash - delta * 5.5)
@@ -1946,6 +1970,21 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 	draw_string(font, pos, txt, align, w, size, col)
 
 # the run's eulogy: panel, stats, build chips, retry
+func _draw_pause() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
+	_otext(Vector2(0, 360), "PAUSED", 64, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	_otext(Vector2(0, 416), "%d m · %s" % [int(distance / 10.0), THEMES[theme_idx].name],
+		20, Color(1, 1, 1, 0.7))
+	draw_style_box(_btn_sb(), PAUSE_RESUME_BTN)
+	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
+	draw_style_box(_btn_sb(), PAUSE_MENU_BTN)
+	_btn_label(PAUSE_MENU_BTN, "quit to menu", 22, Color(1, 1, 1, 0.8))
+	# the duck waits, bobbing, looking back at you
+	if has_art:
+		var hero = ducks[species].get("hero")
+		if hero != null:
+			_blit_centered(hero, Vector2(VIEW.x * 0.5, 200.0 + sin(anim_t * 2.0) * 8.0), 3.4)
+
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
 	var panel := Rect2(56.0, 240.0, VIEW.x - 112.0, 440.0)
@@ -2217,12 +2256,21 @@ func _draw() -> void:
 	_draw_duck()
 	_draw_atmosphere()
 
-	# the in-run menu escape hatch (translucent, corner, ignorable)
+	# the in-run menu escape hatch + pause button (translucent, corner, ignorable)
 	if alive and not drafting:
 		draw_circle(GAME_MENU_BTN.get_center(), 23.0, Color(0.05, 0.09, 0.13, 0.5))
 		draw_arc(GAME_MENU_BTN.get_center(), 23.0, 0, TAU, 24, Color(1, 1, 1, 0.3), 1.5)
 		draw_string(font, Vector2(GAME_MENU_BTN.position.x, GAME_MENU_BTN.position.y + 33), "x",
 			HORIZONTAL_ALIGNMENT_CENTER, GAME_MENU_BTN.size.x, 24, Color(1, 1, 1, 0.55))
+		var pc := GAME_PAUSE_BTN.get_center()
+		draw_circle(pc, 23.0, Color(0.05, 0.09, 0.13, 0.5))
+		draw_arc(pc, 23.0, 0, TAU, 24, Color(1, 1, 1, 0.3), 1.5)
+		draw_rect(Rect2(pc + Vector2(-6, -8), Vector2(4, 16)), Color(1, 1, 1, 0.6))
+		draw_rect(Rect2(pc + Vector2(3, -8), Vector2(4, 16)), Color(1, 1, 1, 0.6))
+
+	if paused:
+		_draw_pause()
+		return
 
 	if not alive:
 		_draw_death()
@@ -2276,13 +2324,12 @@ func _draw() -> void:
 
 	if alive:
 		_draw_status_icons()
-	if alive and state == St.GROUNDED and idle_timer > 4.0:
+	# idle chatter: a soft, gently-fading "quack?" after a relaxed wait (no nag deck for now)
+	if alive and state == St.GROUNDED and idle_timer > 8.0:
 		var dp := Vector2(duck_x, BASE_Y)
-		# stage 1 is always "quack?"; stage 2 cycles the nag deck (~5s each, no repeats back-to-back)
-		var nag := "quack?"
-		if idle_timer > 9.0:
-			nag = IDLE_NAGS[int(idle_timer / 5.0 + nag_seed) % IDLE_NAGS.size()]
-		_otext(dp + Vector2(-160, -DUCK_R - 40), nag, 24, Color(1, 1, 1, 0.9), 320.0, HORIZONTAL_ALIGNMENT_CENTER, 5)
+		var ap := clampf((idle_timer - 8.0) / 0.8, 0.0, 1.0)
+		_otext(dp + Vector2(-160, -DUCK_R - 40), "quack?", 24, Color(1, 1, 1, 0.85 * ap),
+			320.0, HORIZONTAL_ALIGNMENT_CENTER, 5)
 
 # the conga line compresses as it grows so every duckling stays on screen.
 # it starts BELOW the duck sprite (~44px of butt) so nobody waddles underneath it.
