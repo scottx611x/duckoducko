@@ -187,6 +187,29 @@ var in_select := false
 var in_shop := false
 var paused := false
 
+# ANCIENT SHRINE (StS Neow-style): each run opens at the duck statue offering 3
+# random boons — pick one free. Mixed risk/reward.
+var in_shrine := false
+var shrine_boons: Array = []
+var shrine_open_t := -10.0
+const BOONS := [
+	{"id": "clutch",     "name": "EGG CLUTCH",   "desc": "start with 3 ducklings",            "deal": false},
+	{"id": "preheat",    "name": "PREHEATED",     "desc": "start at 60% LOFT",                 "deal": false},
+	{"id": "goosedown",  "name": "GOOSE DOWN",    "desc": "start with 2 shields",              "deal": false},
+	{"id": "tailwind",   "name": "TAILWIND",      "desc": "+12% pace, the whole run",          "deal": false},
+	{"id": "lucky",      "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
+	{"id": "glasscannon","name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
+	{"id": "famine",     "name": "FAMINE FEAST",  "desc": "snacks give DOUBLE loft — but 40% fewer of them", "deal": true},
+	{"id": "highstakes", "name": "HIGH STAKES",   "desc": "feathers earned ×2 — but every Gerald gains +1 HP", "deal": true},
+]
+# per-run boon modifiers (reset each run)
+var boon_pace := 1.0
+var boon_feather_mult := 1
+var boon_heron_mult := 1.0
+var boon_snack_mult := 1.0
+var boon_loft_mult := 1.0
+var boss_hp_bonus := 0
+
 # GERALD THE IMMENSE: a colossal heron boss at fixed distance marks (feet), each
 # tougher than the last. river darkens, music ducks, you duel him with specials and
 # by hopping his dive-shockwaves back at him.
@@ -735,6 +758,8 @@ func _enter_menu() -> void:
 	in_menu = true
 	in_select = false
 	in_shop = false
+	in_shrine = false
+	paused = false
 	fade = 0.0
 	menu_enter_t = anim_t
 	score_label.visible = false
@@ -785,11 +810,53 @@ func start_game() -> void:
 		next_draft = 2000.0
 	if _meta("warmup"):
 		loft = 0.4
+	name_edit.visible = false
+	# the ancient shrine greets you before the river does
+	_open_shrine()
+
+func _open_shrine() -> void:
+	in_shrine = true
+	shrine_open_t = anim_t
+	shrine_boons = BOONS.duplicate()
+	shrine_boons.shuffle()
+	shrine_boons = shrine_boons.slice(0, 3)
+	score_label.visible = false
+	loft_bar.visible = false
+	_sfx("chime", 0.8)
+
+func _shrine_rect(i: int) -> Rect2:
+	return Rect2(60.0, 330.0 + i * 130.0, VIEW.x - 120.0, 112.0)
+
+func _pick_boon(b: Dictionary) -> void:
+	match b.id:
+		"clutch": _add_ducklings(3)
+		"preheat": loft = 0.6
+		"goosedown": shield_charges += 2
+		"tailwind": boon_pace = 1.12
+		"lucky": _grant_random_upgrade(1)
+		"glasscannon":
+			_grant_random_upgrade(3)
+			boon_heron_mult = 1.5
+		"famine":
+			boon_loft_mult = 2.0
+			boon_snack_mult = 0.6
+		"highstakes":
+			boon_feather_mult = 2
+			boss_hp_bonus = 1
+	in_shrine = false
+	fade = 0.0
+	_sfx("unlock")
+	_flash(b.name + "!")
 	score_label.visible = true
 	loft_bar.visible = true
-	name_edit.visible = false
 	if duck_name.to_lower().strip_edges() in ["heron", "gerald", "a heron"]:
 		_flash("wait. are you a heron?")
+
+func _grant_random_upgrade(rarity: int) -> void:
+	var pool: Array = UPGRADES.filter(func(u): return u.rarity == rarity)
+	if pool.is_empty():
+		return
+	_pick_upgrade(pool[randi() % pool.size()])
 
 # per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
 func cur_hop_dur() -> float:
@@ -1145,6 +1212,12 @@ func reset_game() -> void:
 	boss = null
 	boss_waves.clear()
 	next_boss_idx = 0
+	boss_hp_bonus = 0
+	boon_pace = 1.0
+	boon_feather_mult = 1
+	boon_heron_mult = 1.0
+	boon_snack_mult = 1.0
+	boon_loft_mult = 1.0
 	if music_player != null:
 		music_player.volume_db = 0.0
 	log_timer = 0.8
@@ -1224,10 +1297,10 @@ func _input(event: InputEvent) -> void:
 			mega_hop()
 		elif event.keycode == KEY_L:
 			fire_laser()
-		elif event.keycode == KEY_P and not in_menu and not in_select and not in_shop and alive and not drafting:
+		elif event.keycode == KEY_P and not in_menu and not in_select and not in_shop and not in_shrine and alive and not drafting:
 			paused = not paused                    # P toggles pause
 			_sfx("click")
-		elif event.keycode == KEY_ESCAPE and not in_menu:
+		elif event.keycode == KEY_ESCAPE and not in_menu and not in_shrine:
 			_sfx("click")
 			if in_select or in_shop or not alive:
 				_enter_menu()
@@ -1237,6 +1310,14 @@ func _input(event: InputEvent) -> void:
 func _on_press(pos: Vector2) -> void:
 	idle_timer = 0.0
 	nag_seed = randi() % IDLE_NAGS.size()      # next idle bout opens on a fresh line
+	if in_shrine:
+		if anim_t - shrine_open_t < 0.35:
+			return                                 # grace so a stray tap can't pick
+		for i in shrine_boons.size():
+			if _shrine_rect(i).has_point(pos):
+				_pick_boon(shrine_boons[i])
+				return
+		return
 	if in_menu:
 		if Rect2(name_edit.position, name_edit.size).has_point(pos):
 			return                                 # let the LineEdit take the tap
@@ -1278,7 +1359,12 @@ func _on_press(pos: Vector2) -> void:
 		if DEATH_MENU_BTN.has_point(pos):
 			_enter_menu()
 		else:
-			reset_game()
+			reset_game()                           # retry: re-apply metas, re-roll the shrine
+			if _meta("jacket"): shield_charges = 1
+			if _meta("egghead"): ducklings_n = 1
+			if _meta("earlybird"): next_draft = 2000.0
+			if _meta("warmup"): loft = 0.4
+			_open_shrine()
 		return
 	if paused:                                     # paused: only the overlay buttons live
 		if PAUSE_RESUME_BTN.has_point(pos):
@@ -1448,6 +1534,7 @@ func die(msg: String) -> void:
 	dead_m = int(distance / 10.0)
 	if _meta("pockets"):
 		run_feathers *= 2                   # DEEP POCKETS pays at the bank
+	run_feathers *= boon_feather_mult       # HIGH STAKES multiplies the haul
 	feathers += run_feathers
 	dead_record = dead_m > best_m
 	if dead_record and best_m > 0:          # confetti for the new best
@@ -1466,7 +1553,7 @@ func _process(delta: float) -> void:
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
 	if in_select:
 		select_yaw += delta * 0.7
-	if not in_menu and not in_select and not in_shop and alive and not drafting and not paused:
+	if not in_menu and not in_select and not in_shop and not in_shrine and alive and not drafting and not paused:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -1485,7 +1572,7 @@ func _update_play(delta: float) -> void:
 	# speed climbs forever but flattens out — late game gets harder via drifting
 	# logs and hungrier herons, not raw scroll speed
 	speed = BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))
-	distance += speed * delta * (1.0 + 0.08 * ducklings_n)   # the conga pays
+	distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace   # the conga (+ TAILWIND) pays
 	idle_timer += delta
 
 	trail.append({"t": anim_t, "x": duck_x})
@@ -1745,8 +1832,9 @@ func _start_boss() -> void:
 	enemies.clear()
 	logs.clear()
 	boss_waves.clear()
+	var hp := 3 + idx + boss_hp_bonus           # HIGH STAKES toughens every Gerald
 	boss = {
-		"hp": 3 + idx, "max_hp": 3 + idx, "x": VIEW.x * 0.5, "y": -160.0,
+		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
 		"phase": "enter", "t": 0.0, "idx": idx,
 		"dive_gap": 2.6 - 0.5 * idx,          # harder Geralds dive more often
 		"dive_t": 2.6 - 0.5 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
@@ -1876,14 +1964,14 @@ func _spawn(delta: float) -> void:
 	item_timer -= delta
 	if item_timer <= 0.0:
 		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
-		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks"))
+		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START:
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
-		# herons get hungrier deep in the run (down to ~60% of the early gap)
-		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0)
+		# herons get hungrier deep in the run (down to ~60% of the early gap; GLASS CANNON worse)
+		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0) / boon_heron_mult
 
 func _pick_kind() -> int:
 	var total := 0
@@ -2024,7 +2112,7 @@ func _collect(it: Dictionary) -> void:
 	it.got = true
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL: score & feathers, NOT loft
-	var loft_mult := 1.0
+	var loft_mult := boon_loft_mult                # FAMINE FEAST: fewer snacks, double loft
 	if is_airborne() and _up("snackhawk") > 0:     # SNACK HAWK: airborne grabs charge hard
 		loft_mult *= 1.0 + _up("snackhawk")
 		_float_text(it.x, it.y - 20.0, "hawk'd!", Color(0.5, 0.85, 1.0))
@@ -2121,6 +2209,40 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 	draw_string(font, pos, txt, align, w, size, col)
 
 # the run's eulogy: panel, stats, build chips, retry
+func _draw_shrine() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
+	var ot := anim_t - shrine_open_t
+	_otext(Vector2(0, 150), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	_otext(Vector2(0, 196), "offers you a blessing for the road", 19, Color(1, 1, 1, 0.7))
+	# the elder, a big golden-tinted hero duck bobbing above the choices
+	if has_art:
+		var elder = ducks.get("golden", ducks["mallard"]).get("hero")
+		if elder != null:
+			_blit_modulated(elder, Vector2(VIEW.x * 0.5, 270.0 + sin(anim_t * 1.6) * 6.0), 2.6,
+				Color(1.0, 0.95, 0.7))
+	for i in shrine_boons.size():
+		var b: Dictionary = shrine_boons[i]
+		var rc := _shrine_rect(i)
+		var ap := clampf((ot - 0.1 - i * 0.12) / 0.3, 0.0, 1.0)
+		if ap <= 0.0:
+			continue
+		var deal: bool = b.deal
+		var pulse := 0.6 + 0.4 * sin(anim_t * 4.0 + i)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.10, 0.16, 0.95 * ap)
+		sb.set_corner_radius_all(16)
+		sb.set_border_width_all(3)
+		var bc := Color(1.0, 0.55, 0.3) if deal else Color(0.5, 0.85, 1.0)
+		sb.border_color = Color(bc.r, bc.g, bc.b, ap * pulse)
+		draw_style_box(sb, rc)
+		if deal:
+			draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 26), "RISK / REWARD",
+				HORIZONTAL_ALIGNMENT_LEFT, rc.size.x, 13, Color(1.0, 0.55, 0.3, ap))
+		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 56), b.name,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 30, 28, Color(1, 1, 1, ap))
+		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 90), b.desc,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 30, 18, Color(1, 1, 1, 0.75 * ap))
+
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
 	_otext(Vector2(0, 360), "PAUSED", 64, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
@@ -2261,6 +2383,10 @@ func _draw() -> void:
 
 	if in_shop:
 		_draw_shop()
+		return
+
+	if in_shrine:
+		_draw_shrine()
 		return
 
 	# water trail / wake
