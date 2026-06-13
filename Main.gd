@@ -236,10 +236,10 @@ var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
 var duck_steer_mul := 1.0       # scales steering responsiveness
 var duck_size_mul := 1.0        # bufflehead: smaller duck, smaller hitbox
 
-# fancy hop: every ~10th hop is an unannounced barrel roll (WHIMSY §1)
+# whimsy hops: most hops get a little flourish; flashy spins are rarer treats (WHIMSY §1)
 var hop_count := 0
-var fancy_next := 10
-var fancy := false
+var hop_style := ""             # "", "wobble", "boing", "twirl", "barrel", "flip"
+var fancy := false              # true for the spinny styles (ducklings copy, sfx fancier)
 
 var duck_x := VIEW.x * 0.5
 var target_x := VIEW.x * 0.5
@@ -466,7 +466,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -597,7 +597,7 @@ func _smoke() -> void:
 	for i in 24:                                       # enough hops to hit a fancy one
 		hop()
 		await get_tree().create_timer(0.08).timeout
-	print("SMOKE hops=", hop_count, " fancy_next=", fancy_next)
+	print("SMOKE hops=", hop_count, " last_style=", hop_style)
 	run_feathers = 3
 	die("smoke")
 	print("SMOKE dead ok, best_m=", best_m, " feathers=", feathers)
@@ -1230,7 +1230,7 @@ func reset_game() -> void:
 	quacked = false
 	run_feathers = 0
 	hop_count = 0
-	fancy_next = 6 + randi() % 7
+	hop_style = ""
 	fancy = false
 	theme_idx = 0
 	theme_prev = 0
@@ -1456,15 +1456,12 @@ func hop() -> void:
 		hop_lift_bonus = 1.0
 		hop_count += 1
 		hop_events.append(anim_t)                  # the ducklings are watching
-		if hop_count == 100:
-			_flash("hop #100.\nlegendary.")
-			_sfx("chime", 2.0)
-		fancy = hop_count >= fancy_next
-		if fancy:
-			fancy_next = hop_count + 8 + randi() % 6
-			_sfx("hop", 1.3)                       # the fancy one sounds fancier
-		else:
-			_sfx("hop", randf_range(0.95, 1.1))
+		_pick_hop_style()
+		# little milestones so the counter always has a next treat in sight
+		if hop_count in [25, 50, 100, 250]:
+			_flash(["25 hops. warmed up.", "50 hops. springy.",
+				"hop #100.\nLEGENDARY.", "250 hops. unstoppable."][[25, 50, 100, 250].find(hop_count)])
+			_sfx("chime", 1.6 + 0.15 * [25, 50, 100, 250].find(hop_count))
 	elif state == St.HOPPING and air_hops < _up("double"):
 		# DOUBLE HOP: don't restart the arc — extend it. The new, taller arc is
 		# re-entered at the current height (rising), so the duck visibly surges
@@ -1480,6 +1477,37 @@ func hop() -> void:
 		_spawn_parts(duck_x, fy + 20.0, 10, Color(1, 1, 1, 0.9), 130.0)   # feather burst
 		_sfx("hop", 1.3)
 		_sfx("collect", 1.4, -10.0)
+
+# Pick a flourish for this hop. Most are plain; flair is a treat, spins are rarer.
+func _pick_hop_style() -> void:
+	var r := randf()
+	if r < 0.60:
+		hop_style = ""                              # a normal, honest hop
+	elif r < 0.74:
+		hop_style = "wobble"                        # a silly side-to-side waggle
+	elif r < 0.85:
+		hop_style = "boing"                         # extra cartoon stretch + squeak
+	elif r < 0.93:
+		hop_style = "twirl"                         # a flattening pirouette
+	elif r < 0.975:
+		hop_style = "barrel"                        # full barrel roll into the steer
+	else:
+		hop_style = "flip"                          # a showy backflip
+	fancy = hop_style in ["twirl", "barrel", "flip"]
+	match hop_style:
+		"":
+			_sfx("hop", randf_range(0.95, 1.1))
+		"wobble":
+			_sfx("hop", randf_range(1.05, 1.18))
+		"boing":
+			_sfx("hop", 0.8)
+			_sfx("squeak", randf_range(1.1, 1.3), -5.0)
+		"twirl":
+			_sfx("hop", 1.25)
+			_sfx("chime", 1.4, -8.0)
+		"barrel", "flip":
+			_sfx("hop", 1.3)                        # the fancy ones sound fancier
+			_spawn_parts(duck_x, BASE_Y - 60.0, 6, Color(1, 1, 0.7, 0.9), 120.0)
 
 func mega_hop() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0:
@@ -1721,7 +1749,10 @@ func _update_play(delta: float) -> void:
 	# the duck grows impatient (one judgmental quack per idle bout).
 	# rubber duckies do not quack. rubber duckies squeak.
 	if idle_timer > 8.0 and not quacked and state == St.GROUNDED:
-		_sfx("quack", 2.0 if species == "rubberduck" else 1.0)
+		if species == "rubberduck":
+			_sfx("squeak", randf_range(0.95, 1.05))
+		else:
+			_sfx("quack", 1.0)
 		quacked = true
 	elif idle_timer < 8.0:
 		quacked = false
@@ -1760,6 +1791,7 @@ func _update_hop(delta: float) -> void:
 			if hop_t / cur_hop_dur() >= 1.0:
 				state = St.GROUNDED
 				fancy = false
+				hop_style = ""
 				_land(false)
 		St.MEGA:
 			mega_t += delta
@@ -2123,7 +2155,7 @@ func _collect(it: Dictionary) -> void:
 	if def.name == "feather":
 		run_feathers += 1 * int(mult)
 	if def.name == "ducky":
-		_sfx("quack", 1.9, -2.0)                   # squeak.
+		_sfx("squeak", randf_range(0.95, 1.1))     # it squeaks.
 		_flash("squeak.")
 	else:
 		_sfx("collect", 1.0 + it.kind * 0.12)      # rarer = brighter ping
@@ -2794,11 +2826,24 @@ func _draw_duck() -> void:
 			elif squash > 0.0 and state == St.GROUNDED:
 				var sq := squash * squash
 				ds = Vector2(ds.x * (1.0 + 0.24 * sq), ds.y * (1.0 - 0.28 * sq))
-			if fancy and state == St.HOPPING:
-				# the fancy hop: a full unannounced barrel roll, spinning into the steer
+			if hop_style != "" and state == St.HOPPING:
+				var p := hop_t / cur_hop_dur()                       # 0..1 over the arc
 				var dir: float = signf(duck_vx) if absf(duck_vx) > 20.0 else 1.0
-				var rot: float = (hop_t / cur_hop_dur()) * TAU * dir
-				draw_set_transform(duck_pos, rot, Vector2.ONE)
+				var rot := 0.0
+				var sc := Vector2.ONE
+				match hop_style:
+					"barrel":
+						rot = p * TAU * dir                          # one full roll
+					"flip":
+						rot = -p * TAU                               # a showy backflip
+					"twirl":
+						sc.x = cos(p * TAU)                          # flatten -> pirouette
+					"wobble":
+						rot = sin(p * TAU * 2.0) * 0.35 * dir        # a silly waggle
+					"boing":
+						var b := sin(p * PI)
+						sc = Vector2(1.0 - 0.18 * b, 1.0 + 0.30 * b) # cartoon stretch
+				draw_set_transform(duck_pos, rot, sc)
 				draw_texture_rect(fr, Rect2(-ds * 0.5, ds), false)
 				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			else:

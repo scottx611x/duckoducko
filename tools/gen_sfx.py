@@ -249,6 +249,31 @@ def peep():
     return out
 
 
+def squeak():
+    """A real rubber-duck squeak: a reedy two-part 'eee-EEP'. The pitch swoops UP
+    on the squeeze and snaps higher on release -- bright, breathy, comedic."""
+    dur = 0.20
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        # pitch contour: swoop up through the squeeze, then a higher release chirp
+        if p < 0.62:
+            f = 720.0 + 900.0 * (p / 0.62)               # 720 -> 1620 squeeze
+        else:
+            f = 1500.0 + 360.0 * math.sin((p - 0.62) / 0.38 * math.pi)
+        # reedy square-ish tone (odd harmonics), a touch of breath
+        s = 0.0
+        for k in (1, 3, 5, 7):
+            s += math.sin(TAU * f * k * t) / k
+        s *= 0.5
+        s += 0.12 * random.uniform(-1, 1) * max(0.0, 1.0 - p)   # airy squeeze hiss
+        # two little amplitude lobes (the in/out of a squeeze)
+        lobe = 0.55 + 0.45 * abs(math.sin(p * math.pi))
+        out.append(s * lobe * env(t, dur, 0.004, 1.6) * 0.8)
+    return out
+
+
 def click():
     """UI tick."""
     dur = 0.05
@@ -275,4 +300,5 @@ if __name__ == "__main__":
     save("crunch.wav", crunch())
     save("ribbit.wav", ribbit())
     save("fwoosh.wav", fwoosh())
+    save("squeak.wav", squeak())
     print("done.")
