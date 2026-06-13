@@ -216,8 +216,10 @@ var boss_hp_bonus := 0
 const BOSS_MARKS := [5000, 15000, 30000]   # feet
 var next_boss_idx := 0
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
-var boss_waves: Array = []  # shockwave rings from his dives: {x, r, hopped}
+var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
+var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx, vy}
 var boss_flash := 0.0       # white hit-flash on Gerald
+var boss_stomp_flash := 0.0 # screen pop when you land a stomp
 
 var menu_enter_t := -10.0       # brief tap-grace after landing on the menu
 var meta_owned: Array = []      # persistent shop purchases (ids)
@@ -1874,12 +1876,14 @@ func _start_boss() -> void:
 	enemies.clear()
 	logs.clear()
 	boss_waves.clear()
-	var hp := 3 + idx + boss_hp_bonus           # HIGH STAKES toughens every Gerald
+	boss_globs.clear()
+	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
-		"phase": "enter", "t": 0.0, "idx": idx,
-		"dive_gap": 2.6 - 0.5 * idx,          # harder Geralds dive more often
-		"dive_t": 2.6 - 0.5 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
+		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false,
+		"dive_gap": 2.4 - 0.4 * idx,          # harder Geralds dive more often
+		"dive_t": 2.4 - 0.4 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
+		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
 	}
 	_flash("GERALD THE IMMENSE")
 	_sfx("mega", 0.45)
@@ -1910,65 +1914,132 @@ func _hit_boss(n: int) -> void:
 	if boss.hp <= 0:
 		next_boss_idx += 1
 		_boss_leave()
+		return
+	# half health: he gets ANGRY — faster dives, double feather volleys
+	if not boss.phase2 and boss.hp <= boss.max_hp / 2:
+		boss.phase2 = true
+		boss.dive_gap *= 0.62
+		_flash("GERALD IS FURIOUS")
+		_sfx("quack", 0.6, 1.0)
 	else:
 		_flash("HIT! %d left" % boss.hp)
 
 func _update_boss(delta: float) -> void:
 	boss_flash = maxf(0.0, boss_flash - delta * 2.5)
+	boss_stomp_flash = maxf(0.0, boss_stomp_flash - delta * 2.0)
 	boss.t += delta
 	boss.hit_cool = maxf(0.0, boss.hit_cool - delta)
-	# shockwave rings ride outward; a ring hopped over reflects up and stings Gerald
+	# slam rings are now purely cosmetic — they ride outward and fade
 	for w in boss_waves:
 		w.r += 420.0 * delta
-		if not w.hopped and is_airborne() and absf(absf(duck_x - w.x) - w.r) < 22.0:
-			w.hopped = true
-			_hit_boss(1)
-			_float_text(duck_x, BASE_Y - 90.0, "REFLECTED!", Color(0.6, 0.9, 1.0))
-			_sfx("fwoosh", 1.5)
-	boss_waves = boss_waves.filter(func(w): return w.r < VIEW.x * 0.9 and not w.hopped)
+	boss_waves = boss_waves.filter(func(w): return w.r < VIEW.x * 0.9)
+	_update_boss_globs(delta)
 
 	match boss.phase:
 		"enter":
 			boss.y = lerpf(-160.0, 150.0, clampf(boss.t / 1.6, 0.0, 1.0))
 			if boss.t >= 1.7:
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
+				_flash("STOMP HIM WHEN HE'S DAZED!")
 		"fight":
-			if boss.dive_stage == "":
-				boss.x = VIEW.x * 0.5 + sin(anim_t * 0.7) * 140.0
-				boss.y = 150.0 + sin(anim_t * 1.6) * 12.0
-				boss.dive_t -= delta
-				if boss.dive_t <= 0.0:
-					boss.dive_stage = "tele"; boss.t = 0.0
-					boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
-			elif boss.dive_stage == "tele":      # 0.7s telegraph: target locks on the duck
-				if boss.t >= 0.7:
-					boss.dive_stage = "down"; boss.t = 0.0
-					_sfx("fwoosh", 0.7)
-			elif boss.dive_stage == "down":
-				var p := clampf(boss.t / 0.32, 0.0, 1.0)
-				boss.x = lerpf(boss.x, boss.dive_x, p)
-				boss.y = lerpf(150.0, BASE_Y - 6.0, p)
-				if p >= 1.0:
-					boss.dive_stage = "up"; boss.t = 0.0
-					boss_waves.append({"x": boss.dive_x, "r": 18.0, "hopped": false})
-					ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
-					_sfx("splash_big", 0.8)
-					duck_shake = maxf(duck_shake, 0.4)
-					# caught on the water (not airborne / invincible) = you take the hit
-					if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
-						boss.hit_cool = 1.0
-						_boss_hits_player()
-			elif boss.dive_stage == "up":
-				boss.y = lerpf(BASE_Y - 6.0, 150.0, clampf(boss.t / 0.45, 0.0, 1.0))
-				if boss.t >= 0.5:
-					boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+			_boss_fight(delta)
 		"leave":
 			boss.y -= 360.0 * delta
 			if boss.y < -180.0:
 				boss = null
 				boss_waves.clear()
+				boss_globs.clear()
 				if music_player != null:
 					music_player.volume_db = 0.0
+
+# The fight loop: float -> telegraph -> SLAM -> sit DAZED (stomp window) -> rise.
+func _boss_fight(delta: float) -> void:
+	if boss.dive_stage == "":
+		boss.x = VIEW.x * 0.5 + sin(anim_t * 0.7) * 140.0
+		boss.y = 150.0 + sin(anim_t * 1.6) * 12.0
+		boss.dive_t -= delta
+		# between dives he spits feather darts you weave through
+		boss.spit_t -= delta
+		if boss.spit_t <= 0.0:
+			_boss_spit()
+			boss.spit_t = (1.4 if boss.phase2 else 2.2) * randf_range(0.85, 1.15)
+		if boss.dive_t <= 0.0:
+			boss.dive_stage = "tele"; boss.t = 0.0
+			boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+	elif boss.dive_stage == "tele":          # telegraph: the reticle locks onto the duck
+		boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / 0.6, 0.0, 1.0))
+		if boss.t >= 0.7:
+			boss.dive_stage = "down"; boss.t = 0.0
+			_sfx("fwoosh", 0.7)
+	elif boss.dive_stage == "down":
+		var p := clampf(boss.t / 0.28, 0.0, 1.0)
+		boss.x = boss.dive_x
+		boss.y = lerpf(150.0, BASE_Y + 18.0, p)   # slams nose-down into the water
+		if p >= 1.0:
+			boss.dive_stage = "dazed"; boss.t = 0.0
+			boss.daze_t = 1.5 - 0.15 * boss.idx   # tougher Geralds recover quicker
+			boss.stomped = false
+			boss_waves.append({"x": boss.dive_x, "r": 18.0})
+			ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
+			_sfx("splash_big", 0.8)
+			duck_shake = maxf(duck_shake, 0.4)
+			# caught on the water at the impact point = you take the hit
+			if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				boss.hit_cool = 1.0
+				_boss_hits_player()
+	elif boss.dive_stage == "dazed":
+		# he's beached and woozy, head low — HOP ONTO HIM to stomp
+		boss.y = BASE_Y + 18.0 + sin(anim_t * 3.0) * 3.0
+		boss.daze_t -= delta
+		if not boss.stomped and is_airborne() and hop_height() < 0.55 \
+				and absf(duck_x - boss.x) < 70.0:
+			_boss_stomped()
+		if boss.daze_t <= 0.0:
+			boss.dive_stage = "up"; boss.t = 0.0
+	elif boss.dive_stage == "up":
+		var rise := 0.32 if boss.stomped else 0.5   # a stomp punts him up faster
+		boss.y = lerpf(BASE_Y + 18.0, 150.0, clampf(boss.t / rise, 0.0, 1.0))
+		if boss.t >= rise:
+			boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+
+# STOMP! the payoff: bounce off his skull for a damage tick + a big juicy pop.
+func _boss_stomped() -> void:
+	boss.stomped = true
+	boss_stomp_flash = 1.0
+	duck_shake = maxf(duck_shake, 0.5)
+	# bounce the duck back up off his head so the stomp reads as a real bop
+	hop_t = cur_hop_dur() * 0.18
+	hop_lift_bonus = maxf(hop_lift_bonus, 1.3)
+	_spawn_parts(boss.x, boss.y - 20.0, 22, Color(1, 0.95, 0.7), 280.0)
+	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
+	_sfx("mega", 1.1)
+	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
+	_hit_boss(1)
+
+# Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
+func _boss_spit() -> void:
+	var n: int = 3 if boss.phase2 else 2
+	_sfx("fwoosh", 1.3, -4.0)
+	var bx: float = boss.x
+	var by: float = boss.y
+	for i in n:
+		var spread := (float(i) - (n - 1) * 0.5) * 70.0 + randf_range(-20.0, 20.0)
+		var tx := clampf(duck_x + spread, BANK_W, VIEW.x - BANK_W)
+		var d := Vector2(tx - bx, BASE_Y - by).normalized() * 240.0
+		boss_globs.append({"x": bx, "y": by + 30.0, "vx": d.x, "vy": d.y})
+
+func _update_boss_globs(delta: float) -> void:
+	for f in boss_globs:
+		f.x += f.vx * delta
+		f.y += f.vy * delta
+		# a glob to the face stings unless you're hopping over it / invincible
+		if f.y > BASE_Y - 46.0 and absf(f.x - duck_x) < 30.0 \
+				and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+			boss.hit_cool = 0.8
+			f.y = 9999.0
+			_spawn_parts(duck_x, BASE_Y - 20.0, 8, Color(0.36, 0.3, 0.18), 140.0)
+			_boss_hits_player()
+	boss_globs = boss_globs.filter(func(f): return f.y < BASE_Y + 30.0 and f.x > -40.0 and f.x < VIEW.x + 40.0)
 
 func _boss_hits_player() -> void:
 	if shield_charges > 0:
@@ -2705,6 +2776,9 @@ func _duckling_h(i: int) -> float:
 func _draw_boss_ground() -> void:
 	# darken the river for the duel
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.02, 0.08, 0.34))
+	# a golden pop the instant you stomp him
+	if boss_stomp_flash > 0.0:
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(1.0, 0.9, 0.5, 0.22 * boss_stomp_flash))
 	# dive telegraph: a red targeting reticle locks onto where Gerald will strike
 	if boss.dive_stage == "tele":
 		var tp := clampf(boss.t / 0.7, 0.0, 1.0)
@@ -2713,11 +2787,16 @@ func _draw_boss_ground() -> void:
 		draw_arc(Vector2(boss.dive_x, BASE_Y), rr, 0, TAU, 28, col, 3.0)
 		draw_line(Vector2(boss.dive_x, BASE_Y - rr), Vector2(boss.dive_x, BASE_Y + rr), col, 2.0)
 		draw_line(Vector2(boss.dive_x - rr, BASE_Y), Vector2(boss.dive_x + rr, BASE_Y), col, 2.0)
-	# shockwave rings expanding outward — hop one to reflect it
+	# slam splash rings expanding outward (cosmetic)
 	for w in boss_waves:
 		var a: float = clampf(1.0 - w.r / (VIEW.x * 0.7), 0.0, 1.0)
 		draw_arc(Vector2(w.x, BASE_Y), w.r, PI * 0.05, PI * 0.95, 20, Color(0.7, 0.85, 1.0, 0.5 * a), 4.0)
 		draw_arc(Vector2(w.x, BASE_Y), w.r, PI * 1.05, PI * 1.95, 20, Color(0.7, 0.85, 1.0, 0.5 * a), 4.0)
+	# muck globs in flight — dark, wobbling, clearly NOT a tasty feather
+	for f in boss_globs:
+		var wob := sin((f.x + f.y) * 0.05) * 2.0
+		draw_circle(Vector2(f.x, f.y) + Vector2(wob, 0), 9.0, Color(0.20, 0.17, 0.10, 0.9))
+		draw_circle(Vector2(f.x - 2, f.y - 2), 3.0, Color(0.42, 0.55, 0.30, 0.8))   # slimy highlight
 
 # GERALD himself: the colossal heron + his HP pips
 func _draw_boss_gerald() -> void:
@@ -2732,25 +2811,43 @@ func _draw_boss_gerald() -> void:
 			var shs := tex_shadow.get_size() * (3.0 + 3.0 * sh)
 			draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, BASE_Y + 6) - shs * 0.5, shs),
 				false, Color(0, 0, 0, 0.18 + 0.22 * sh))
+		var dazed: bool = boss.dive_stage == "dazed" and not boss.stomped
 		var mod := Color(1, 1, 1)
+		if dazed:
+			# woozy & vulnerable: a warm pulsing glow says "HIT ME"
+			var gl := 0.5 + 0.5 * sin(anim_t * 9.0)
+			draw_circle(gpos, gsz.x * 0.42, Color(1.0, 0.85, 0.3, 0.12 + 0.12 * gl))
+			mod = Color(1, 1, 1).lerp(Color(1.3, 1.1, 0.6), 0.3 + 0.3 * gl)
 		if boss_flash > 0.0:
 			mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)   # white hit-flash
 		draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+		if dazed:
+			# a bouncing chevron + prompt over his head so the window is unmissable
+			var by := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
+			var c := Color(1, 0.9, 0.35)
+			draw_line(Vector2(boss.x - 16, by), Vector2(boss.x, by + 16), c, 5.0)
+			draw_line(Vector2(boss.x + 16, by), Vector2(boss.x, by + 16), c, 5.0)
+			_otext(Vector2(0, by - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+			# dizzy stars circling his head
+			for s in 3:
+				var sa := anim_t * 5.0 + s * TAU / 3.0
+				draw_circle(gpos + Vector2(cos(sa) * 34.0, -gsz.y * 0.36 + sin(sa) * 10.0), 4.0, Color(1, 1, 0.6, 0.9))
 	# title card during the entrance
 	if boss.phase == "enter":
 		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
 		_otext(Vector2(0, 250), "GERALD THE IMMENSE", 40, Color(1, 0.3, 0.25, ta), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
 		_otext(Vector2(0, 296), ["he remembers you.", "round two.", "the final heron."][boss.idx],
 			20, Color(1, 1, 1, 0.8 * ta))
-	# HP pips, top center
+	# HP pips, top center — width adapts so a long health bar never clips off-screen
 	var pips: int = boss.max_hp
-	var pw := 30.0
+	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
+	var pr: float = clampf(pw * 0.37, 5.0, 11.0)
 	var x0 := VIEW.x * 0.5 - pips * pw * 0.5
 	for i in pips:
 		var filled: bool = i < boss.hp
-		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), 11.0,
+		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr,
 			Color(0.9, 0.2, 0.18) if filled else Color(0.3, 0.3, 0.36, 0.6))
-		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), 11.0, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
+		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
 
 # theme atmosphere: bog fog drifts, aurora ribbons breathe
 func _draw_atmosphere() -> void:
