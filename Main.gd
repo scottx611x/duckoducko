@@ -980,15 +980,24 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
-	# SNAPZ the turtle, mid-fight, jaws STUCK out (the vulnerable window)
+	# SNAPZ the turtle — capture LURK (submerged), SNAP (erupting), STUCK (vulnerable)
 	boss = null
 	next_boss_idx = 1
 	_start_boss()
-	boss.phase = "fight"; boss.dive_stage = "stuck"; boss.daze_t = 1.0
-	boss.stomped = false; boss.sub = 0.0
-	boss.x = VIEW.x * 0.5; boss.y = BASE_Y - 18.0
-	boss.say = "MWA HA HA HA."; boss.say_t = anim_t
+	boss.phase = "fight"; boss.x = VIEW.x * 0.5
+	boss.dive_stage = ""; boss.sub = 1.0; boss.dive_t = 99.0   # LURK (held)
+	boss.say = "guh huh huh huh."; boss.say_t = anim_t
 	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_snapz_lurk.png")
+	boss.dive_stage = "snap"; boss.t = 0.09; boss.sub = 0.4   # SNAP lunging down
+	await get_tree().create_timer(0.02).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_snapz_snap.png")
+	boss.dive_stage = "stuck"; boss.daze_t = 99.0; boss.stomped = false
+	boss.sub = 0.0
+	boss.say = "MWA HA HA HA."; boss.say_t = anim_t
+	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_snapz.png")
 	# pause screen with the duck's quip
@@ -2333,10 +2342,10 @@ func _boss_fight(delta: float) -> void:
 # invulnerable until you bait a snap and punish the open jaws.
 func _snapz_fight(delta: float) -> void:
 	match boss.dive_stage:
-		"":   # LURK: glide under the surface toward the duck, mostly submerged
-			boss.sub = move_toward(boss.sub, 1.0, delta * 2.0)
-			boss.y = BASE_Y + 46.0
-			boss.x = move_toward(boss.x, clampf(duck_x, BANK_W + 40.0, VIEW.x - BANK_W - 40.0), 120.0 * delta)
+		"":   # LURK: a dim murky shape looming up high, stalking the duck's lane
+			boss.sub = move_toward(boss.sub, 1.0, delta * 2.5)
+			boss.y = 250.0 + sin(anim_t * 1.4) * 16.0
+			boss.x = move_toward(boss.x, clampf(duck_x, BANK_W + 40.0, VIEW.x - BANK_W - 40.0), 150.0 * delta)
 			boss.dive_t -= delta
 			if boss.dive_t <= 0.0:
 				boss.dive_stage = "warn"; boss.t = 0.0
@@ -2348,39 +2357,40 @@ func _snapz_fight(delta: float) -> void:
 						_sfx("laugh", randf_range(0.92, 1.08))   # the guttural cackle
 					else:
 						_sfx("quack", randf_range(0.45, 0.6), -2.0)
-		"warn":   # churning-water telegraph at the strike point
-			boss.x = boss.dive_x
-			if boss.t >= 0.72:
+		"warn":   # churning-water telegraph at the strike point — DODGE this lane
+			boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / 0.5, 0.0, 1.0))
+			if boss.t >= 0.66:
 				boss.dive_stage = "snap"; boss.t = 0.0
+				boss.sub = 0.0                        # bursts clear of the water
 				_sfx("fwoosh", 0.5)
-		"snap":   # LUNGE up out of the water, jaws gaping
-			var p := clampf(boss.t / 0.16, 0.0, 1.0)
-			boss.sub = move_toward(boss.sub, 0.0, delta * 7.0)
+		"snap":   # LUNGE DOWN at the duck's lane, jaws gaping
+			var p := clampf(boss.t / 0.2, 0.0, 1.0)
 			boss.x = boss.dive_x
-			boss.y = lerpf(BASE_Y + 46.0, BASE_Y - 34.0, p)
+			boss.y = lerpf(250.0, BASE_Y - 6.0, p)
 			if p >= 1.0:
 				boss.dive_stage = "stuck"; boss.t = 0.0
 				boss.daze_t = 1.5 - 0.12 * boss.idx
 				boss.stomped = false
 				boss_waves.append({"x": boss.dive_x, "r": 18.0})
-				ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
+				ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 170.0})
+				_spawn_parts(boss.dive_x, BASE_Y, 16, Color(0.7, 0.9, 0.85), 240.0)   # splash
 				_sfx("crunch", 0.85); _sfx("splash_big", 0.7)
 				duck_shake = maxf(duck_shake, 0.45)
 				if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
 					boss.hit_cool = 1.0
 					_boss_hits_player()
-		"stuck":   # jaws agape, head out — VULNERABLE: hop on his skull
-			boss.y = BASE_Y - 18.0 + sin(anim_t * 3.0) * 3.0
+		"stuck":   # jaws agape, beached — VULNERABLE: hop on his skull to STOMP
+			boss.y = BASE_Y - 14.0 + sin(anim_t * 3.0) * 3.0
 			boss.daze_t -= delta
 			if not boss.stomped and is_airborne() and hop_height() < 0.55 \
-					and absf(duck_x - boss.x) < 74.0:
+					and absf(duck_x - boss.x) < 78.0:
 				_boss_stomped()
 			if boss.daze_t <= 0.0:
 				boss.dive_stage = "dive"; boss.t = 0.0
-		"dive":   # sink back under to lurk again
-			boss.sub = move_toward(boss.sub, 1.0, delta * 3.0)
-			boss.y = lerpf(BASE_Y - 18.0, BASE_Y + 46.0, clampf(boss.t / 0.4, 0.0, 1.0))
-			if boss.t >= (0.3 if boss.stomped else 0.42):
+		"dive":   # sink back and fade into the murk, then lurk again
+			boss.sub = move_toward(boss.sub, 1.0, delta * 2.5)
+			boss.y = lerpf(BASE_Y - 14.0, 250.0, clampf(boss.t / 0.5, 0.0, 1.0))
+			if boss.t >= (0.4 if boss.stomped else 0.5):
 				boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
 
 # STOMP! the payoff: bounce off his skull for a damage tick + a big juicy pop.
@@ -3297,37 +3307,47 @@ func _draw_boss_snapz() -> void:
 			"snap", "stuck": fr = 2
 		var gt: Texture2D = tex_snapz[fr]
 		var gsz := gt.get_size() * 3.1          # COLOSSAL — he dwarfs the duck
+		var sub: float = boss.sub
+		# a dark shape he casts in the murk beneath him
+		if tex_shadow != null:
+			var shs := tex_shadow.get_size() * 5.0
+			draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, gpos.y + gsz.y * 0.4) - shs * 0.5, shs),
+				false, Color(0, 0, 0, 0.18 + 0.12 * (1.0 - sub)))
 		var stuck: bool = boss.dive_stage == "stuck" and not boss.stomped
 		var mod := Color(1, 1, 1)
 		if stuck:
 			var gl := 0.5 + 0.5 * sin(anim_t * 9.0)
-			draw_circle(gpos, gsz.x * 0.4, Color(1.0, 0.85, 0.3, 0.12 + 0.12 * gl))
+			draw_circle(gpos, gsz.x * 0.34, Color(1.0, 0.85, 0.3, 0.12 + 0.12 * gl))
 			mod = Color(1, 1, 1).lerp(Color(1.3, 1.15, 0.7), 0.3 + 0.3 * gl)
+		# DIVE: submerged = dim, cool and faded into the murk (no hard water box)
+		if sub > 0.02:
+			mod = mod.lerp(mod * Color(0.42, 0.6, 0.58), sub * 0.85)
+			mod.a = 1.0 - sub * 0.64
 		if boss_flash > 0.0:
 			mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)
 		draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
-		# submersion: a translucent water sheet covers the part still under the surface
-		var sub: float = boss.sub
-		if sub > 0.02:
-			var top := gpos.y - gsz.y * 0.5
-			var cover: float = 0.22 + 0.62 * sub          # how much of him is underwater
-			var wl := top + gsz.y * (1.0 - cover)
-			draw_rect(Rect2(gpos.x - gsz.x * 0.55, wl, gsz.x * 1.1, VIEW.y - wl),
-				Color(0.07, 0.13, 0.16, 0.62))
-			for k in 6:                                    # a rippling surface line
-				var rx := gpos.x - gsz.x * 0.5 + gsz.x * (k / 5.0)
-				draw_circle(Vector2(rx, wl + sin(anim_t * 4.0 + k) * 2.0), 3.0, Color(0.5, 0.7, 0.66, 0.4))
+		# bubbles rising + surface wake while he lurks under the murk
+		if sub > 0.2:
+			for k in 7:
+				var bx: float = boss.x + sin(anim_t * 1.3 + k * 2.0) * gsz.x * 0.32
+				var by: float = gpos.y + gsz.y * 0.25 - fmod(anim_t * 46.0 + k * 34.0, gsz.y * 0.7)
+				draw_circle(Vector2(bx, by), 2.0 + float(k % 3), Color(0.62, 0.82, 0.76, 0.45 * sub))
+			for r in 2:
+				var rr := 34.0 + r * 24.0 + sin(anim_t * 3.0 + r) * 6.0
+				draw_arc(Vector2(boss.x, gpos.y + gsz.y * 0.1), rr, PI * 0.12, PI * 0.88, 18,
+					Color(0.5, 0.72, 0.66, 0.32 * sub), 3.0)
 		if stuck:
-			var by := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
+			var by2 := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
 			var c := Color(1, 0.9, 0.35)
-			draw_line(Vector2(boss.x - 16, by), Vector2(boss.x, by + 16), c, 5.0)
-			draw_line(Vector2(boss.x + 16, by), Vector2(boss.x, by + 16), c, 5.0)
-			_otext(Vector2(0, by - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
-		# SNAPZ speaks — a murky swamp-green bubble (not Gerald's creepy red)
-		if boss.say != "" and anim_t - boss.say_t < 1.9:
+			draw_line(Vector2(boss.x - 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
+			draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
+			_otext(Vector2(0, by2 - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		# SNAPZ speaks — CREEPY jittery text, but a sickly swamp-GREEN (not Gerald's red)
+		if boss.say != "" and anim_t - boss.say_t < 1.9 and sub < 0.5:
 			var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
-				Color(0.04, 0.10, 0.06, 0.95), Color(0.4, 0.7, 0.45, 0.95), 18, 1.0)
+				Color(0.03, 0.08, 0.04, 0.95), Color(0.35, 0.7, 0.4, 0.95), 18, 1.0, true,
+				Color(0.12, 0.42, 0.12), Color(0.45, 0.98, 0.4))
 	_draw_boss_pips()
 	if boss.phase == "enter":
 		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
@@ -3760,7 +3780,8 @@ func _log_biome_accents(l: Dictionary) -> void:
 		draw_line(Vector2(-hw * 0.8, hh * 0.3), Vector2(hw * 0.8, hh * 0.3), Color(0, 0, 0, 0.18), 2.0)
 
 # CREEPY text: each glyph jitters and jiggles in a sickly, pulsing red. for GERALD.
-func _creepy_text(center_x: float, baseline_y: float, text: String, size: int) -> void:
+func _creepy_text(center_x: float, baseline_y: float, text: String, size: int,
+		lo := Color(0.62, 0.0, 0.02), hi := Color(1.0, 0.16, 0.10)) -> void:
 	var total: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var x: float = center_x - total * 0.5
 	for i in text.length():
@@ -3768,9 +3789,9 @@ func _creepy_text(center_x: float, baseline_y: float, text: String, size: int) -
 		var jx := sin(anim_t * 19.0 + i * 1.7) * 1.7        # nervous twitch
 		var jy := cos(anim_t * 16.0 + i * 2.3) * 2.0
 		var bob := sin(anim_t * 7.0 + i * 0.9) * 0.5 + 0.5
-		var col := Color(0.62, 0.0, 0.02).lerp(Color(1.0, 0.16, 0.10), bob)
-		# a faint blood-shadow underneath for that spooky depth
-		draw_char(font, Vector2(x + jx + 1.0, baseline_y + jy + 1.0), ch, size, Color(0.15, 0, 0, 0.7))
+		var col := lo.lerp(hi, bob)
+		# a faint dark shadow underneath for that spooky depth
+		draw_char(font, Vector2(x + jx + 1.0, baseline_y + jy + 1.0), ch, size, Color(0.05, 0.02, 0.0, 0.7))
 		draw_char(font, Vector2(x + jx, baseline_y + jy), ch, size, col)
 		x += font.get_char_size(ch.unicode_at(0), size).x
 
@@ -3784,7 +3805,8 @@ func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 
 # A comic speech bubble sized to its line, with a little tail. `tail_dir`: +1 the
 # tail drops below the anchor (speaker is under the bubble), -1 it points up.
-func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0, creepy := false) -> void:
+func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0, creepy := false,
+		creep_lo := Color(0.62, 0.0, 0.02), creep_hi := Color(1.0, 0.16, 0.10)) -> void:
 	var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
 	var w: float = clampf(tw + 36.0, 110.0, VIEW.x - 36.0)
 	var h: float = fsz + 24.0
@@ -3802,7 +3824,7 @@ func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(cx - 9.0, ty), Vector2(cx + 19.0, ty), tip]), bg)
 	if creepy:
-		_creepy_text(cx, anchor.y + fsz * 0.34, text, fsz)
+		_creepy_text(cx, anchor.y + fsz * 0.34, text, fsz, creep_lo, creep_hi)
 	else:
 		var fg := Color(0.15, 0.12, 0.10) if bg.r > 0.5 else Color(1, 1, 1)
 		draw_string(font, Vector2(rc.position.x, anchor.y + fsz * 0.34), text,
