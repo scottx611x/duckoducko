@@ -211,6 +211,21 @@ var paused := false
 var in_shrine := false
 var shrine_boons: Array = []
 var shrine_open_t := -10.0
+var shrine_line := 0            # which sage line the elder is currently saying
+var shrine_line_t := 0.0       # when the current line started (for the talk flap)
+# the Ancient Duck holds forth. cryptic, kind, faintly unhinged.
+const ELDER_LINES := [
+	"ah. a duck of destiny.",
+	"the river remembers every hop.",
+	"bread is temporary. waddling is forever.",
+	"choose wisely, little one.",
+	"i too was a duckling, once.",
+	"beware the heron. but also... say hi.",
+	"i have seen a thousand rivers. this is one of them.",
+	"a blessing, for the road ahead.",
+	"quack, and the world quacks with you.",
+	"my beard holds many secrets. and snacks.",
+]
 const BOONS := [
 	{"id": "clutch",     "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
 	{"id": "preheat",    "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
@@ -240,6 +255,13 @@ var boss_hp_bonus := 0
 const BOSS_MARKS := [5000, 15000, 30000]   # feet
 var next_boss_idx := 0
 var bosses_cleared := 0     # lifetime: highest boss tier ever beaten (gates the shrine)
+# GERALD has opinions. he shares them mid-fight (pompous, petty, faintly British).
+const GERALD_TAUNTS := [
+	"this is MY river.", "you again?!", "insolent duckling.",
+	"i shall have you for brunch.", "FLEE, fowl!", "behold my majesty.",
+	"the bread was MINE.", "stand STILL.", "ahem. prepare to be plucked.",
+]
+const GERALD_STOMP_LINES := ["OW.", "RUDE!", "my BEAK!", "ow ow ow.", "how DARE you."]
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
 var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx, vy}
@@ -388,6 +410,7 @@ var tex_frog: Texture2D
 var tex_heron := []
 var tex_gerald := []            # GERALD THE IMMENSE boss frames
 var tex_elder: Texture2D        # the ancient bearded duck (shrine)
+var tex_elder_talk: Texture2D   # ...with his beak open, for talking
 var tex_items := {}
 var tex_water: Texture2D
 var tex_bank_l: Texture2D
@@ -427,6 +450,8 @@ func _ready() -> void:
 		tex_gerald = [load("res://art/gerald_0.png"), load("res://art/gerald_1.png"), load("res://art/gerald_2.png")]
 	if ResourceLoader.exists("res://art/elder.png"):
 		tex_elder = load("res://art/elder.png")
+	if ResourceLoader.exists("res://art/elder_talk.png"):
+		tex_elder_talk = load("res://art/elder_talk.png")
 	if ResourceLoader.exists("res://art/sadie_0.png"):
 		tex_sadie = [load("res://art/sadie_0.png"), load("res://art/sadie_1.png")]
 		tex_chuckit = load("res://art/chuckit.png")
@@ -940,6 +965,8 @@ func _open_shrine() -> void:
 	shrine_boons = BOONS.duplicate()
 	shrine_boons.shuffle()
 	shrine_boons = shrine_boons.slice(0, 3)
+	shrine_line = randi() % ELDER_LINES.size()
+	shrine_line_t = anim_t
 	score_label.visible = false
 	loft_bar.visible = false
 	_sfx("chime", 0.8)
@@ -2035,10 +2062,17 @@ func _start_boss() -> void:
 	if music_player != null:
 		music_player.volume_db = -16.0       # duck the music for the duel
 
+# GERALD pipes up — a quick speech-tinted float over his head, with a honk.
+func _gerald_say(line: String) -> void:
+	if boss == null:
+		return
+	_float_text(boss.x, boss.y - 70.0, line, Color(1.0, 0.85, 0.85))
+	_sfx("quack", randf_range(0.55, 0.7), -3.0)
+
 func _boss_leave() -> void:
 	boss.phase = "leave"
 	boss.t = 0.0
-	_flash("GERALD RETREATS")
+	_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3])
 	_sfx("quack", 0.5, 2.0)
 	# the spoils: a feather shower scaling with which Gerald you bested
 	var reward: int = 15 + 10 * int(boss.idx)
@@ -2068,6 +2102,7 @@ func _hit_boss(n: int) -> void:
 		boss.phase2 = true
 		boss.dive_gap *= 0.62
 		_flash("GERALD IS FURIOUS")
+		_gerald_say("NOW you've done it.")
 		_sfx("quack", 0.6, 1.0)
 	else:
 		_flash("HIT! %d left" % boss.hp)
@@ -2114,6 +2149,8 @@ func _boss_fight(delta: float) -> void:
 		if boss.dive_t <= 0.0:
 			boss.dive_stage = "tele"; boss.t = 0.0
 			boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+			if randf() < 0.5:                        # a little trash talk before he strikes
+				_gerald_say(GERALD_TAUNTS[randi() % GERALD_TAUNTS.size()])
 	elif boss.dive_stage == "tele":          # telegraph: the reticle locks onto the duck
 		boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / 0.6, 0.0, 1.0))
 		if boss.t >= 0.7:
@@ -2162,6 +2199,7 @@ func _boss_stomped() -> void:
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
 	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
+	_float_text(boss.x + 40.0, boss.y - 50.0, GERALD_STOMP_LINES[randi() % GERALD_STOMP_LINES.size()], Color(1, 0.8, 0.8))
 	_hit_boss(1)
 
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
@@ -2473,26 +2511,40 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 func _draw_shrine() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
 	var ot := anim_t - shrine_open_t
-	_otext(Vector2(0, 150), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
-	_otext(Vector2(0, 196), "offers you a blessing for the road", 19, Color(1, 1, 1, 0.7))
-	# the elder, a big golden-tinted hero duck bobbing above the choices
+	_otext(Vector2(0, 128), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	# he cycles through his sage musings; each new line restarts the beak-flap
+	const LINE_DUR := 4.0
+	if anim_t - shrine_line_t > LINE_DUR:
+		shrine_line = (shrine_line + 1) % ELDER_LINES.size()
+		shrine_line_t = anim_t
+	var line_age := anim_t - shrine_line_t
+	# the elder: bobs, drifts side to side and leans — very much alive
 	if has_art:
-		var ey := 270.0 + sin(anim_t * 1.6) * 6.0
-		var ec := Vector2(VIEW.x * 0.5, ey)
+		var drift := sin(anim_t * 0.9) * 26.0          # he can't hold still
+		var ey := 300.0 + sin(anim_t * 1.8) * 7.0
+		var ec := Vector2(VIEW.x * 0.5 + drift, ey)
 		# a soft halo of ancient wisdom
 		for g in 3:
-			draw_circle(ec, 70.0 + g * 14.0, Color(1.0, 0.92, 0.55, 0.05))
+			draw_circle(ec, 64.0 + g * 14.0, Color(1.0, 0.92, 0.55, 0.05))
 		# floating golden runes orbit the elder (pure whimsy)
 		for r in 5:
 			var ra := anim_t * 0.6 + r * TAU / 5.0
-			var rp := ec + Vector2(cos(ra) * 96.0, sin(ra * 1.3) * 34.0)
+			var rp := ec + Vector2(cos(ra) * 92.0, sin(ra * 1.3) * 32.0)
 			draw_circle(rp, 3.0, Color(1.0, 0.9, 0.5, 0.5 + 0.4 * sin(anim_t * 3.0 + r)))
-		if tex_elder != null:
-			_blit_centered(tex_elder, ec, 3.4)
+		# beak flaps while he's mid-sentence (first ~2.4s of each line)
+		var talking: bool = line_age < 2.4 and fmod(line_age, 0.34) < 0.17
+		var tex: Texture2D = tex_elder
+		if talking and tex_elder_talk != null:
+			tex = tex_elder_talk
+		var lean := sin(anim_t * 0.9 + 1.2) * 0.05      # a gentle sway as he drifts
+		if tex != null:
+			_blit_rot(tex, ec, 3.0, lean)
 		else:
 			var elder = ducks.get("golden", ducks["mallard"]).get("hero")
 			if elder != null:
 				_blit_modulated(elder, ec, 2.6, Color(1.0, 0.95, 0.7))
+		# his speech bubble (drawn last so it floats clearly over everything)
+		_elder_bubble(Vector2(VIEW.x * 0.5, 196.0), ELDER_LINES[shrine_line])
 	for i in shrine_boons.size():
 		var b: Dictionary = shrine_boons[i]
 		var rc := _shrine_rect(i)
@@ -3388,6 +3440,36 @@ func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 		return
 	var sz: Vector2 = tex.get_size() * scale
 	draw_texture_rect(tex, Rect2(pos - sz * 0.5, sz), false, mod)
+
+func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
+	if tex == null:
+		return
+	var sz: Vector2 = tex.get_size() * scale
+	draw_set_transform(pos, rot, Vector2.ONE)
+	draw_texture_rect(tex, Rect2(-sz * 0.5, sz), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# A little comic speech bubble for the Ancient Duck, sized to its line + a tail.
+func _elder_bubble(anchor: Vector2, text: String) -> void:
+	var fsz := 19
+	var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
+	var w: float = clampf(tw + 36.0, 120.0, VIEW.x - 40.0)
+	var h := 44.0
+	var rc := Rect2(anchor.x - w * 0.5, anchor.y - h * 0.5, w, h)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.98, 0.97, 0.92, 0.96)
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(1.0, 0.86, 0.4, 0.9)
+	draw_style_box(sb, rc)
+	# a little tail pointing down toward the elder below
+	var tip := Vector2(anchor.x + 10.0, rc.position.y + h + 14.0)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(anchor.x - 8.0, rc.position.y + h - 2.0),
+		Vector2(anchor.x + 18.0, rc.position.y + h - 2.0), tip]),
+		Color(0.98, 0.97, 0.92, 0.96))
+	draw_string(font, Vector2(rc.position.x, anchor.y + 6.5), text,
+		HORIZONTAL_ALIGNMENT_CENTER, w, fsz, Color(0.15, 0.12, 0.10))
 
 func _stat_bar(label: String, val, y: float) -> void:
 	var bx := VIEW.x * 0.5 - 90.0

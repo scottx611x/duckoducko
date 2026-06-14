@@ -643,9 +643,12 @@ def generate_ducks(art_dir):
         Vf = build(sp, "folded")
         for i, sl in enumerate(stack_slices(Vf, shade(Vf))):
             save(sl, "%s_stack_%02d.png" % (sp, i))
-    # THE ANCIENT DUCK: a golden elder with a flowing white beard, for the shrine
+    # THE ANCIENT DUCK: a golden elder with a flowing white beard, for the shrine.
+    # two frames so his beak flaps while he talks.
     elder = shade(build("golden", "folded", elder=True))
     save(render(elder, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=1.45), "elder.png")
+    elder_talk = shade(build("golden", "folded", beak_open=True, elder=True))
+    save(render(elder_talk, math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=1.45), "elder_talk.png")
     print("ducks generated ->", art_dir)
 
 
