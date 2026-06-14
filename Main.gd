@@ -157,14 +157,14 @@ const ITEM_DEFS := [
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
-	{"id": "jacket", "name": "DOWN JACKET", "desc": "start every run with a shield", "cost": 150},
-	{"id": "warmup", "name": "WARM-UP LAPS", "desc": "start every run with 40% LOFT", "cost": 100},
-	{"id": "earlybird", "name": "EARLY BIRD", "desc": "your first draft arrives at 200m", "cost": 120},
-	{"id": "egghead", "name": "EGG HEAD", "desc": "start every run with a duckling", "cost": 200},
-	{"id": "pockets", "name": "DEEP POCKETS", "desc": "feathers you bank count DOUBLE", "cost": 250},
-	{"id": "basket", "name": "BREAD BASKET", "desc": "snacks fall ~18% more often", "cost": 180},
-	{"id": "flyer", "name": "FREQUENT FLYER", "desc": "upgrade drafts arrive sooner", "cost": 160},
-	{"id": "thermal", "name": "THERMAL VENT", "desc": "a permanent +5% pace, every run", "cost": 220},
+	{"id": "jacket", "name": "DOWN JACKET", "desc": "start every run with a shield", "cost": 400},
+	{"id": "warmup", "name": "WARM-UP LAPS", "desc": "start every run with 40% LOFT", "cost": 280},
+	{"id": "earlybird", "name": "EARLY BIRD", "desc": "your first draft arrives at 200m", "cost": 320},
+	{"id": "egghead", "name": "EGG HEAD", "desc": "start every run with a duckling", "cost": 550},
+	{"id": "pockets", "name": "DEEP POCKETS", "desc": "feathers you bank count DOUBLE", "cost": 700},
+	{"id": "basket", "name": "BREAD BASKET", "desc": "snacks fall ~18% more often", "cost": 480},
+	{"id": "flyer", "name": "FREQUENT FLYER", "desc": "upgrade drafts arrive sooner", "cost": 440},
+	{"id": "thermal", "name": "THERMAL VENT", "desc": "a permanent +5% pace, every run", "cost": 600},
 ]
 const SHOP_ROW_H := 96.0
 const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mobile has no Esc)
@@ -183,17 +183,17 @@ const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 const ROSTER := [
 	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "trait": "the balanced drake", "cost": 0},
 	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "trait": "the clever hen", "cost": 0},
-	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "trait": "floaty show-off", "cost": 60},
-	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "trait": "tiny & twitchy", "cost": 120, "size": 0.85},
-	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "trait": "that bill? born with it", "cost": 160},
-	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "trait": "the best steerer", "cost": 200},
-	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "trait": "the crested diver", "cost": 280},
-	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "trait": "blue bill. stiff tail. zero fear.", "cost": 350},
-	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "trait": "the redhead racer", "cost": 450},
-	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "trait": "painted by the river itself", "cost": 550},
-	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 700},
-	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "trait": "squeaks. the endgame flex.", "cost": 999, "size": 0.95},
-	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 1200},
+	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "trait": "floaty show-off", "cost": 140},
+	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "trait": "tiny & twitchy", "cost": 280, "size": 0.85},
+	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "trait": "that bill? born with it", "cost": 420},
+	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "trait": "the best steerer", "cost": 600},
+	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "trait": "the crested diver", "cost": 850},
+	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "trait": "blue bill. stiff tail. zero fear.", "cost": 1150},
+	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "trait": "the redhead racer", "cost": 1500},
+	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "trait": "painted by the river itself", "cost": 2000},
+	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 2800},
+	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "trait": "squeaks. the endgame flex.", "cost": 4200, "size": 0.95},
+	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 6500},
 	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
 	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
 	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
@@ -239,6 +239,7 @@ var boss_hp_bonus := 0
 # by hopping his dive-shockwaves back at him.
 const BOSS_MARKS := [5000, 15000, 30000]   # feet
 var next_boss_idx := 0
+var bosses_cleared := 0     # lifetime: highest boss tier ever beaten (gates the shrine)
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
 var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx, vy}
@@ -655,6 +656,7 @@ func _load_save() -> void:
 		duck_name = cfg.get_value("save", "duck_name", "")
 		meta_owned = cfg.get_value("save", "meta", [])
 		last_species = cfg.get_value("save", "last_species", "mallard")
+		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
 		if not ducks.has(last_species):
 			last_species = "mallard"
 
@@ -666,6 +668,7 @@ func _save() -> void:
 	cfg.set_value("save", "duck_name", duck_name)
 	cfg.set_value("save", "meta", meta_owned)
 	cfg.set_value("save", "last_species", last_species)
+	cfg.set_value("save", "bosses_cleared", bosses_cleared)
 	cfg.save("user://save.cfg")
 
 func _meta(id: String) -> bool:
@@ -918,8 +921,18 @@ func start_game() -> void:
 	if _meta("warmup"):
 		loft = 0.4
 	name_edit.visible = false
-	# the ancient shrine greets you before the river does
-	_open_shrine()
+	# the ancient shrine only appears once you've bested your first Gerald
+	if bosses_cleared >= 1:
+		_open_shrine()
+	else:
+		_begin_run()
+
+# go straight to the river (no shrine): show the gameplay HUD and run
+func _begin_run() -> void:
+	in_shrine = false
+	fade = 0.0
+	score_label.visible = true
+	loft_bar.visible = true
 
 func _open_shrine() -> void:
 	in_shrine = true
@@ -1482,7 +1495,10 @@ func _on_press(pos: Vector2) -> void:
 			if _meta("egghead"): ducklings_n = 1
 			if _meta("earlybird"): next_draft = 2000.0
 			if _meta("warmup"): loft = 0.4
-			_open_shrine()
+			if bosses_cleared >= 1:
+				_open_shrine()
+			else:
+				_begin_run()
 		return
 	if paused:                                     # paused: only the overlay buttons live
 		if PAUSE_RESUME_BTN.has_point(pos):
@@ -2041,6 +2057,9 @@ func _hit_boss(n: int) -> void:
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
 	if boss.hp <= 0:
 		next_boss_idx += 1
+		if next_boss_idx > bosses_cleared:
+			bosses_cleared = next_boss_idx          # lifetime progress: unlocks the shrine
+			_save()
 		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
