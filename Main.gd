@@ -144,6 +144,14 @@ const THEMES := [
 	{"name": "City Fountain", "tint": Color(0.82, 0.98, 1.08)},
 	{"name": "Aurora Lake",   "tint": Color(0.52, 0.62, 0.98)},
 ]
+# each biome weathers its driftwood differently — bog logs are mossy & dead, etc.
+const LOG_TINT := [
+	Color(1.00, 1.00, 1.00),   # Lazy Pond — fresh natural driftwood
+	Color(1.08, 0.97, 0.74),   # Park Picnic — sun-bleached, warm
+	Color(0.60, 0.72, 0.52),   # Spooky Bog — mossy, sickly, dead
+	Color(0.80, 0.86, 0.92),   # City Fountain — cold, grey, waterlogged
+	Color(0.80, 0.88, 1.08),   # Aurora Lake — frost-rimed, icy blue
+]
 
 # collectibles: score (adds to distance) + loft fill + spawn weight
 const ITEM_DEFS := [
@@ -226,6 +234,77 @@ const ELDER_LINES := [
 	"quack, and the world quacks with you.",
 	"my beard holds many secrets. and snacks.",
 ]
+# what each duck says — personality per species (pause screen + duck-select).
+const DUCK_LINES := {
+	"mallard": ["just catching my breath.", "the river waits.", "ten more feet. promise.",
+		"balanced. like my diet of bread.", "a classic never goes out of style.",
+		"green head, big heart.", "everyduck's favorite. it's fine.", "i quack, therefore i am.",
+		"the original. accept no substitutes.", "let's get back out there, yeah?"],
+	"hen": ["i'm thinking. give me a sec.", "strategy is everything.",
+		"the clever one always wins.", "underestimate me. please.", "mother knows the river best.",
+		"camouflage is a power move.", "subtle. deadly. brown.", "i raised twelve. i can dodge a log.",
+		"brains over plumage.", "patience, then pounce."],
+	"wood": ["do i look good? i look good.", "floatiest in the biz.",
+		"these colors? all natural.", "hang time is a lifestyle.", "show-off? i prefer 'icon'.",
+		"i nest in TREES. casually.", "iridescence is a full-time job.", "the prettiest in the pond. sorry.",
+		"float like a leaf, look like a king.", "yes, you may take a photo."],
+	"bufflehead": ["small duck, big dreams.", "zoom resumes shortly.",
+		"tiny hitbox, huge ego.", "blink and you'll miss me.", "twitchy? i call it caffeinated.",
+		"fun-sized and fearless.", "i fit in the small gaps.", "espresso shot with wings.",
+		"little duck, BIG energy.", "catch me if you can. you can't."],
+	"shoveler": ["this bill? born with it.", "just scooping a breather.",
+		"i filter-feed AND vibe.", "the bill does the talking.", "wide load coming through.",
+		"yes it's a big spoon. it's useful.", "i strain water for FUN.", "the bill is the brand.",
+		"function AND fashion.", "scoop scoop, baby."],
+	"pintail": ["precision takes patience.", "i could steer this asleep.",
+		"grace is my whole thing.", "the best turner in the marsh.", "elegant. always.",
+		"that tail? aerodynamic.", "i thread needles for sport.", "smooth operator, long tail.",
+		"poise is a skill. i have it.", "watch how i corner."],
+	"hoodie": ["fabulous, even paused.", "the crest stays UP.",
+		"hood up, worries down.", "a merganser of taste.", "dramatic? maybe a little.",
+		"the hood is a statement.", "i dive AND i serve looks.", "crest deployed. attention received.",
+		"merganser excellence.", "yes, it folds. yes, it's incredible."],
+	"ruddy": ["blue bill, zero fear. brief nap.", "stiff tail, loose vibes.",
+		"i fear nothing. except cats.", "that's a BLUE bill, thank you.", "small and unbothered.",
+		"tail up, attitude up.", "stiff-tailed and stubborn.", "the blue bill earns respect.",
+		"compact and chaotic.", "nap's over. let's brawl."],
+	"canvasback": ["pit stop. then i race.", "redheads run fast.",
+		"i am basically aerodynamic.", "the river is my speedway.", "vroom. but make it duck.",
+		"the sloped head? pure speed.", "fastest waterfowl alive. probably.", "redhead, leadfoot.",
+		"i don't paddle, i launch.", "green light's coming."],
+	"harlequin": ["painted, poised, paused.", "the river made me.",
+		"a living watercolor.", "every feather, on purpose.", "art that floats.",
+		"i match the rapids on purpose.", "a masterpiece, briefly idle.", "painted by the current itself.",
+		"beauty AND whitewater cred.", "the river's own brushwork."],
+	"eider": ["royalty rests when it pleases.", "a king naps gloriously.",
+		"bow when ready.", "the largest, and humble about it.", "my eiderdown is unmatched.",
+		"the crown is metaphorical. mostly.", "sea duck. big deal. literally.", "warmest feathers in the realm.",
+		"a king does not hurry.", "you may resume my reign now."],
+	"rubberduck": ["squeak. (that means hi.)", "i float, therefore i am.",
+		"SQUEAK.", "bathtime is every time.", "the endgame flex, resting.",
+		"i am 100% buoyant. flawless.", "no bones, no fear.", "squeak squeak. (deep stuff.)",
+		"the bath misses me.", "iconic. inflatable. immortal."],
+	"golden": ["not a myth. just resting.", "shine never pauses long.",
+		"legends get tired too.", "yes, real gold. don't touch.", "the rarest of birds.",
+		"i gleam. it's exhausting.", "a legend takes a knee. briefly.", "24 karat and counting.",
+		"you found me. lucky you.", "shine restored. let's fly."],
+	"disco": ["the boogie never stops. ok, briefly.", "stayin' alive. and paused.",
+		"this duck has MOVES.", "groove is in the heart. and the hop.", "neon never sleeps.",
+		"hit me with that bassline.", "every hop's a dance move.", "feel the funk, feathered one.",
+		"the floor misses me already.", "boogie reloading..."],
+	"shadow": ["...", "the dark waits with me.", "we will continue. soon.",
+		"you cannot see me. but i hop.", "born of a bested heron.",
+		"i move where the light won't.", "silence is also a feature.", "the void hops too.",
+		"earned, not bought.", "...let's."],
+}
+var pause_line := ""
+var _was_paused := false
+var select_line := ""           # the duck's current quip on the select screen
+var select_line_t := 0.0
+
+func _duck_quip(sp: String) -> String:
+	var lines: Array = DUCK_LINES.get(sp, ["...", "let's go.", "paused."])
+	return lines[randi() % lines.size()]
 # boon "tier" = how many bosses you must have bested for it to enter the shrine pool.
 # the elder always appears, but only offers richer blessings once you've earned them.
 const BOONS := [
@@ -779,6 +858,7 @@ func _dbg() -> void:
 	get_viewport().get_texture().get_image().save_png("/tmp/s_menu.png")
 	_open_select()
 	sel_index = 1                       # the Hen
+	select_line = _duck_quip("hen"); select_line_t = anim_t   # show its quip bubble
 	await get_tree().create_timer(0.5).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_select.png")
@@ -886,9 +966,16 @@ func _dbg() -> void:
 	boss.x = VIEW.x * 0.5
 	boss.y = BASE_Y + 18.0
 	boss_globs.append({"x": 150.0, "y": 300.0, "vx": -60.0, "vy": 180.0})  # one in flight to show
+	boss.say = "this is MY river."; boss.say_t = anim_t      # show his speech bubble
+	boss.dive_stage = ""; boss.y = 150.0                     # float pose so the bubble sits clean
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
+	# pause screen with the duck's quip
+	in_shrine = false; paused = true; pause_line = _duck_quip(species)
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_pause.png")
 	get_tree().quit()
 
 func _enter_menu() -> void:
@@ -1588,10 +1675,13 @@ func _select_press(pos: Vector2) -> void:
 		if _thumb_rect(i).has_point(pos):
 			if i != sel_index:
 				_sfx("click", 1.2)
+				select_line = ""                   # a new duck, a clean slate
 			sel_index = i                          # locked ducks can be previewed
 			return
-	if pos.y < 440.0 and _is_unlocked(sel_index):  # tap the turntable duck -> it quacks
+	if pos.y < 440.0 and _is_unlocked(sel_index):  # tap the turntable duck -> it quacks AND speaks
 		menu_quack_t = anim_t
+		select_line = _duck_quip(ROSTER[sel_index].species)
+		select_line_t = anim_t
 		if ROSTER[sel_index].species == "rubberduck":
 			_sfx("squeak", randf_range(0.95, 1.05))
 		else:
@@ -1748,11 +1838,19 @@ func die(msg: String) -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
+	# the duck speaks: a fresh quip each time you pause
+	if paused and not _was_paused:
+		pause_line = _duck_quip(species)
+	_was_paused = paused
 	if in_menu:
 		menu_spin += menu_spin_vel * delta
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
 	if in_select:
 		select_yaw += delta * 0.7
+		# the duck chatters on its own — a fresh quip every few seconds (no tap needed)
+		if select_line == "" or anim_t - select_line_t > 3.8:
+			select_line = _duck_quip(ROSTER[sel_index].species)
+			select_line_t = anim_t
 	if not in_menu and not in_select and not in_shop and not in_shrine and alive and not drafting and not paused:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
@@ -2045,6 +2143,7 @@ func _start_boss() -> void:
 		"dive_gap": 2.4 - 0.4 * idx,          # harder Geralds dive more often
 		"dive_t": 2.4 - 0.4 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
+		"say": "", "say_t": -10.0,
 	}
 	_flash("GERALD THE IMMENSE")
 	_sfx("mega", 0.45)
@@ -2052,11 +2151,12 @@ func _start_boss() -> void:
 	if music_player != null:
 		music_player.volume_db = -16.0       # duck the music for the duel
 
-# GERALD pipes up — a quick speech-tinted float over his head, with a honk.
+# GERALD pipes up — stores a line his draw routine renders as a speech bubble.
 func _gerald_say(line: String) -> void:
 	if boss == null:
 		return
-	_float_text(boss.x, boss.y - 70.0, line, Color(1.0, 0.85, 0.85))
+	boss.say = line
+	boss.say_t = anim_t
 	_sfx("quack", randf_range(0.55, 0.7), -3.0)
 
 func _boss_leave() -> void:
@@ -2195,7 +2295,7 @@ func _boss_stomped() -> void:
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
 	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
-	_float_text(boss.x + 40.0, boss.y - 50.0, GERALD_STOMP_LINES[randi() % GERALD_STOMP_LINES.size()], Color(1, 0.8, 0.8))
+	_gerald_say(GERALD_STOMP_LINES[randi() % GERALD_STOMP_LINES.size()])
 	_hit_boss(1)
 
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
@@ -2578,11 +2678,14 @@ func _draw_pause() -> void:
 	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), PAUSE_MENU_BTN)
 	_btn_label(PAUSE_MENU_BTN, "quit to menu", 22, Color(1, 1, 1, 0.8))
-	# the duck waits, bobbing, looking back at you
+	# the duck waits, bobbing, looking back at you — and says its piece
 	if has_art:
 		var hero = ducks[species].get("hero")
 		if hero != null:
 			_blit_centered(hero, Vector2(VIEW.x * 0.5, 200.0 + sin(anim_t * 2.0) * 8.0), 3.4)
+		if pause_line != "":
+			_speech_bubble(Vector2(VIEW.x * 0.5, 116.0), pause_line,
+				Color(0.98, 0.97, 0.92, 0.96), Color(0.5, 0.85, 1.0, 0.9), 18, 1.0)
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
@@ -2753,7 +2856,8 @@ func _draw() -> void:
 				draw_string(font, Vector2(-l.w * 0.5, 7), "↑", HORIZONTAL_ALIGNMENT_CENTER,
 					l.w, 22, Color(1, 1, 0.85, 0.6 + 0.4 * pulse))
 			else:
-				draw_texture_rect(tex_log, Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), false)
+				draw_texture_rect(tex_log, Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h), false, LOG_TINT[theme_idx])
+				_log_biome_accents(l)
 			if l.frog and not l.frog_gone:
 				var fz := tex_frog.get_size() * 2.0
 				var fhop: float = absf(sin(anim_t * 3.0 + l.phase)) * 4.0
@@ -3045,6 +3149,14 @@ func _draw_boss_gerald() -> void:
 			for s in 3:
 				var sa := anim_t * 5.0 + s * TAU / 3.0
 				draw_circle(gpos + Vector2(cos(sa) * 34.0, -gsz.y * 0.36 + sin(sa) * 10.0), 4.0, Color(1, 1, 0.6, 0.9))
+		# GERALD's speech: a clear dark bubble near his head (kept on-screen)
+		if boss.say != "" and anim_t - boss.say_t < 1.9 and not tex_gerald.is_empty():
+			var s_above: bool = boss.y > 320.0        # he's low -> bubble above; high -> below
+			var s_gsz: Vector2 = tex_gerald[0].get_size() * 1.7
+			var s_by: float = boss.y - s_gsz.y * 0.5 - 24.0 if s_above else boss.y + s_gsz.y * 0.44 + 24.0
+			s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
+			_speech_bubble(Vector2(boss.x, s_by), boss.say,
+				Color(0.16, 0.04, 0.06, 0.95), Color(1.0, 0.45, 0.45, 0.95), 18, 1.0 if s_above else -1.0)
 	# title card during the entrance
 	if boss.phase == "enter":
 		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
@@ -3384,7 +3496,12 @@ func _draw_select() -> void:
 		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)
 		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, tint)
 		_otext(Vector2(0, 355.0), "??? SECRET ???" if is_secret else "LOCKED", 28, Color(1, 1, 1, 0.7))
-	_otext(Vector2(0, 432.0), "< drag to spin >", 17, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	# the duck chatters away on its own — its quip floats over its head
+	if unlocked and select_line != "":
+		_speech_bubble(Vector2(cx, 168.0), select_line,
+			Color(0.98, 0.97, 0.92, 0.96), Color(0.5, 0.85, 1.0, 0.9), 18, 1.0)
+	else:
+		_otext(Vector2(0, 432.0), "< drag to spin >", 16, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
 	# name + trait + stat bars (a locked secret hides its name and stats)
 	var show_secret: bool = is_secret and not unlocked
@@ -3441,6 +3558,30 @@ func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	var sz: Vector2 = tex.get_size() * scale
 	draw_texture_rect(tex, Rect2(pos - sz * 0.5, sz), false, mod)
 
+# biome dressing painted over a log (called inside the log's local transform).
+# placements are seeded off l.phase so each log's weathering stays put.
+func _log_biome_accents(l: Dictionary) -> void:
+	var hw: float = l.w * 0.5
+	var hh: float = l.h * 0.5
+	var seed: float = l.phase
+	if theme_idx == 2:                                  # Spooky Bog: moss + dead knots
+		for k in 5:
+			var mx := fposmod(sin(seed + k * 2.3) * 0.5 + 0.5, 1.0) * (hw * 1.7) - hw * 0.85
+			var my := sin(seed * 1.7 + k) * hh * 0.55
+			draw_circle(Vector2(mx, my), 2.2 + fposmod(k * 1.7, 2.0),
+				Color(0.32, 0.5, 0.26, 0.8))           # clumps of moss
+		draw_circle(Vector2(-hw * 0.4, hh * 0.1), 3.0, Color(0.12, 0.12, 0.10, 0.7))   # a dead knot
+		draw_circle(Vector2(hw * 0.5, -hh * 0.1), 2.4, Color(0.12, 0.12, 0.10, 0.6))
+	elif theme_idx == 4:                                # Aurora Lake: frost + an icy glint
+		for k in 4:
+			var fx := fposmod(cos(seed + k * 1.9) * 0.5 + 0.5, 1.0) * (hw * 1.7) - hw * 0.85
+			var fy := cos(seed * 1.3 + k) * hh * 0.5
+			draw_circle(Vector2(fx, fy), 1.8, Color(0.85, 0.95, 1.0, 0.7))
+		draw_line(Vector2(-hw * 0.7, -hh * 0.4), Vector2(hw * 0.7, -hh * 0.5),
+			Color(0.8, 0.92, 1.0, 0.5), 1.5)
+	elif theme_idx == 3:                                # City Fountain: dark waterline streaks
+		draw_line(Vector2(-hw * 0.8, hh * 0.3), Vector2(hw * 0.8, hh * 0.3), Color(0, 0, 0, 0.18), 2.0)
+
 func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 	if tex == null:
 		return
@@ -3449,27 +3590,31 @@ func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 	draw_texture_rect(tex, Rect2(-sz * 0.5, sz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-# A little comic speech bubble for the Ancient Duck, sized to its line + a tail.
-func _elder_bubble(anchor: Vector2, text: String) -> void:
-	var fsz := 19
+# A comic speech bubble sized to its line, with a little tail. `tail_dir`: +1 the
+# tail drops below the anchor (speaker is under the bubble), -1 it points up.
+func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0) -> void:
 	var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
-	var w: float = clampf(tw + 36.0, 120.0, VIEW.x - 40.0)
-	var h := 44.0
-	var rc := Rect2(anchor.x - w * 0.5, anchor.y - h * 0.5, w, h)
+	var w: float = clampf(tw + 36.0, 110.0, VIEW.x - 36.0)
+	var h: float = fsz + 24.0
+	# keep the bubble fully on-screen horizontally
+	var cx: float = clampf(anchor.x, w * 0.5 + 12.0, VIEW.x - w * 0.5 - 12.0)
+	var rc := Rect2(cx - w * 0.5, anchor.y - h * 0.5, w, h)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.98, 0.97, 0.92, 0.96)
+	sb.bg_color = bg
 	sb.set_corner_radius_all(14)
 	sb.set_border_width_all(2)
-	sb.border_color = Color(1.0, 0.86, 0.4, 0.9)
+	sb.border_color = border
 	draw_style_box(sb, rc)
-	# a little tail pointing down toward the elder below
-	var tip := Vector2(anchor.x + 10.0, rc.position.y + h + 14.0)
+	var ty: float = rc.position.y + h - 2.0 if tail_dir > 0.0 else rc.position.y + 2.0
+	var tip := Vector2(cx + 8.0, ty + 16.0 * tail_dir)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(anchor.x - 8.0, rc.position.y + h - 2.0),
-		Vector2(anchor.x + 18.0, rc.position.y + h - 2.0), tip]),
-		Color(0.98, 0.97, 0.92, 0.96))
-	draw_string(font, Vector2(rc.position.x, anchor.y + 6.5), text,
-		HORIZONTAL_ALIGNMENT_CENTER, w, fsz, Color(0.15, 0.12, 0.10))
+		Vector2(cx - 9.0, ty), Vector2(cx + 19.0, ty), tip]), bg)
+	var fg := Color(0.15, 0.12, 0.10) if bg.r > 0.5 else Color(1, 1, 1)
+	draw_string(font, Vector2(rc.position.x, anchor.y + fsz * 0.34), text,
+		HORIZONTAL_ALIGNMENT_CENTER, w, fsz, fg)
+
+func _elder_bubble(anchor: Vector2, text: String) -> void:
+	_speech_bubble(anchor, text, Color(0.98, 0.97, 0.92, 0.96), Color(1.0, 0.86, 0.4, 0.9))
 
 func _stat_bar(label: String, val, y: float) -> void:
 	var bx := VIEW.x * 0.5 - 90.0
