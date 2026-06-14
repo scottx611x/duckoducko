@@ -3158,7 +3158,7 @@ func _draw_boss_gerald() -> void:
 			var s_by: float = boss.y - s_gsz.y * 0.5 - 24.0 if s_above else boss.y + s_gsz.y * 0.44 + 24.0
 			s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
-				Color(0.16, 0.04, 0.06, 0.95), Color(1.0, 0.45, 0.45, 0.95), 18, 1.0 if s_above else -1.0)
+				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true)
 	# title card during the entrance
 	if boss.phase == "enter":
 		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
@@ -3589,6 +3589,21 @@ func _log_biome_accents(l: Dictionary) -> void:
 	elif theme_idx == 3:                                # City Fountain: dark waterline streaks
 		draw_line(Vector2(-hw * 0.8, hh * 0.3), Vector2(hw * 0.8, hh * 0.3), Color(0, 0, 0, 0.18), 2.0)
 
+# CREEPY text: each glyph jitters and jiggles in a sickly, pulsing red. for GERALD.
+func _creepy_text(center_x: float, baseline_y: float, text: String, size: int) -> void:
+	var total: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var x: float = center_x - total * 0.5
+	for i in text.length():
+		var ch := text[i]
+		var jx := sin(anim_t * 19.0 + i * 1.7) * 1.7        # nervous twitch
+		var jy := cos(anim_t * 16.0 + i * 2.3) * 2.0
+		var bob := sin(anim_t * 7.0 + i * 0.9) * 0.5 + 0.5
+		var col := Color(0.62, 0.0, 0.02).lerp(Color(1.0, 0.16, 0.10), bob)
+		# a faint blood-shadow underneath for that spooky depth
+		draw_char(font, Vector2(x + jx + 1.0, baseline_y + jy + 1.0), ch, size, Color(0.15, 0, 0, 0.7))
+		draw_char(font, Vector2(x + jx, baseline_y + jy), ch, size, col)
+		x += font.get_char_size(ch.unicode_at(0), size).x
+
 func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 	if tex == null:
 		return
@@ -3599,7 +3614,7 @@ func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 
 # A comic speech bubble sized to its line, with a little tail. `tail_dir`: +1 the
 # tail drops below the anchor (speaker is under the bubble), -1 it points up.
-func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0) -> void:
+func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0, creepy := false) -> void:
 	var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
 	var w: float = clampf(tw + 36.0, 110.0, VIEW.x - 36.0)
 	var h: float = fsz + 24.0
@@ -3616,9 +3631,12 @@ func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz
 	var tip := Vector2(cx + 8.0, ty + 16.0 * tail_dir)
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(cx - 9.0, ty), Vector2(cx + 19.0, ty), tip]), bg)
-	var fg := Color(0.15, 0.12, 0.10) if bg.r > 0.5 else Color(1, 1, 1)
-	draw_string(font, Vector2(rc.position.x, anchor.y + fsz * 0.34), text,
-		HORIZONTAL_ALIGNMENT_CENTER, w, fsz, fg)
+	if creepy:
+		_creepy_text(cx, anchor.y + fsz * 0.34, text, fsz)
+	else:
+		var fg := Color(0.15, 0.12, 0.10) if bg.r > 0.5 else Color(1, 1, 1)
+		draw_string(font, Vector2(rc.position.x, anchor.y + fsz * 0.34), text,
+			HORIZONTAL_ALIGNMENT_CENTER, w, fsz, fg)
 
 func _elder_bubble(anchor: Vector2, text: String) -> void:
 	_speech_bubble(anchor, text, Color(0.98, 0.97, 0.92, 0.96), Color(1.0, 0.86, 0.4, 0.9))

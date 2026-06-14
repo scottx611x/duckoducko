@@ -876,6 +876,63 @@ def build_sadie(frame=0):
     return V
 
 
+def build_snapz(frame=0):
+    """SNAPZ: a colossal snapping turtle boss. Domed mossy shell, thick neck, and a
+    hooked beak that gapes wider across frames (0 shut .. 2 a full CHOMP). Faces +z
+    toward the duck, same camera as Gerald."""
+    SHELL = (52, 66, 40); SHELLH = (78, 94, 56); SHELLD = (34, 44, 26)
+    SKIN = (80, 88, 70); SKIND = (56, 62, 50)
+    BEAK = (170, 156, 120); BEAKD = (132, 118, 88)
+    EYE = (224, 188, 44); PUP = (20, 18, 16); MOSS = (96, 150, 64)
+    CLAW = (158, 148, 122)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    gape = [0, 2, 4][frame]                                # how far the jaw drops
+    # ---- the great domed shell (sits back, flat-bottomed) ----
+    for x in range(-10, 11):
+        for y in range(-1, 9):
+            for z in range(-12, 4):
+                if (x / 9.0) ** 2 + (y / 6.5) ** 2 + ((z + 4) / 8.5) ** 2 <= 1.0:
+                    put(x, y, z, SHELL)
+    ellip(0, 4.0, -4, 7.2, 4.6, 6.6, SHELLH, only_empty=True)   # top sheen
+    # carapace scutes: a ridged grid of darker seams + a few bright moss clumps
+    for (x, y, z) in list(V.keys()):
+        if V[(x, y, z)] in (SHELL, SHELLH):
+            if (x + 20) % 4 == 0 or (z + 20) % 4 == 0:
+                V[(x, y, z)] = SHELLD
+            elif (x * 31 + z * 17) % 13 == 0 and y > 2:
+                V[(x, y, z)] = MOSS
+    # spiky back ridge (snappers are jagged)
+    for z in range(-9, 2, 2):
+        put(0, round(7.5 - (z + 9) * 0.05), z, SHELLD)
+        put(0, round(8.0 - (z + 9) * 0.05), z, SHELLH)
+    # ---- thick neck + blocky head, thrust forward ----
+    ellip(0, 1.4, 4, 3.2, 3.0, 3.0, SKIN)
+    ellip(0, 1.6, 7.5, 3.4, 3.0, 3.2, SKIN)
+    ellip(0, 3.0, 8.0, 2.2, 1.6, 2.2, SKIND, only_empty=True)   # crown shadow
+    # warty skin speckle
+    for (x, y, z) in list(V.keys()):
+        if V[(x, y, z)] == SKIN and (x * 13 + y * 7 + z * 5) % 9 == 0:
+            V[(x, y, z)] = SKIND
+    # ---- the beak: upper fixed, lower swings DOWN by `gape`, dark maw between ----
+    box(-2, 2, 1 + 1, 2 + 1, 9, 12, BEAK)                       # upper mandible
+    box(-1, 1, 2, 2, 12, 13, BEAKD)                            # hooked tip
+    box(-2, 2, -1 - gape, 0 - gape, 9, 12, BEAK)               # lower jaw (drops)
+    box(-1, 1, -1 - gape, -1 - gape, 12, 13, BEAKD)
+    if gape > 0:                                               # the open maw
+        box(-2, 2, -gape, 1, 9, 11, (40, 18, 20))
+    # ---- eyes: angry, set high on the head ----
+    for s in (1, -1):
+        put(2 * s, 3, 9, EYE); put(2 * s, 3, 10, EYE)
+        put(2 * s, 4, 9, PUP)
+    # ---- stubby clawed forelimbs poking out front ----
+    for s in (1, -1):
+        ellip(7 * s, -0.5, 2, 2.0, 1.8, 2.6, SKIN)
+        for c in range(3):
+            put(round((7 + c * 0.6) * s), -2, 5 + c, CLAW)
+    return V
+
+
 def make_chuckit():
     """Sadie's beloved ball: orange with the blue band (from the photo)."""
     from PIL import Image, ImageDraw
