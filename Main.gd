@@ -189,22 +189,22 @@ const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
 # the cost ladder is a power ladder: more feathers = objectively better duck
 const ROSTER := [
-	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "trait": "the balanced drake", "cost": 0},
-	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "trait": "the clever hen", "cost": 0},
-	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "trait": "floaty show-off", "cost": 140},
-	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "trait": "tiny & twitchy", "cost": 280, "size": 0.85},
-	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "trait": "that bill? born with it", "cost": 420},
-	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "trait": "the best steerer", "cost": 600},
-	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "trait": "the crested diver", "cost": 850},
-	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "trait": "blue bill. stiff tail. zero fear.", "cost": 1150},
-	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "trait": "the redhead racer", "cost": 1500},
-	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "trait": "painted by the river itself", "cost": 2000},
-	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "trait": "royalty, obviously", "cost": 2800},
-	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "trait": "squeaks. the endgame flex.", "cost": 4200, "size": 0.95},
-	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "trait": "not a myth after all", "cost": 6500},
+	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "pace": 0.5, "trait": "the balanced drake", "cost": 0},
+	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "pace": 0.5, "trait": "the clever hen", "cost": 0},
+	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "pace": 0.45, "trait": "floaty show-off", "cost": 140},
+	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "pace": 0.7, "trait": "tiny & twitchy", "cost": 280, "size": 0.85},
+	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "pace": 0.45, "trait": "that bill? born with it", "cost": 420},
+	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "pace": 0.6, "trait": "the best steerer", "cost": 600},
+	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "pace": 0.6, "trait": "the crested diver", "cost": 850},
+	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "pace": 0.55, "trait": "blue bill. stiff tail. zero fear.", "cost": 1150},
+	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "pace": 0.95, "trait": "the redhead racer", "cost": 1500},
+	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "pace": 0.7, "trait": "painted by the river itself", "cost": 2000},
+	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "pace": 0.5, "trait": "royalty, obviously", "cost": 2800},
+	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "pace": 0.6, "trait": "squeaks. the endgame flex.", "cost": 4200, "size": 0.95},
+	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "pace": 1.0, "trait": "not a myth after all", "cost": 6500},
 	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
-	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
-	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
+	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
+	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
 ]
 
 # ---- state -------------------------------------------------------------------
@@ -364,6 +364,7 @@ var laser_t := 0.0
 # per-duck gameplay multipliers, set from ROSTER stats in start_game
 var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
 var duck_steer_mul := 1.0       # scales steering responsiveness
+var duck_pace_mul := 1.0        # scales scroll/run speed (zippy vs stately)
 var duck_size_mul := 1.0        # bufflehead: smaller duck, smaller hitbox
 
 # whimsy hops: most hops get a little flourish; flashy spins are rarer treats (WHIMSY §1)
@@ -1023,6 +1024,7 @@ func start_game() -> void:
 		_save()
 	duck_hop_mul = 0.85 + 0.3 * r.hop      # 0.5 stat -> 1.0x
 	duck_steer_mul = 0.85 + 0.3 * r.steer
+	duck_pace_mul = 0.85 + 0.3 * r.get("pace", 0.5)
 	duck_size_mul = r.get("size", 1.0)
 	reset_game()
 	# permanent unlocks kick in at the waterline
@@ -1869,7 +1871,7 @@ func _process(delta: float) -> void:
 func _update_play(delta: float) -> void:
 	# speed climbs forever but flattens out — late game gets harder via drifting
 	# logs and hungrier herons, not raw scroll speed
-	speed = BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))
+	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) * duck_pace_mul
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
 	distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
 	idle_timer += delta
@@ -3508,8 +3510,9 @@ func _draw_select() -> void:
 	_otext(Vector2(0, 466.0), "? ? ?" if show_secret else duck.name, 34, Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	_otext(Vector2(0, 498.0), duck.trait, 20, Color(1, 0.85, 0.45, 0.85) if show_secret else Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	if not show_secret:
-		_stat_bar("HOP", duck.hop, 536.0)
-		_stat_bar("STEER", duck.steer, 572.0)
+		_stat_bar("HOP", duck.hop, 526.0)
+		_stat_bar("STEER", duck.steer, 560.0)
+		_stat_bar("PACE", duck.get("pace", 0.5), 594.0)
 
 	if unlocked:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
