@@ -343,6 +343,11 @@ const GERALD_TAUNTS := [
 	"the bread was MINE.", "stand STILL.", "ahem. prepare to be plucked.",
 ]
 const GERALD_STOMP_LINES := ["OW.", "RUDE!", "my BEAK!", "ow ow ow.", "how DARE you."]
+# SNAPZ is terse, ancient, and very bitey.
+const SNAPZ_TAUNTS := ["snap.", "come closer...", "i have waited.", "SNAP SNAP.",
+	"the deep is mine.", "tasty little duck.", "you cannot see me down here.",
+	"HEH HEH HEH.", "MWA HA HA HA.", "guh huh huh huh."]
+const SNAPZ_STOMP_LINES := ["HSSS!", "my shell!", "grrrk.", "you DARE?", "snap... ow."]
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
 var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx, vy}
@@ -491,6 +496,7 @@ var tex_log: Texture2D
 var tex_frog: Texture2D
 var tex_heron := []
 var tex_gerald := []            # GERALD THE IMMENSE boss frames
+var tex_snapz := []             # SNAPZ the snapping turtle boss frames
 var tex_elder: Texture2D        # the ancient bearded duck (shrine)
 var tex_elder_talk: Texture2D   # ...with his beak open, for talking
 var tex_items := {}
@@ -530,6 +536,8 @@ func _ready() -> void:
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
 	if ResourceLoader.exists("res://art/gerald_0.png"):
 		tex_gerald = [load("res://art/gerald_0.png"), load("res://art/gerald_1.png"), load("res://art/gerald_2.png")]
+	if ResourceLoader.exists("res://art/snapz_0.png"):
+		tex_snapz = [load("res://art/snapz_0.png"), load("res://art/snapz_1.png"), load("res://art/snapz_2.png")]
 	if ResourceLoader.exists("res://art/elder.png"):
 		tex_elder = load("res://art/elder.png")
 	if ResourceLoader.exists("res://art/elder_talk.png"):
@@ -603,7 +611,7 @@ func _ready() -> void:
 	hud.add_child(loft_bar)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -972,7 +980,19 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
+	# SNAPZ the turtle, mid-fight, jaws STUCK out (the vulnerable window)
+	boss = null
+	next_boss_idx = 1
+	_start_boss()
+	boss.phase = "fight"; boss.dive_stage = "stuck"; boss.daze_t = 1.0
+	boss.stomped = false; boss.sub = 0.0
+	boss.x = VIEW.x * 0.5; boss.y = BASE_Y - 18.0
+	boss.say = "MWA HA HA HA."; boss.say_t = anim_t
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_snapz.png")
 	# pause screen with the duck's quip
+	boss = null
 	in_shrine = false; paused = true; pause_line = _duck_quip(species)
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
@@ -1873,7 +1893,8 @@ func _update_play(delta: float) -> void:
 	# logs and hungrier herons, not raw scroll speed
 	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) * duck_pace_mul
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
-	distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
+	if boss == null:                                    # distance freezes during a boss duel
+		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
 	idle_timer += delta
 
 	trail.append({"t": anim_t, "x": duck_x})
@@ -2138,16 +2159,23 @@ func _start_boss() -> void:
 	logs.clear()
 	boss_waves.clear()
 	boss_globs.clear()
+	var kind := "snapz" if idx == 1 else "gerald"   # the 15k-mark boss is the turtle
 	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
-		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false,
+		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false, "kind": kind,
 		"dive_gap": 2.4 - 0.4 * idx,          # harder Geralds dive more often
 		"dive_t": 2.4 - 0.4 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
-		"say": "", "say_t": -10.0,
+		"say": "", "say_t": -10.0, "sub": 0.0,
 	}
-	_flash("GERALD THE IMMENSE")
+	if kind == "snapz":
+		_flash("SNAPZ\nawakens.")
+		_sfx("laugh", 1.0)                    # a big guttural laugh from the deep
+		_sfx("splash_big", 0.35)
+		duck_shake = maxf(duck_shake, 0.6)
+	else:
+		_flash("GERALD THE IMMENSE")
 	_sfx("mega", 0.45)
 	_sfx("splash_big", 0.5)
 	if music_player != null:
@@ -2164,7 +2192,10 @@ func _gerald_say(line: String) -> void:
 func _boss_leave() -> void:
 	boss.phase = "leave"
 	boss.t = 0.0
-	_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3])
+	if boss.kind == "snapz":
+		_flash(["SNAPZ SINKS AWAY", "SNAPZ RETREATS\nTO THE DEEP"][randi() % 2])
+	else:
+		_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3])
 	_sfx("quack", 0.5, 2.0)
 	# the spoils: a feather shower scaling with which Gerald you bested
 	var reward: int = 15 + 10 * int(boss.idx)
@@ -2179,6 +2210,11 @@ func _boss_leave() -> void:
 
 func _hit_boss(n: int) -> void:
 	if boss == null or boss.phase != "fight":
+		return
+	# SNAPZ is armored: shrug off everything unless his jaws are STUCK out (post-snap)
+	if boss.kind == "snapz" and boss.dive_stage != "stuck":
+		_float_text(boss.x, boss.y - 40.0, "CLANG!", Color(0.7, 0.75, 0.7))
+		_sfx("bonk", 0.7, -4.0)
 		return
 	boss.hp -= n
 	boss_flash = 0.35
@@ -2219,11 +2255,18 @@ func _update_boss(delta: float) -> void:
 
 	match boss.phase:
 		"enter":
-			boss.y = lerpf(-160.0, 150.0, clampf(boss.t / 1.6, 0.0, 1.0))
+			if boss.kind == "snapz":
+				boss.sub = 1.0          # rises from the deep, not the sky
+				boss.y = lerpf(BASE_Y + 200.0, BASE_Y + 46.0, clampf(boss.t / 1.6, 0.0, 1.0))
+			else:
+				boss.y = lerpf(-160.0, 150.0, clampf(boss.t / 1.6, 0.0, 1.0))
 			if boss.t >= 1.7:
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
 		"fight":
-			_boss_fight(delta)
+			if boss.kind == "snapz":
+				_snapz_fight(delta)
+			else:
+				_boss_fight(delta)
 		"leave":
 			boss.y -= 360.0 * delta
 			if boss.y < -180.0:
@@ -2285,6 +2328,61 @@ func _boss_fight(delta: float) -> void:
 		if boss.t >= rise:
 			boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
 
+# SNAPZ loop: LURK submerged (armored) -> surface WARN -> SNAP lunge -> sit STUCK
+# (the only vulnerable window) -> sink back under. Differs from Gerald: he's
+# invulnerable until you bait a snap and punish the open jaws.
+func _snapz_fight(delta: float) -> void:
+	match boss.dive_stage:
+		"":   # LURK: glide under the surface toward the duck, mostly submerged
+			boss.sub = move_toward(boss.sub, 1.0, delta * 2.0)
+			boss.y = BASE_Y + 46.0
+			boss.x = move_toward(boss.x, clampf(duck_x, BANK_W + 40.0, VIEW.x - BANK_W - 40.0), 120.0 * delta)
+			boss.dive_t -= delta
+			if boss.dive_t <= 0.0:
+				boss.dive_stage = "warn"; boss.t = 0.0
+				boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+				if randf() < 0.6:
+					var line: String = SNAPZ_TAUNTS[randi() % SNAPZ_TAUNTS.size()]
+					boss.say = line; boss.say_t = anim_t
+					if "HA" in line or "HEH" in line or "huh" in line or randf() < 0.3:
+						_sfx("laugh", randf_range(0.92, 1.08))   # the guttural cackle
+					else:
+						_sfx("quack", randf_range(0.45, 0.6), -2.0)
+		"warn":   # churning-water telegraph at the strike point
+			boss.x = boss.dive_x
+			if boss.t >= 0.72:
+				boss.dive_stage = "snap"; boss.t = 0.0
+				_sfx("fwoosh", 0.5)
+		"snap":   # LUNGE up out of the water, jaws gaping
+			var p := clampf(boss.t / 0.16, 0.0, 1.0)
+			boss.sub = move_toward(boss.sub, 0.0, delta * 7.0)
+			boss.x = boss.dive_x
+			boss.y = lerpf(BASE_Y + 46.0, BASE_Y - 34.0, p)
+			if p >= 1.0:
+				boss.dive_stage = "stuck"; boss.t = 0.0
+				boss.daze_t = 1.5 - 0.12 * boss.idx
+				boss.stomped = false
+				boss_waves.append({"x": boss.dive_x, "r": 18.0})
+				ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
+				_sfx("crunch", 0.85); _sfx("splash_big", 0.7)
+				duck_shake = maxf(duck_shake, 0.45)
+				if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+					boss.hit_cool = 1.0
+					_boss_hits_player()
+		"stuck":   # jaws agape, head out — VULNERABLE: hop on his skull
+			boss.y = BASE_Y - 18.0 + sin(anim_t * 3.0) * 3.0
+			boss.daze_t -= delta
+			if not boss.stomped and is_airborne() and hop_height() < 0.55 \
+					and absf(duck_x - boss.x) < 74.0:
+				_boss_stomped()
+			if boss.daze_t <= 0.0:
+				boss.dive_stage = "dive"; boss.t = 0.0
+		"dive":   # sink back under to lurk again
+			boss.sub = move_toward(boss.sub, 1.0, delta * 3.0)
+			boss.y = lerpf(BASE_Y - 18.0, BASE_Y + 46.0, clampf(boss.t / 0.4, 0.0, 1.0))
+			if boss.t >= (0.3 if boss.stomped else 0.42):
+				boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+
 # STOMP! the payoff: bounce off his skull for a damage tick + a big juicy pop.
 func _boss_stomped() -> void:
 	boss.stomped = true
@@ -2297,7 +2395,8 @@ func _boss_stomped() -> void:
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
 	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
-	_gerald_say(GERALD_STOMP_LINES[randi() % GERALD_STOMP_LINES.size()])
+	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else GERALD_STOMP_LINES
+	_gerald_say(lines[randi() % lines.size()])
 	_hit_boss(1)
 
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
@@ -2966,7 +3065,10 @@ func _draw() -> void:
 	_draw_ducklings()
 	_draw_duck()
 	if boss != null:
-		_draw_boss_gerald()          # Gerald himself, over the duck (a dive comes down ON you)
+		if boss.kind == "snapz":
+			_draw_boss_snapz()       # the turtle lunging up from the water
+		else:
+			_draw_boss_gerald()      # Gerald himself, over the duck (a dive comes down ON you)
 	_draw_atmosphere()
 
 	# the in-run menu escape hatch + pause button (translucent, corner, ignorable)
@@ -3106,6 +3208,15 @@ func _draw_boss_ground() -> void:
 		draw_arc(Vector2(boss.dive_x, BASE_Y), rr, 0, TAU, 28, col, 3.0)
 		draw_line(Vector2(boss.dive_x, BASE_Y - rr), Vector2(boss.dive_x, BASE_Y + rr), col, 2.0)
 		draw_line(Vector2(boss.dive_x - rr, BASE_Y), Vector2(boss.dive_x + rr, BASE_Y), col, 2.0)
+	# SNAPZ surfacing telegraph: churning, bubbling water where the jaws will erupt
+	if boss.dive_stage == "warn":
+		var tp := clampf(boss.t / 0.72, 0.0, 1.0)
+		var col := Color(0.45, 0.7, 0.5, 0.4 + 0.45 * tp)
+		draw_arc(Vector2(boss.dive_x, BASE_Y), lerpf(64.0, 26.0, tp), 0, TAU, 28, col, 3.0)
+		for b in 7:
+			var ba := anim_t * 4.5 + b * 1.4
+			draw_circle(Vector2(boss.dive_x + cos(ba) * 24.0, BASE_Y + sin(ba * 1.3) * 11.0),
+				2.0 + float(b % 3), Color(0.62, 0.82, 0.66, 0.5))
 	# slam splash rings expanding outward (cosmetic)
 	for w in boss_waves:
 		var a: float = clampf(1.0 - w.r / (VIEW.x * 0.7), 0.0, 1.0)
@@ -3166,6 +3277,65 @@ func _draw_boss_gerald() -> void:
 		_otext(Vector2(0, 296), ["he remembers you.", "round two.", "the final heron."][boss.idx],
 			20, Color(1, 1, 1, 0.8 * ta))
 	# HP pips, top center — width adapts so a long health bar never clips off-screen
+	var pips: int = boss.max_hp
+	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
+	var pr: float = clampf(pw * 0.37, 5.0, 11.0)
+	var x0 := VIEW.x * 0.5 - pips * pw * 0.5
+	for i in pips:
+		var filled: bool = i < boss.hp
+		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr,
+			Color(0.9, 0.2, 0.18) if filled else Color(0.3, 0.3, 0.36, 0.6))
+		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
+
+# SNAPZ: the snapping turtle lunging from the water, with a submersion overlay.
+func _draw_boss_snapz() -> void:
+	var gpos := Vector2(boss.x, boss.y)
+	if not tex_snapz.is_empty():
+		var fr := 0
+		match boss.dive_stage:
+			"warn", "dive": fr = 1
+			"snap", "stuck": fr = 2
+		var gt: Texture2D = tex_snapz[fr]
+		var gsz := gt.get_size() * 3.1          # COLOSSAL — he dwarfs the duck
+		var stuck: bool = boss.dive_stage == "stuck" and not boss.stomped
+		var mod := Color(1, 1, 1)
+		if stuck:
+			var gl := 0.5 + 0.5 * sin(anim_t * 9.0)
+			draw_circle(gpos, gsz.x * 0.4, Color(1.0, 0.85, 0.3, 0.12 + 0.12 * gl))
+			mod = Color(1, 1, 1).lerp(Color(1.3, 1.15, 0.7), 0.3 + 0.3 * gl)
+		if boss_flash > 0.0:
+			mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)
+		draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+		# submersion: a translucent water sheet covers the part still under the surface
+		var sub: float = boss.sub
+		if sub > 0.02:
+			var top := gpos.y - gsz.y * 0.5
+			var cover: float = 0.22 + 0.62 * sub          # how much of him is underwater
+			var wl := top + gsz.y * (1.0 - cover)
+			draw_rect(Rect2(gpos.x - gsz.x * 0.55, wl, gsz.x * 1.1, VIEW.y - wl),
+				Color(0.07, 0.13, 0.16, 0.62))
+			for k in 6:                                    # a rippling surface line
+				var rx := gpos.x - gsz.x * 0.5 + gsz.x * (k / 5.0)
+				draw_circle(Vector2(rx, wl + sin(anim_t * 4.0 + k) * 2.0), 3.0, Color(0.5, 0.7, 0.66, 0.4))
+		if stuck:
+			var by := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
+			var c := Color(1, 0.9, 0.35)
+			draw_line(Vector2(boss.x - 16, by), Vector2(boss.x, by + 16), c, 5.0)
+			draw_line(Vector2(boss.x + 16, by), Vector2(boss.x, by + 16), c, 5.0)
+			_otext(Vector2(0, by - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		# SNAPZ speaks — a murky swamp-green bubble (not Gerald's creepy red)
+		if boss.say != "" and anim_t - boss.say_t < 1.9:
+			var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 92.0, BASE_Y - 60.0)
+			_speech_bubble(Vector2(boss.x, s_by), boss.say,
+				Color(0.04, 0.10, 0.06, 0.95), Color(0.4, 0.7, 0.45, 0.95), 18, 1.0)
+	_draw_boss_pips()
+	if boss.phase == "enter":
+		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
+		_otext(Vector2(0, 250), "SNAPZ", 48, Color(0.5, 0.8, 0.4, ta), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+		_otext(Vector2(0, 300), "something stirs in the deep...", 20, Color(1, 1, 1, 0.8 * ta))
+
+# shared boss health pips, top-center
+func _draw_boss_pips() -> void:
 	var pips: int = boss.max_hp
 	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
 	var pr: float = clampf(pw * 0.37, 5.0, 11.0)

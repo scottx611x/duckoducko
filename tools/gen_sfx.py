@@ -274,6 +274,31 @@ def squeak():
     return out
 
 
+def gutlaugh():
+    """SNAPZ's big guttural villain laugh: HUH-HUH-HUH-HUHHH, low, rough and gleeful."""
+    bursts = [(0.00, 132, 0.13), (0.18, 120, 0.13), (0.36, 110, 0.14), (0.54, 98, 0.34)]
+    dur = 1.0
+    out = [0.0] * n_samples(dur)
+    for (start, f0, blen) in bursts:
+        for i in range(n_samples(blen)):
+            t = i / SR
+            f = f0 * (1.0 - 0.08 * (t / blen))               # each HUH sags downward
+            ph = TAU * f * t
+            s = 0.0
+            for k in range(1, 9):                            # rough sawtooth voice
+                s += math.sin(k * ph) / k
+            s *= 0.5
+            s += 0.18 * random.uniform(-1, 1)                # throat gravel
+            s *= 0.6 + 0.4 * math.sin(TAU * 22.0 * t)        # guttural AM warble
+            idx = int((start + t) * SR)
+            if idx < len(out):
+                out[idx] += s * env(t, blen, 0.01, 1.6) * 0.5
+    for i in range(len(out)):                                # a low sub-rumble underneath
+        t = i / SR
+        out[i] += math.sin(TAU * 55.0 * t) * 0.18 * max(0.0, 1.0 - t / dur)
+    return out
+
+
 def click():
     """UI tick."""
     dur = 0.05
@@ -301,4 +326,5 @@ if __name__ == "__main__":
     save("ribbit.wav", ribbit())
     save("fwoosh.wav", fwoosh())
     save("squeak.wav", squeak())
+    save("laugh.wav", gutlaugh())
     print("done.")

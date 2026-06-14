@@ -877,59 +877,108 @@ def build_sadie(frame=0):
 
 
 def build_snapz(frame=0):
-    """SNAPZ: a colossal snapping turtle boss. Domed mossy shell, thick neck, and a
-    hooked beak that gapes wider across frames (0 shut .. 2 a full CHOMP). Faces +z
-    toward the duck, same camera as Gerald."""
-    SHELL = (52, 66, 40); SHELLH = (78, 94, 56); SHELLD = (34, 44, 26)
-    SKIN = (80, 88, 70); SKIND = (56, 62, 50)
-    BEAK = (170, 156, 120); BEAKD = (132, 118, 88)
-    EYE = (224, 188, 44); PUP = (20, 18, 16); MOSS = (96, 150, 64)
-    CLAW = (158, 148, 122)
+    """SNAPZ: the COLOSSAL snapping-turtle boss — high-density voxels for a big,
+    detailed, menacing presence. Earthy mud-brown, a keeled scuted carapace, a heavy
+    wrinkled tuberculed neck, huge amber eyes under a bony brow, and a great hooked
+    beak that gapes wider per frame (0 shut .. 2 a full chomp). Faces +z."""
+    SHELL = (64, 62, 52); SHELLH = (96, 92, 76); SHELLD = (42, 40, 32); SHELLM = (80, 76, 62)
+    SKIN = (92, 82, 64); SKIND = (60, 52, 40); SKINH = (120, 108, 84); SKINM = (104, 93, 72)
+    BEAK = (78, 68, 52); BEAKE = (132, 116, 86); BEAKD = (52, 44, 34); MAW = (64, 26, 28)
+    EYE = (176, 148, 84); EYEH = (224, 200, 124); PUP = (20, 18, 14); BROW = (46, 40, 30)
+    TUBR = (128, 114, 88); MUD = (142, 130, 106); ALGAE = (78, 94, 56)
+    CLAW = (170, 158, 128); CLAWD = (118, 108, 86)
     V = {}
     put, ellip, box = _vox_helpers(V)
-    gape = [0, 2, 4][frame]                                # how far the jaw drops
-    # ---- the great domed shell (sits back, flat-bottomed) ----
-    for x in range(-10, 11):
-        for y in range(-1, 9):
-            for z in range(-12, 4):
-                if (x / 9.0) ** 2 + (y / 6.5) ** 2 + ((z + 4) / 8.5) ** 2 <= 1.0:
+    gape = [0, 4, 9][frame]                                # how far the lower jaw drops
+
+    # ---- carapace: a long low dome, pushed back so the head dominates ----
+    for x in range(-20, 21):
+        for y in range(-2, 15):
+            for z in range(-33, 2):
+                if (x / 17.5) ** 2 + (y / 8.4) ** 2 + ((z + 15) / 16.5) ** 2 <= 1.0:
                     put(x, y, z, SHELL)
-    ellip(0, 4.0, -4, 7.2, 4.6, 6.6, SHELLH, only_empty=True)   # top sheen
-    # carapace scutes: a ridged grid of darker seams + a few bright moss clumps
+    ellip(0, 6.0, -15, 13.5, 6.2, 12.5, SHELLH, only_empty=True)   # broad top light
+    # scutes: a fine seam grid + raised plate centers + sparse mud / muted algae
     for (x, y, z) in list(V.keys()):
         if V[(x, y, z)] in (SHELL, SHELLH):
-            if (x + 20) % 4 == 0 or (z + 20) % 4 == 0:
-                V[(x, y, z)] = SHELLD
-            elif (x * 31 + z * 17) % 13 == 0 and y > 2:
-                V[(x, y, z)] = MOSS
-    # spiky back ridge (snappers are jagged)
-    for z in range(-9, 2, 2):
-        put(0, round(7.5 - (z + 9) * 0.05), z, SHELLD)
-        put(0, round(8.0 - (z + 9) * 0.05), z, SHELLH)
-    # ---- thick neck + blocky head, thrust forward ----
-    ellip(0, 1.4, 4, 3.2, 3.0, 3.0, SKIN)
-    ellip(0, 1.6, 7.5, 3.4, 3.0, 3.2, SKIN)
-    ellip(0, 3.0, 8.0, 2.2, 1.6, 2.2, SKIND, only_empty=True)   # crown shadow
-    # warty skin speckle
+            sx = (x + 42) % 7; sz = (z + 42) % 7
+            if sx == 0 or sz == 0:
+                V[(x, y, z)] = SHELLD                      # seams between plates
+            elif sx in (3, 4) and sz in (3, 4) and y > 3:
+                V[(x, y, z)] = SHELLM                      # raised plate centers
+            elif (x * 17 + z * 29) % 29 == 0 and y > 7:
+                V[(x, y, z)] = MUD
+            elif (x * 31 + z * 13) % 41 == 0 and y > 5:
+                V[(x, y, z)] = ALGAE
+    # three keels: jagged raised spines for menace
+    for z in range(-30, -2):
+        yk = round(9.0 - (z + 30) * 0.02)
+        bump = 1 if (z % 4 == 0) else 0
+        for (sx, base) in ((0, yk), (8, yk - 2), (-8, yk - 2)):
+            put(sx, base + bump, z, SHELLD); put(sx, base + bump + 1, z, SHELLH)
+
+    # ---- neck: thick, wrinkled, thrust forward and UP ----
+    for i, z in enumerate(range(-4, 9)):
+        cy = 1.5 + i * 0.6
+        rad = 7.5 - i * 0.2
+        ellip(0, cy, z, rad, rad * 0.82, 1.9, SKIN)
+        if z % 2 == 0:                                     # accordion wrinkle rings
+            ellip(0, cy, z, rad, rad * 0.82, 0.8, SKIND)
+    # tubercles: dense rows of pointed warts along the neck
+    for z in range(-2, 9):
+        for sx in (7, -7, 5, -5, 3, -3):
+            if (z + sx) % 2 == 0:
+                put(sx, round(-2.5 + z * 0.3), z, TUBR)
+
+    # ---- the HUGE wedge head: rivals the shell, raised and forward ----
+    for i, z in enumerate(range(5, 27)):
+        t = i / 21.0
+        rx = 11.0 - 7.0 * t
+        ry = 8.0 - 4.6 * t
+        cy = 3.5 + t * 3.2
+        ellip(0, cy, z, rx, ry, 1.7, SKIN)
+    ellip(0, 9.5, 15, 6.5, 3.2, 5.5, SKINH, only_empty=True)     # lit crown
+    # pebbled, scaly skin detail over neck + head
     for (x, y, z) in list(V.keys()):
-        if V[(x, y, z)] == SKIN and (x * 13 + y * 7 + z * 5) % 9 == 0:
-            V[(x, y, z)] = SKIND
-    # ---- the beak: upper fixed, lower swings DOWN by `gape`, dark maw between ----
-    box(-2, 2, 1 + 1, 2 + 1, 9, 12, BEAK)                       # upper mandible
-    box(-1, 1, 2, 2, 12, 13, BEAKD)                            # hooked tip
-    box(-2, 2, -1 - gape, 0 - gape, 9, 12, BEAK)               # lower jaw (drops)
-    box(-1, 1, -1 - gape, -1 - gape, 12, 13, BEAKD)
-    if gape > 0:                                               # the open maw
-        box(-2, 2, -gape, 1, 9, 11, (40, 18, 20))
-    # ---- eyes: angry, set high on the head ----
+        if V[(x, y, z)] == SKIN:
+            h = (x * 13 + y * 7 + z * 5) % 9
+            if h == 0: V[(x, y, z)] = SKIND
+            elif h == 1: V[(x, y, z)] = SKINH
+            elif h == 2: V[(x, y, z)] = SKINM
+
+    # ---- the great HOOKED beak: layered, juts out and curls DOWN to a point ----
+    box(-5, 5, 5, 9, 23, 25, BEAK)                            # broad upper base
+    box(-4, 4, 4, 8, 25, 28, BEAK)                           # juts forward
+    box(-3, 3, 3, 6, 28, 30, BEAK)                           # narrows
+    box(-2, 2, 1, 4, 30, 31, BEAK)                           # the hook
+    for sx in range(-2, 3): put(sx, 0, 31, BEAKE)            # curled-down lit edge
+    put(0, -1, 31, BEAKD); put(1, -1, 30, BEAKD); put(-1, -1, 30, BEAKD)
+    box(-2, 2, 9, 9, 23, 27, (108, 94, 70))                  # nostril ridge
+    put(2, 10, 27, BROW); put(-2, 10, 27, BROW)             # nostrils
+    # lower jaw drops by gape; a dark maw opens between
+    box(-5, 5, 2 - gape, 5 - gape, 23, 29, BEAK)
+    box(-4, 4, 2 - gape, 3 - gape, 29, 31, BEAKD)
+    for sx in range(-2, 3): put(sx, 2 - gape, 31, BEAKE)
+    if gape > 0:
+        box(-5, 5, 4 - gape, 5, 22, 28, MAW)                # the gaping maw
+        box(-4, 4, 5 - gape, 4, 23, 26, (44, 16, 18))       # dark throat
+
+    # ---- huge menacing eyes: amber, forward-set, glinting under a heavy bony brow ----
     for s in (1, -1):
-        put(2 * s, 3, 9, EYE); put(2 * s, 3, 10, EYE)
-        put(2 * s, 4, 9, PUP)
-    # ---- stubby clawed forelimbs poking out front ----
+        for ez in range(18, 21):                            # heavy brow ridge
+            put(7 * s, 12, ez, BROW); put(7 * s, 13, ez, BROW); put(6 * s, 13, ez, BROW)
+        for ey in (10, 11):
+            for ez in (18, 19):
+                put(7 * s, ey, ez, EYE)
+        put(7 * s, 11, 18, EYEH)                            # glint
+        put(7 * s, 10, 20, PUP); put(7 * s, 11, 20, PUP)    # pupil glaring forward
+
+    # ---- stout clawed forelimbs poking out from under the shell ----
     for s in (1, -1):
-        ellip(7 * s, -0.5, 2, 2.0, 1.8, 2.6, SKIN)
-        for c in range(3):
-            put(round((7 + c * 0.6) * s), -2, 5 + c, CLAW)
+        ellip(15 * s, -0.5, -2, 4.2, 3.4, 5.0, SKIN)
+        for c in range(4):
+            put(round((15 + c * 0.9) * s), -3, 3 + c * 2, CLAW)
+            put(round((15 + c * 0.9) * s), -4, 3 + c * 2, CLAWD)
     return V
 
 
@@ -973,6 +1022,19 @@ def generate_critters(art_dir):
     for f in (0, 1, 2):
         save(render(shade(build_heron(f)), math.radians(0), math.radians(42), out=132, scale=2.7),
              "gerald_%d.png" % f)
+    # SNAPZ: the snapping-turtle boss — a big, detailed 3/4 PROFILE (head thrust
+    # forward, gaping maw) so he reads as a menacing snapper, not a bug from above.
+    # Crop all frames to a shared tight bbox so they stay aligned + frame the turtle.
+    snapz_imgs = [render(shade(build_snapz(f)), math.radians(24), math.radians(8), out=240, scale=2.2)
+                  for f in (0, 1, 2)]
+    bb = None
+    for im in snapz_imgs:
+        b = im.getbbox()
+        if b:
+            bb = b if bb is None else (min(bb[0], b[0]), min(bb[1], b[1]), max(bb[2], b[2]), max(bb[3], b[3]))
+    bb = (max(0, bb[0] - 4), max(0, bb[1] - 4), min(240, bb[2] + 4), min(240, bb[3] + 4))
+    for f, im in enumerate(snapz_imgs):
+        save(im.crop(bb), "snapz_%d.png" % f)
     # duckling: back view to match gameplay camera
     gy = math.radians(GAME_YAW)
     SHd = shade(build_duckling("folded"))
