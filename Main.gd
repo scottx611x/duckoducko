@@ -226,18 +226,20 @@ const ELDER_LINES := [
 	"quack, and the world quacks with you.",
 	"my beard holds many secrets. and snacks.",
 ]
+# boon "tier" = how many bosses you must have bested for it to enter the shrine pool.
+# the elder always appears, but only offers richer blessings once you've earned them.
 const BOONS := [
-	{"id": "clutch",     "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
-	{"id": "preheat",    "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
-	{"id": "goosedown",  "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
-	{"id": "tailwind",   "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
-	{"id": "lucky",      "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
-	{"id": "breadwinner","name": "BREADWINNER",   "desc": "every snack is worth +60% distance","deal": false},
-	{"id": "nestegg",    "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
-	{"id": "glasscannon","name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
-	{"id": "famine",     "name": "FAMINE FEAST",  "desc": "snacks give TRIPLE loft — but 40% fewer of them", "deal": true},
-	{"id": "highstakes", "name": "HIGH STAKES",   "desc": "feathers earned ×2 — but every Gerald gains +1 HP", "deal": true},
-	{"id": "secondwind", "name": "SECOND WIND",   "desc": "cheat death once — but you pace 10% slower", "deal": true},
+	{"id": "clutch",     "tier": 0, "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
+	{"id": "preheat",    "tier": 0, "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
+	{"id": "tailwind",   "tier": 0, "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
+	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "every snack is worth +60% distance","deal": false},
+	{"id": "nestegg",    "tier": 0, "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
+	{"id": "goosedown",  "tier": 1, "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
+	{"id": "lucky",      "tier": 1, "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
+	{"id": "famine",     "tier": 1, "name": "FAMINE FEAST",  "desc": "snacks give TRIPLE loft — but 40% fewer of them", "deal": true},
+	{"id": "highstakes", "tier": 1, "name": "HIGH STAKES",   "desc": "feathers earned ×2 — but every Gerald gains +1 HP", "deal": true},
+	{"id": "glasscannon","tier": 2, "name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
+	{"id": "secondwind", "tier": 2, "name": "SECOND WIND",   "desc": "cheat death once — but you pace 10% slower", "deal": true},
 ]
 # per-run boon modifiers (reset each run)
 var boon_pace := 1.0
@@ -946,25 +948,16 @@ func start_game() -> void:
 	if _meta("warmup"):
 		loft = 0.4
 	name_edit.visible = false
-	# the ancient shrine only appears once you've bested your first Gerald
-	if bosses_cleared >= 1:
-		_open_shrine()
-	else:
-		_begin_run()
-
-# go straight to the river (no shrine): show the gameplay HUD and run
-func _begin_run() -> void:
-	in_shrine = false
-	fade = 0.0
-	score_label.visible = true
-	loft_bar.visible = true
+	# the ancient shrine greets you before the river does (boon power scales with bosses)
+	_open_shrine()
 
 func _open_shrine() -> void:
 	in_shrine = true
 	shrine_open_t = anim_t
-	shrine_boons = BOONS.duplicate()
-	shrine_boons.shuffle()
-	shrine_boons = shrine_boons.slice(0, 3)
+	# only boons you've EARNED (tier <= bosses bested) can appear; beat bosses for richer ones
+	var pool: Array = BOONS.filter(func(b): return b.tier <= bosses_cleared)
+	pool.shuffle()
+	shrine_boons = pool.slice(0, 3)
 	shrine_line = randi() % ELDER_LINES.size()
 	shrine_line_t = anim_t
 	score_label.visible = false
@@ -1522,10 +1515,7 @@ func _on_press(pos: Vector2) -> void:
 			if _meta("egghead"): ducklings_n = 1
 			if _meta("earlybird"): next_draft = 2000.0
 			if _meta("warmup"): loft = 0.4
-			if bosses_cleared >= 1:
-				_open_shrine()
-			else:
-				_begin_run()
+			_open_shrine()
 		return
 	if paused:                                     # paused: only the overlay buttons live
 		if PAUSE_RESUME_BTN.has_point(pos):
@@ -2080,6 +2070,10 @@ func _boss_leave() -> void:
 	_float_text(duck_x, BASE_Y - 110.0, "+%d feathers!" % reward, Color(1, 0.9, 0.4))
 	for i in 26:
 		_spawn_parts(randf_range(60, VIEW.x - 60), randf_range(120, 360), 1, Color(1, 0.9, 0.4), 130.0)
+	# the SPOILS OF WAR: best a Gerald, take home a high-tier power (rare, or legendary later)
+	var rarity: int = 3 if int(boss.idx) >= 1 else 2
+	_float_text(duck_x, BASE_Y - 150.0, "SPOILS OF WAR!", Color(1.0, 0.6, 0.95))
+	_grant_random_upgrade(rarity)
 
 func _hit_boss(n: int) -> void:
 	if boss == null or boss.phase != "fight":
@@ -2090,10 +2084,13 @@ func _hit_boss(n: int) -> void:
 	_sfx("crunch", 0.7)
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
 	if boss.hp <= 0:
+		var was := bosses_cleared
 		next_boss_idx += 1
 		if next_boss_idx > bosses_cleared:
-			bosses_cleared = next_boss_idx          # lifetime progress: unlocks the shrine
+			bosses_cleared = next_boss_idx          # lifetime progress: tiers up the shrine boons
 			_save()
+			if bosses_cleared > was and bosses_cleared <= 2:
+				_flash("BLESSINGS EMPOWERED!\nthe shrine offers richer boons")
 		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
@@ -2123,7 +2120,6 @@ func _update_boss(delta: float) -> void:
 			boss.y = lerpf(-160.0, 150.0, clampf(boss.t / 1.6, 0.0, 1.0))
 			if boss.t >= 1.7:
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
-				_flash("STOMP HIM WHEN HE'S DAZED!")
 		"fight":
 			_boss_fight(delta)
 		"leave":
@@ -2511,7 +2507,11 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 func _draw_shrine() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
 	var ot := anim_t - shrine_open_t
-	_otext(Vector2(0, 128), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	_otext(Vector2(0, 122), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	# boon power tier: tells the player that besting bosses unlocks richer blessings
+	var tier_txt := "BLESSINGS · TIER %d/2 — best a boss for richer ones" % bosses_cleared if bosses_cleared < 2 \
+		else "BLESSINGS · TIER 2 — fully empowered"
+	_otext(Vector2(0, 154), tier_txt, 15, Color(0.7, 0.95, 1.0, 0.8), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# he cycles through his sage musings; each new line restarts the beak-flap
 	const LINE_DUR := 4.0
 	if anim_t - shrine_line_t > LINE_DUR:
@@ -2521,7 +2521,7 @@ func _draw_shrine() -> void:
 	# the elder: bobs, drifts side to side and leans — very much alive
 	if has_art:
 		var drift := sin(anim_t * 0.9) * 26.0          # he can't hold still
-		var ey := 300.0 + sin(anim_t * 1.8) * 7.0
+		var ey := 266.0 + sin(anim_t * 1.8) * 6.0      # high enough his beard clears the boons
 		var ec := Vector2(VIEW.x * 0.5 + drift, ey)
 		# a soft halo of ancient wisdom
 		for g in 3:
@@ -2538,7 +2538,7 @@ func _draw_shrine() -> void:
 			tex = tex_elder_talk
 		var lean := sin(anim_t * 0.9 + 1.2) * 0.05      # a gentle sway as he drifts
 		if tex != null:
-			_blit_rot(tex, ec, 3.0, lean)
+			_blit_rot(tex, ec, 2.8, lean)
 		else:
 			var elder = ducks.get("golden", ducks["mallard"]).get("hero")
 			if elder != null:
