@@ -189,22 +189,22 @@ const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
 # the cost ladder is a power ladder: more feathers = objectively better duck
 const ROSTER := [
-	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "pace": 0.5, "trait": "the balanced drake", "cost": 0},
-	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "pace": 0.5, "trait": "the clever hen", "cost": 0},
-	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "pace": 0.45, "trait": "floaty show-off", "cost": 140},
-	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.8, "pace": 0.7, "trait": "tiny & twitchy", "cost": 280, "size": 0.85},
-	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "pace": 0.45, "trait": "that bill? born with it", "cost": 420},
-	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "pace": 0.6, "trait": "the best steerer", "cost": 600},
-	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "pace": 0.6, "trait": "the crested diver", "cost": 850},
-	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.75, "pace": 0.55, "trait": "blue bill. stiff tail. zero fear.", "cost": 1150},
-	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.75, "pace": 0.95, "trait": "the redhead racer", "cost": 1500},
-	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "pace": 0.7, "trait": "painted by the river itself", "cost": 2000},
-	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.85, "pace": 0.5, "trait": "royalty, obviously", "cost": 2800},
-	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "pace": 0.6, "trait": "squeaks. the endgame flex.", "cost": 4200, "size": 0.95},
-	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "pace": 1.0, "trait": "not a myth after all", "cost": 6500},
+	{"name": "Mallard", "species": "mallard", "hop": 0.5, "steer": 0.5, "pace": 0.5, "size": 1.0, "trait": "the balanced drake", "cost": 0},
+	{"name": "Hen Mallard", "species": "hen", "hop": 0.5, "steer": 0.6, "pace": 0.5, "size": 0.95, "trait": "the clever hen", "cost": 0},
+	{"name": "Wood Duck", "species": "wood", "hop": 0.8, "steer": 0.5, "pace": 0.45, "size": 0.82, "trait": "floaty show-off", "cost": 140},
+	{"name": "Bufflehead", "species": "bufflehead", "hop": 0.65, "steer": 0.82, "pace": 0.7, "size": 0.72, "trait": "smallest. twitchiest.", "cost": 280},
+	{"name": "Northern Shoveler", "species": "shoveler", "hop": 0.65, "steer": 0.75, "pace": 0.45, "size": 0.85, "trait": "that bill? born with it", "cost": 420},
+	{"name": "Pintail", "species": "pintail", "hop": 0.55, "steer": 0.95, "pace": 0.6, "size": 0.9, "trait": "the best steerer", "cost": 600},
+	{"name": "Hooded Merganser", "species": "hoodie", "hop": 0.75, "steer": 0.75, "pace": 0.6, "size": 0.8, "trait": "the crested diver", "cost": 850},
+	{"name": "Ruddy Duck", "species": "ruddy", "hop": 0.8, "steer": 0.78, "pace": 0.55, "size": 0.74, "trait": "blue bill. stiff tail. zero fear.", "cost": 1150},
+	{"name": "Canvasback", "species": "canvasback", "hop": 0.85, "steer": 0.72, "pace": 0.95, "size": 1.02, "trait": "the redhead racer", "cost": 1500},
+	{"name": "Harlequin Duck", "species": "harlequin", "hop": 0.85, "steer": 0.85, "pace": 0.7, "size": 0.8, "trait": "painted by the river itself", "cost": 2000},
+	{"name": "King Eider", "species": "eider", "hop": 0.9, "steer": 0.8, "pace": 0.5, "size": 1.18, "trait": "the biggest. royalty, obviously", "cost": 2800},
+	{"name": "Rubber Ducky", "species": "rubberduck", "hop": 0.9, "steer": 0.9, "pace": 0.6, "size": 0.78, "trait": "squeaks. the endgame flex.", "cost": 4200},
+	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "pace": 1.0, "size": 1.0, "trait": "not a myth after all", "cost": 6500},
 	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
-	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
-	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
+	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "size": 0.98, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
+	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
 ]
 
 # ---- state -------------------------------------------------------------------
@@ -858,8 +858,8 @@ func _dbg() -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_menu.png")
 	_open_select()
-	sel_index = 1                       # the Hen
-	select_line = _duck_quip("hen"); select_line_t = anim_t   # show its quip bubble
+	sel_index = 3                       # the Bufflehead (smallest) — check size + 4 stats
+	select_line = _duck_quip("bufflehead"); select_line_t = anim_t   # show its quip bubble
 	await get_tree().create_timer(0.5).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_select.png")
@@ -3234,12 +3234,12 @@ func _draw_duck() -> void:
 		fire_i = clampf((fire_max - fire_t) / 0.3, 0.05, 1.0) * clampf(fire_t / 0.8, 0.0, 1.0)
 	elif heat >= 0.7:
 		fire_i = 0.2 * (heat - 0.7) / 0.3
-	var fire_scale := DUCK_DRAW * duck_scale * pow(0.8, float(_up("tiny")))
+	var fire_scale := DUCK_DRAW * duck_scale * pow(0.8, float(_up("tiny"))) * duck_size_mul
 	if fire_i > 0.0:
 		_draw_fire_volume(duck_pos, fire_scale, fire_i)
 
 	if has_art:
-		var ss := tex_shadow.get_size() * DUCK_DRAW
+		var ss := tex_shadow.get_size() * DUCK_DRAW * duck_size_mul
 		var swf := 1.0 - 0.55 * h
 		var sw := Vector2(ss.x * swf, ss.y * swf)
 		draw_texture_rect(tex_shadow, Rect2(Vector2(duck_x, BASE_Y + 8) - sw * 0.5, sw),
@@ -3253,7 +3253,7 @@ func _draw_duck() -> void:
 			_draw_stack(duck_pos, 2.4 + 1.8 * h, st_slices, yaw, roll, false)
 		else:
 			var fr := _duck_frame(h)
-			var ds := fr.get_size() * DUCK_DRAW * duck_scale * pow(0.8, float(_up("tiny")))
+			var ds := fr.get_size() * DUCK_DRAW * duck_scale * pow(0.8, float(_up("tiny"))) * duck_size_mul
 			# juice: stretch tall on takeoff, squash wide on landing
 			if state == St.HOPPING and hop_t < cur_hop_dur() * 0.22:
 				ds = Vector2(ds.x * 0.92, ds.y * 1.14)
@@ -3284,7 +3284,7 @@ func _draw_duck() -> void:
 				draw_texture_rect(fr, Rect2(duck_pos - ds * 0.5, ds), false)
 	else:
 		draw_circle(Vector2(duck_x, BASE_Y + 6), DUCK_R * (1.0 - 0.55 * h), Color(0, 0, 0, 0.22 * (1.0 - 0.4 * h)))
-		draw_circle(duck_pos, DUCK_R * duck_scale, Color(0.97, 0.84, 0.27))
+		draw_circle(duck_pos, DUCK_R * duck_scale * duck_size_mul, Color(0.97, 0.84, 0.27))
 
 	# the front licks of the volume wrap over the sprite: properly engulfed
 	if fire_i > 0.0:
@@ -3491,12 +3491,14 @@ func _draw_select() -> void:
 	# big render on a free-spinning turntable: drag to rotate, idles slowly otherwise.
 	# tapping it opens the beak AT the current angle (a quack in any orientation)
 	var fr = _spin_frame(sp, select_yaw, anim_t - menu_quack_t < 0.45)
+	# the preview scales with the duck's real-world size, so you SEE the difference
+	var psc: float = 6.0 * duck.get("size", 1.0)
 	if unlocked:
-		_blit_centered(fr, Vector2(cx, 320.0 + bob), 6.0)
+		_blit_centered(fr, Vector2(cx, 320.0 + bob), psc)
 	else:
 		# locked: a dark silhouette — keep the mystery (pure black for secrets)
 		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)
-		_blit_modulated(fr, Vector2(cx, 320.0 + bob), 6.0, tint)
+		_blit_modulated(fr, Vector2(cx, 320.0 + bob), psc, tint)
 		_otext(Vector2(0, 355.0), "??? SECRET ???" if is_secret else "LOCKED", 28, Color(1, 1, 1, 0.7))
 	# the duck chatters away on its own — its quip floats over its head
 	if unlocked and select_line != "":
@@ -3510,9 +3512,11 @@ func _draw_select() -> void:
 	_otext(Vector2(0, 466.0), "? ? ?" if show_secret else duck.name, 34, Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	_otext(Vector2(0, 498.0), duck.trait, 20, Color(1, 0.85, 0.45, 0.85) if show_secret else Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	if not show_secret:
-		_stat_bar("HOP", duck.hop, 526.0)
-		_stat_bar("STEER", duck.steer, 560.0)
-		_stat_bar("PACE", duck.get("pace", 0.5), 594.0)
+		_stat_bar("HOP", duck.hop, 520.0)
+		_stat_bar("STEER", duck.steer, 549.0)
+		_stat_bar("PACE", duck.get("pace", 0.5), 578.0)
+		# SIZE bar shows the duck's real-world bulk (small = nimbler hitbox)
+		_stat_bar("SIZE", clampf((duck.get("size", 1.0) - 0.6) / 0.62, 0.06, 1.0), 607.0)
 
 	if unlocked:
 		draw_style_box(_btn_sb(), SEL_PLAY_BTN)

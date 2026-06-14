@@ -38,7 +38,7 @@ SPECIES = dict(
     hen=dict(hen=True, bill_saddle=True),
     wood=dict(crest=True, face_paint="wood", red_eye=True, chest_speckles=True, flank_bars=True),
     # head_scale must leave the stubby bill poking out past the head ellipsoid
-    bufflehead=dict(head_scale=1.18, bill_len=16, face_paint="bufflehead", size=0.85),
+    bufflehead=dict(head_scale=1.18, bill_len=16, face_paint="bufflehead"),
     pintail=dict(pin_tail=True, face_paint="pintail", long_neck=True, bill_stripe=True),
     hoodie=dict(crest=True, big_crest=True, face_paint="hoodie", eye_col=(244, 196, 60), bill_thin=True),
     canvasback=dict(red_eye=True, dark_rump=True),
@@ -47,7 +47,7 @@ SPECIES = dict(
     shoveler=dict(bill_len=19, bill_wide=True, eye_col=(238, 198, 60)),
     ruddy=dict(pin_tail=True, face_paint="ruddy"),
     harlequin=dict(face_paint="harlequin"),
-    rubberduck=dict(size=0.95),
+    rubberduck=dict(),
     disco=dict(chest_speckles=True, dark_rump=True),     # SECRET unlocks
     shadow=dict(dark_rump=True, red_eye=False),
 )
