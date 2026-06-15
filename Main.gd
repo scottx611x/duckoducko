@@ -2349,7 +2349,7 @@ func _start_boss() -> void:
 		bscale = 1.85
 		title = "GERALD THE ETERNAL"
 		intro_pool = "gerald_final"
-		tint = Color(1.25, 0.7, 0.78)            # a ghostly, blood-tinged pallor
+		tint = Color(1.55, 0.4, 0.42)            # drenched in blood-red, deeply evil
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
 		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false, "kind": kind,
@@ -3070,12 +3070,19 @@ func _draw_run_timeline() -> void:
 		var bx: float = fx.call(float(BOSS_MARKS[i]))
 		var beaten: bool = i < next_boss_idx
 		var is_snapz: bool = i == 1
+		var is_final: bool = i >= 2          # GERALD THE ETERNAL: massive + bloody on the timeline too
 		var btex: Texture2D = (tex_snapz[0] if is_snapz else tex_gerald[0]) if (not tex_gerald.is_empty()) else null
 		var bob: float = 0.0 if beaten else absf(sin(anim_t * 2.0 + i)) * 2.0
 		if btex != null:
-			var bs := 30.0 / float(btex.get_size().x) * btex.get_size()
-			var col := Color(0.4, 0.5, 0.5, 0.7) if beaten else Color(1, 1, 1)
-			draw_texture_rect(btex, Rect2(Vector2(bx, y - 16 - bob) - bs * 0.5, bs), false, col)
+			var px: float = 48.0 if is_final else 30.0
+			var bs := px / float(btex.get_size().x) * btex.get_size()
+			var ctr := Vector2(bx, y - 16 - bob)
+			if is_final and not beaten:       # a pulsing blood halo of dread
+				var pl := 0.5 + 0.5 * sin(anim_t * 5.0)
+				draw_circle(ctr, px * 0.5 + 4.0 + pl * 4.0, Color(0.7, 0.02, 0.05, 0.18 + 0.12 * pl))
+			var col := Color(0.4, 0.5, 0.5, 0.7) if beaten else \
+				(Color(1.5, 0.3, 0.32) if is_final else Color(1, 1, 1))   # bloody/evil for the final
+			draw_texture_rect(btex, Rect2(ctr - bs * 0.5, bs), false, col)
 		if beaten:
 			_otext(Vector2(bx - 14, y - 6), "✓", 16, Color(0.5, 0.95, 0.6, 0.9), 28, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		else:
@@ -3682,6 +3689,12 @@ func _draw_boss_gerald() -> void:
 			mod = Color(1, 1, 1).lerp(Color(1.3, 1.1, 0.6), 0.3 + 0.3 * gl)
 		if boss_flash > 0.0:
 			mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)   # white hit-flash
+		# GERALD THE ETERNAL radiates a pulsing aura of blood and dread
+		if int(boss.idx) >= 2 and boss.kind == "gerald":
+			var bp := 0.5 + 0.5 * sin(anim_t * 4.0)
+			for g in 3:
+				draw_circle(gpos, gsz.x * (0.36 + g * 0.12),
+					Color(0.7, 0.02, 0.05, 0.09 * float(3 - g) * (0.6 + 0.4 * bp)))
 		draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
 		if dazed:
 			# a bouncing chevron + prompt over his head so the window is unmissable
