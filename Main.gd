@@ -1368,10 +1368,9 @@ func _update_turtle(delta: float) -> void:
 		"warn":                                    # churn telegraph — DODGE this lane
 			if tt.t > 0.7:
 				tt.stage = "snap"; tt.t = 0.0; tt.sub = 0.0
-				_sfx("crunch", 0.9); _sfx("splash_big", 0.6)
+				_sfx("crunch", 0.9)
 				duck_shake = maxf(duck_shake, 0.3)
-				ripples.append({"x": tt.snap_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
-				_spawn_parts(tt.snap_x, BASE_Y, 14, Color(0.7, 0.9, 0.85), 220.0)
+				_water_burst(tt.snap_x, BASE_Y, 1.1)     # erupts in a splash
 				# the BITE: caught on the water at the strike point = it gets you
 				if absf(duck_x - tt.snap_x) < 46.0 and not is_airborne() and not is_invincible():
 					if shield_charges > 0:
@@ -1567,6 +1566,26 @@ func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
 		var s := randf_range(spd * 0.35, spd)
 		parts.append({"x": x, "y": y, "vx": cos(a) * s, "vy": sin(a) * s - spd * 0.45,
 			"t": 0.0, "life": randf_range(0.3, 0.65), "col": col})
+
+# a big dramatic SPLASH for something breaching the surface — a foam crown of
+# rings + a fan of water droplets thrown up and out.
+func _water_burst(x: float, y: float, power := 1.0) -> void:
+	ripples.append({"x": x, "y": y, "t": 0.0, "max": 130.0 * power, "col": Color(0.85, 0.95, 1.0)})
+	ripples.append({"x": x, "y": y, "t": 0.0, "max": 80.0 * power, "col": Color(1, 1, 1)})
+	var n := int(22 * power)
+	for i in n:
+		var a := -PI * 0.5 + (float(i) / float(maxi(n - 1, 1)) - 0.5) * PI * 1.35   # fan upward
+		var spd := randf_range(180.0, 380.0) * power
+		parts.append({"x": x + randf_range(-12, 12), "y": y - 4.0,
+			"vx": cos(a) * spd, "vy": sin(a) * spd - 80.0, "t": 0.0,
+			"life": randf_range(0.45, 0.9),
+			"col": Color(0.82, 0.93, 1.0) if randf() < 0.5 else Color(1, 1, 1, 0.95)})
+	# a few heavy foam blobs straight up
+	for i in int(5 * power):
+		parts.append({"x": x + randf_range(-8, 8), "y": y - 6.0,
+			"vx": randf_range(-40, 40), "vy": randf_range(-360, -240) * power, "t": 0.0,
+			"life": randf_range(0.5, 0.85), "col": Color(0.92, 0.97, 1.0)})
+	_sfx("splash_big", randf_range(0.65, 0.85))
 
 func _update_parts(delta: float) -> void:
 	for p in parts:
@@ -2553,9 +2572,8 @@ func _snapz_fight(delta: float) -> void:
 				boss.daze_t = 1.05                # a tighter stomp window than Gerald
 				boss.stomped = false
 				boss_waves.append({"x": boss.dive_x, "r": 18.0})
-				ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 170.0})
-				_spawn_parts(boss.dive_x, BASE_Y, 16, Color(0.7, 0.9, 0.85), 240.0)   # splash
-				_sfx("crunch", 0.85); _sfx("splash_big", 0.7)
+				_water_burst(boss.dive_x, BASE_Y, 1.5)   # he BREACHES with a huge splash
+				_sfx("crunch", 0.85)
 				duck_shake = maxf(duck_shake, 0.45)
 				if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
 					boss.hit_cool = 1.0
