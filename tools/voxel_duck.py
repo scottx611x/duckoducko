@@ -1135,6 +1135,24 @@ def generate_critters(art_dir):
         save(render(shade(build_sadie(f)), math.radians(90), math.radians(40), out=64, scale=1.7),
              "sadie_%d.png" % f)
     make_chuckit().save(os.path.join(art_dir, "chuckit.png"))
+    # COMPENDIUM turntables: 16-frame yaw spins so each character can be rotated in
+    # the codex detail view, just like the ducks. Cropped to a shared per-character bbox.
+    def spin_set(SH, name, pitch_deg, scale, out=220, n=16):
+        imgs = [render(SH, math.radians(i * 360.0 / n), math.radians(pitch_deg), out=out, scale=scale)
+                for i in range(n)]
+        bb = None
+        for im in imgs:
+            b = im.getbbox()
+            if b:
+                bb = b if bb is None else (min(bb[0], b[0]), min(bb[1], b[1]), max(bb[2], b[2]), max(bb[3], b[3]))
+        bb = (max(0, bb[0] - 4), max(0, bb[1] - 4), min(out, bb[2] + 4), min(out, bb[3] + 4))
+        for i, im in enumerate(imgs):
+            save(im.crop(bb), "%s_spin_%02d.png" % (name, i))
+    spin_set(shade(build_heron(0)), "gerald", 30, 2.6, out=200)
+    spin_set(shade(build_snapz(0)), "snapz", 18, 3.6, out=240)
+    spin_set(shade(build_hawk(0)), "rusty", 24, 3.2, out=180)
+    spin_set(shade(build_sadie(0)), "sadie", 34, 1.7, out=80)
+    spin_set(shade(build("golden", "folded", elder=True)), "elder", HERO_PITCH, 1.45, out=110)
     # ON FIRE flame volume: 6-frame loop at the gameplay camera, emissive (no
     # shade/outline). fire_duck = whole volume (behind), fire_lick = front wrap (over)
     for f in range(6):

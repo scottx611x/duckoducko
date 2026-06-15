@@ -190,12 +190,11 @@ const PAUSE_RESUME_BTN := Rect2(120.0, 470.0, 300.0, 64.0)
 const PAUSE_MENU_BTN := Rect2(160.0, 552.0, 220.0, 52.0)
 const DEATH_MENU_BTN := Rect2(60.0, 636.0, 200.0, 44.0)
 const DEATH_STATS_BTN := Rect2(280.0, 636.0, 200.0, 44.0)   # death-screen LOGBOOK button
-const MENU_STATS_BTN := Rect2(50.0, 700.0, 213.0, 42.0)     # menu LOGBOOK button
-const MENU_CODEX_BTN := Rect2(277.0, 700.0, 213.0, 42.0)    # menu COMPENDIUM button
-
-# duck-select screen (menu buttons get breathing room on phone screens)
-const MENU_DUCKS_BTN := Rect2(50.0, 752.0, 185.0, 58.0)
-const MENU_SHOP_BTN := Rect2(305.0, 752.0, 185.0, 58.0)
+# menu buttons: name field at 722, then a tidy 2x2 grid — aligned columns + gaps
+const MENU_DUCKS_BTN := Rect2(50.0, 772.0, 214.0, 52.0)
+const MENU_SHOP_BTN := Rect2(276.0, 772.0, 214.0, 52.0)
+const MENU_STATS_BTN := Rect2(50.0, 832.0, 214.0, 46.0)     # LOGBOOK
+const MENU_CODEX_BTN := Rect2(276.0, 832.0, 214.0, 46.0)    # COMPENDIUM
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 640.0, 220.0, 62.0)
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
@@ -501,7 +500,7 @@ const CODEX := [
 	{"id": "snapz", "name": "SNAPZ", "tag": "boss · the snapper",
 		"lore": "An ancient snapping turtle the size of a manhole cover — armoured, ill-tempered, and far quicker than something that old should be. His shell shrugs off everything; only his jammed, gaping jaws can be stomped."},
 	{"id": "eternal", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
-		"lore": "Gerald came back. Wrong. Bigger, bloodier, and no longer entirely alive, he has crossed back from beyond to reclaim HIS river. The last test of the current."},
+		"lore": "Gerald came back. Wrong. Bigger, bloodier, and no longer entirely alive, he has crossed back from beyond to reclaim HIS river. He now double-slams and summons spectral herons. The last test of the current."},
 	{"id": "rusty", "name": "RUSTY", "tag": "guide · red-tailed hawk",
 		"lore": "A red-tailed hawk who appointed himself your mentor. Swoops in early to drop a tip (and a theatrical SKREE), then minds the feather shop from his perch. Insists he is NOT just decorative."},
 	{"id": "sadie", "name": "SADIE", "tag": "hazard · the good girl",
@@ -512,6 +511,9 @@ const CODEX := [
 var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
 var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
 var in_codex := false
+var codex_sel := -1             # which CODEX entry's detail view is open (-1 = list)
+var codex_yaw := 0.0            # turntable angle in the detail view (drag to spin)
+var tex_codex_spin: Dictionary = {}   # id -> 16-frame yaw turntable
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
 var turtle_timer := 28.0
@@ -662,6 +664,12 @@ func _ready() -> void:
 			load("res://art/hawk_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
+	for cid in ["gerald", "snapz", "rusty", "sadie", "elder"]:   # COMPENDIUM turntables
+		if ResourceLoader.exists("res://art/%s_spin_00.png" % cid):
+			var frames: Array = []
+			for i in 16:
+				frames.append(load("res://art/%s_spin_%02d.png" % [cid, i]))
+			tex_codex_spin[cid] = frames
 	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
 		var fp := "res://art/fire_duck_%d.png" % fi
 		if ResourceLoader.exists(fp):
@@ -758,8 +766,8 @@ func _ready() -> void:
 	name_edit = LineEdit.new()
 	name_edit.placeholder_text = "name your duck"
 	name_edit.max_length = 16
-	name_edit.size = Vector2(250, 42)
-	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 830)
+	name_edit.size = Vector2(250, 40)
+	name_edit.position = Vector2(VIEW.x * 0.5 - 125, 722)
 	name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var nsb := StyleBoxFlat.new()
 	nsb.bg_color = Color(0.07, 0.13, 0.19, 0.9)
@@ -1144,7 +1152,11 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_codex.png")
-	in_codex = false; codex_seen = []; codex_viewed = []
+	codex_sel = 0; codex_yaw = 1.4                  # GERALD's rotatable detail page
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_codex_detail.png")
+	in_codex = false; codex_sel = -1; codex_seen = []; codex_viewed = []
 	reset_game()
 	# select screen: a locked duck (pintail) with cost text
 	_enter_menu()
@@ -2154,6 +2166,10 @@ func _on_press(pos: Vector2) -> void:
 	press_time = Time.get_ticks_msec() / 1000.0
 
 func _on_drag(pos: Vector2) -> void:
+	if in_codex and codex_sel >= 0:                # spin the compendium turntable
+		codex_yaw += (pos.x - spin_prev_x) * 0.016
+		spin_prev_x = pos.x
+		return
 	if in_select:
 		select_yaw += (pos.x - spin_prev_x) * 0.012
 		spin_prev_x = pos.x
@@ -2463,6 +2479,8 @@ func _process(delta: float) -> void:
 		pause_yaw += delta * 0.5                    # the pause duck idles on its turntable
 		if pause_line == "" or anim_t - pause_line_t > 4.5:
 			pause_line = _duck_quip(species); pause_line_t = anim_t
+	if in_codex and codex_sel >= 0:
+		codex_yaw += delta * 0.55                   # the studied creature idles on its turntable
 	if in_select:
 		select_yaw += delta * 0.7
 		# the duck chatters on its own — a fresh quip every few seconds (no tap needed)
@@ -3567,17 +3585,17 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"double":                                          # two up-chevrons
 			draw_polyline(PackedVector2Array([c + Vector2(-s, 0), c + Vector2(0, -s), c + Vector2(s, 0)]), col, 2.5)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.7), c + Vector2(0, -s * 0.3), c + Vector2(s, s * 0.7)]), col, 2.5)
-		"clutch", "egghead":                               # EGG CLUTCH: a single smooth egg
+		"clutch", "egghead":                               # EGG CLUTCH: a smooth egg (oval, gently narrowed top)
 			var pts := PackedVector2Array()
-			for i in 20:
-				var a: float = TAU * i / 20.0
-				var ex: float = cos(a) * s * 0.62
-				var ey: float = sin(a) * s * 0.86
-				if ey < 0.0:                               # taper the top into an egg point
-					ex *= 1.0 + ey / (s * 1.7)
-				pts.append(c + Vector2(ex, ey))
+			for i in 24:
+				var a: float = TAU * i / 24.0
+				var ey: float = sin(a) * s * 0.92          # taller than wide
+				var w: float = s * 0.62
+				if ey < 0.0:                               # only a GENTLE taper up top — egg, not droplet
+					w *= 1.0 - 0.28 * (-ey / (s * 0.92))
+				pts.append(c + Vector2(cos(a) * w, ey))
 			draw_colored_polygon(pts, col)
-			draw_circle(c + Vector2(-s * 0.18, s * 0.12), s * 0.15, col.lightened(0.45))
+			draw_circle(c + Vector2(-s * 0.2, s * 0.18), s * 0.16, col.lightened(0.5))
 		"duckling", "trio", "school":                      # duckling brood of dots
 			var nn := 1 if id == "duckling" else 3
 			for i in nn:
@@ -4047,6 +4065,7 @@ func _stats_graph(area: Rect2) -> void:
 # ---- the COMPENDIUM: characters you've met, with lore ------------------------
 func _open_codex() -> void:
 	in_codex = true
+	codex_sel = -1
 	in_menu = false
 	fade = 0.0
 	name_edit.visible = false
@@ -4059,11 +4078,34 @@ func _open_codex() -> void:
 	_save()
 	_sfx("click")
 
+func _codex_rect(i: int) -> Rect2:
+	return Rect2(26.0, 152.0 + i * 104.0, VIEW.x - 52.0, 90.0)
+
 func _codex_press(pos: Vector2) -> void:
+	if codex_sel >= 0:                              # DETAIL view
+		spin_prev_x = pos.x
+		if SEL_BACK_BTN.has_point(pos):
+			_sfx("click"); codex_sel = -1
+			return
+		if pos.y < 540.0:                          # tap the turntable -> the creature REACTS
+			menu_quack_t = anim_t
+			match CODEX[codex_sel].id:
+				"rusty": _sfx("screech", randf_range(0.95, 1.08), 1.0)
+				"snapz": _sfx("laugh", randf_range(0.9, 1.05))
+				"gerald", "eternal": _sfx("quack", randf_range(0.4, 0.55), -2.0)
+				_: _sfx("quack", randf_range(0.6, 0.8))
+		return
+	# LIST view
 	if SEL_BACK_BTN.has_point(pos):
 		_sfx("click")
 		in_codex = false
 		_enter_menu()
+		return
+	for i in CODEX.size():
+		if _codex_rect(i).has_point(pos) and CODEX[i].id in codex_seen:
+			codex_sel = i; codex_yaw = 0.0
+			_sfx("click", 1.2)
+			return
 
 func _codex_tex(id: String):
 	match id:
@@ -4081,45 +4123,78 @@ func _codex_tex(id: String):
 
 func _draw_codex() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.04, 0.05, 0.09, 1.0))
+	if codex_sel >= 0:
+		_draw_codex_detail(CODEX[codex_sel])
+		return
+	# LIST: a tappable row per soul; tap one to open its rotatable detail page
 	_fancy_title("COMPENDIUM", 92.0, 34, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
-	_otext(Vector2(0, 128), "%d of %d souls of the river met" % [codex_seen.size(), CODEX.size()],
+	_otext(Vector2(0, 128), "%d of %d souls of the river met  ·  tap to study" % [codex_seen.size(), CODEX.size()],
 		14, Color(1, 1, 1, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-	var pitch := 124.0
 	for i in CODEX.size():
 		var e: Dictionary = CODEX[i]
 		var seen: bool = e.id in codex_seen
-		var rc := Rect2(26.0, 150.0 + i * pitch, VIEW.x - 52.0, pitch - 12.0)
+		var rc := _codex_rect(i)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.07, 0.09, 0.14, 0.95); sb.set_corner_radius_all(14)
 		sb.set_border_width_all(2)
 		sb.border_color = Color(0.9, 0.7, 0.4, 0.55) if seen else Color(1, 1, 1, 0.12)
 		draw_style_box(sb, rc)
-		# portrait box on the left
-		var box := Rect2(rc.position + Vector2(10, 10), Vector2(92, rc.size.y - 20))
+		var box := Rect2(rc.position + Vector2(10, 10), Vector2(70, rc.size.y - 20))
 		var bsb := StyleBoxFlat.new()
 		bsb.bg_color = Color(0.03, 0.05, 0.09, 0.9); bsb.set_corner_radius_all(10)
 		draw_style_box(bsb, box)
 		var tex = _codex_tex(e.id)
 		if seen and tex != null:
-			var fit: float = minf((box.size.x - 14.0) / tex.get_size().x, (box.size.y - 14.0) / tex.get_size().y)
-			if e.id == "eternal":                  # the undead twin reads bloody-red
+			var fit: float = minf((box.size.x - 12.0) / tex.get_size().x, (box.size.y - 12.0) / tex.get_size().y)
+			if e.id == "eternal":
 				_blit_modulated(tex, box.get_center(), fit, Color(1.5, 0.4, 0.42))
 			else:
 				_blit_centered(tex, box.get_center(), fit)
 		else:
-			_otext(Vector2(box.position.x, box.get_center().y + 12.0), "?", 48, Color(1, 1, 1, 0.25), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-		# text on the right
-		var tx := box.position.x + box.size.x + 14.0
-		var tw := rc.position.x + rc.size.x - tx - 12.0
+			_otext(Vector2(box.position.x, box.get_center().y + 12.0), "?", 44, Color(1, 1, 1, 0.25), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		var tx := box.position.x + box.size.x + 16.0
+		var tw := rc.position.x + rc.size.x - tx - 30.0
 		if seen:
-			draw_string(font, Vector2(tx, rc.position.y + 28.0), e.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 19, Color(1, 0.92, 0.55))
-			draw_string(font, Vector2(tx, rc.position.y + 46.0), e.tag, HORIZONTAL_ALIGNMENT_LEFT, tw, 12, Color(0.7, 0.85, 1.0, 0.8))
-			_mtext(Vector2(tx, rc.position.y + 56.0 + font.get_ascent(12.5)), e.lore, 12, Color(1, 1, 1, 0.72), tw, HORIZONTAL_ALIGNMENT_LEFT)
+			draw_string(font, Vector2(tx, rc.position.y + 38.0), e.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 20, Color(1, 0.92, 0.55))
+			draw_string(font, Vector2(tx, rc.position.y + 60.0), e.tag, HORIZONTAL_ALIGNMENT_LEFT, tw, 13, Color(0.7, 0.85, 1.0, 0.8))
+			_otext(Vector2(rc.position.x + rc.size.x - 28.0, rc.position.y + 52.0), "›", 30, Color(1, 1, 1, 0.4), 24, HORIZONTAL_ALIGNMENT_CENTER, 2)
 		else:
-			draw_string(font, Vector2(tx, rc.position.y + 30.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 22, Color(1, 1, 1, 0.4))
-			draw_string(font, Vector2(tx, rc.position.y + 56.0), "not yet encountered", HORIZONTAL_ALIGNMENT_LEFT, tw, 14, Color(1, 1, 1, 0.35))
+			draw_string(font, Vector2(tx, rc.position.y + 42.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 22, Color(1, 1, 1, 0.4))
+			draw_string(font, Vector2(tx, rc.position.y + 64.0), "not yet encountered", HORIZONTAL_ALIGNMENT_LEFT, tw, 14, Color(1, 1, 1, 0.35))
+
+# the detail page: a big TURNTABLE sprite (drag to spin, tap to react) + full lore
+func _draw_codex_detail(e: Dictionary) -> void:
+	draw_style_box(_btn_sb(), SEL_BACK_BTN)
+	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_fancy_title(e.name, 118.0, 28, Color(1, 0.92, 0.55), Color(0.9, 0.6, 0.3), 3.0)
+	_otext(Vector2(0, 150), e.tag, 15, Color(0.7, 0.85, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	# the rotatable turntable
+	var sid: String = "gerald" if e.id == "eternal" else e.id
+	var frames: Array = tex_codex_spin.get(sid, [])
+	var cx := VIEW.x * 0.5
+	var cyc := 320.0 + sin(anim_t * 2.0) * 8.0
+	if frames.size() > 0:
+		var fi: int = int(fposmod(codex_yaw, TAU) / TAU * frames.size()) % frames.size()
+		var fr: Texture2D = frames[fi]
+		var sc: float = minf(320.0 / fr.get_size().x, 240.0 / fr.get_size().y)
+		# a soft pedestal glow
+		draw_circle(Vector2(cx, cyc + 70.0), 70.0, Color(0.5, 0.7, 1.0, 0.06))
+		if e.id == "eternal":
+			_blit_modulated(fr, Vector2(cx, cyc), sc, Color(1.5, 0.4, 0.42))
+		else:
+			_blit_centered(fr, Vector2(cx, cyc), sc)
+	_otext(Vector2(0, 470), "< drag to spin · tap to provoke >", 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	# lore panel
+	var pr := Rect2(36.0, 520.0, VIEW.x - 72.0, 0.0)
+	var lh: float = font.get_multiline_string_size(e.lore, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 32.0, 17).y
+	pr.size.y = 36.0 + lh
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.06, 0.09, 0.14, 0.96); psb.set_corner_radius_all(16)
+	psb.set_border_width_all(2); psb.border_color = Color(0.9, 0.7, 0.4, 0.5)
+	draw_style_box(psb, pr)
+	_mtext(Vector2(pr.position.x + 16.0, pr.position.y + 18.0 + font.get_ascent(17)), e.lore, 17, Color(1, 1, 1, 0.82), pr.size.x - 32.0)
 
 func _flash(msg: String, dur := 1.0) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
