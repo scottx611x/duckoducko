@@ -300,6 +300,7 @@ const DUCK_LINES := {
 var pause_line := ""
 var pause_yaw := 0.0             # the pause-screen duck is a spinnable turntable
 var pause_line_t := 0.0
+var pause_power_sel := -1        # tapped relic index on the pause screen (-1 = none)
 var _was_paused := false
 var select_line := ""           # the duck's current quip on the select screen
 var select_line_t := 0.0
@@ -816,7 +817,7 @@ func _load_save() -> void:
 		feathers = cfg.get_value("save", "feathers", 0)
 		best_m = cfg.get_value("save", "best_m", 0)
 		unlocked_extra = cfg.get_value("save", "unlocked", [])
-		duck_name = cfg.get_value("save", "duck_name", "")
+		duck_name = cfg.get_value("save", "duck_name", "duckoducko")   # the base name
 		meta_owned = cfg.get_value("save", "meta", [])
 		last_species = cfg.get_value("save", "last_species", "mallard")
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
@@ -1090,6 +1091,7 @@ func _dbg() -> void:
 	boss = null
 	in_shrine = false; paused = true; pause_line = _duck_quip(species)
 	shield_charges = 1; picked = {"spring": 1, "gold": 1, "thunder": 1}; run_boons = ["tailwind", "secondwind"]
+	pause_power_sel = 4   # show a power's explanation popup
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_pause.png")
@@ -1906,17 +1908,32 @@ func _on_press(pos: Vector2) -> void:
 			_sfx("click")
 			paused = false
 			_enter_menu()
-		elif pos.y < 300.0:                        # tap the duck -> it quacks & speaks
-			menu_quack_t = anim_t
-			pause_line = _duck_quip(species); pause_line_t = anim_t
-			if species == "rubberduck":
-				_sfx("squeak", randf_range(0.95, 1.05))
+		else:
+			# tap a power to inspect it (toggle); tap a different one to switch
+			var hit := -1
+			var rrects := _pause_relic_rects()
+			for i in rrects.size():
+				if rrects[i].rect.grow(4.0).has_point(pos):
+					hit = i
+					break
+			if hit >= 0:
+				pause_power_sel = -1 if pause_power_sel == hit else hit
+				_sfx("click", 1.1)
+			elif pos.y < 300.0:                    # tap the duck -> it quacks & speaks
+				pause_power_sel = -1
+				menu_quack_t = anim_t
+				pause_line = _duck_quip(species); pause_line_t = anim_t
+				if species == "rubberduck":
+					_sfx("squeak", randf_range(0.95, 1.05))
+				else:
+					_sfx("quack", randf_range(0.95, 1.1))
 			else:
-				_sfx("quack", randf_range(0.95, 1.1))
+				pause_power_sel = -1               # tap empty space -> dismiss the popup
 		return
 	if GAME_PAUSE_BTN.has_point(pos) and not drafting and alive:
 		_sfx("click")
 		paused = true
+		pause_power_sel = -1
 		return
 	if GAME_MENU_BTN.has_point(pos) and not drafting:
 		_sfx("click")
@@ -3052,6 +3069,32 @@ func _draw_status_icons() -> void:
 		_draw_relic(Rect2(x, y, bs, bs), r)
 		x += bs + gap
 
+# pause-screen relic hit rects (shared by draw + tap), one per active power
+func _pause_relic_rects() -> Array:
+	var relics := _active_relics()
+	var out: Array = []
+	var bsz := 30.0
+	var gp := 6.0
+	var total: float = relics.size() * (bsz + gp) - gp
+	var rx: float = VIEW.x * 0.5 - total * 0.5
+	for r in relics:
+		out.append({"rect": Rect2(rx, 416.0, bsz, bsz), "relic": r})
+		rx += bsz + gp
+	return out
+
+# name + plain-English description for any power (upgrade / boon / shield charge)
+func _power_info(r: Dictionary) -> Dictionary:
+	if r.id == "_shield":
+		return {"name": "SHIELD", "desc": "shrug off one bonk per charge"}
+	if r.get("boon", false):
+		for b in BOONS:
+			if b.id == r.id:
+				return {"name": b.name, "desc": b.desc}
+	for u in UPGRADES:
+		if u.id == r.id:
+			return {"name": u.name, "desc": u.desc}
+	return {"name": r.id, "desc": ""}
+
 # the active powers this run: shield charges, drafted upgrades, and ancient-duck boons
 func _active_relics() -> Array:
 	var relics: Array = []
@@ -3345,19 +3388,26 @@ func _draw_pause() -> void:
 		if pause_line != "":
 			_speech_bubble(Vector2(cx, 104.0), pause_line,
 				Color(0.98, 0.97, 0.92, 0.96), Color(0.5, 0.85, 1.0, 0.9), 18, 1.0)
-	# the powers you're carrying — boons + upgrades + shields, as relics
-	var relics := _active_relics()
-	if not relics.is_empty():
-		_otext(Vector2(0, 408), "YOUR POWERS", 13, Color(1, 0.85, 0.4, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-		var bsz := 28.0
-		var gp := 5.0
-		var total: float = relics.size() * (bsz + gp) - gp
-		var rx: float = cx - total * 0.5
-		for r in relics:
-			if rx + bsz > VIEW.x - 16.0:
-				rx = cx - total * 0.5     # (single row; clamps visually if huge)
-			_draw_relic(Rect2(rx, 418.0, bsz, bsz), r)
-			rx += bsz + gp
+	# the powers you're carrying — tap any for an explanation
+	var rrects := _pause_relic_rects()
+	if not rrects.is_empty():
+		_otext(Vector2(0, 406), "YOUR POWERS  (tap to inspect)", 13, Color(1, 0.85, 0.4, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		for i in rrects.size():
+			var rr: Dictionary = rrects[i]
+			_draw_relic(rr.rect, rr.relic)
+			if i == pause_power_sel:               # highlight the inspected one
+				draw_arc(rr.rect.get_center(), rr.rect.size.x * 0.66, 0, TAU, 20, Color(1, 1, 1, 0.85), 2.0)
+		if pause_power_sel >= 0 and pause_power_sel < rrects.size():
+			var info := _power_info(rrects[pause_power_sel].relic)
+			var pr := Rect2(40.0, 632.0, VIEW.x - 80.0, 0.0)   # below the buttons, clear space
+			var dh: float = font.get_multiline_string_size(info.desc, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 24.0, 16).y
+			pr.size.y = 34.0 + dh + 12.0
+			var psb := StyleBoxFlat.new()
+			psb.bg_color = Color(0.08, 0.13, 0.18, 0.97); psb.set_corner_radius_all(12)
+			psb.set_border_width_all(2); psb.border_color = Color(1, 0.86, 0.4, 0.8)
+			draw_style_box(psb, pr)
+			_otext(Vector2(pr.position.x, pr.position.y + 24.0), info.name, 19, Color(1, 0.92, 0.45), pr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+			_mtext(Vector2(pr.position.x + 12.0, pr.position.y + 32.0 + font.get_ascent(16)), info.desc, 16, Color(1, 1, 1, 0.85), pr.size.x - 24.0)
 	draw_style_box(_btn_sb(), PAUSE_RESUME_BTN)
 	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), PAUSE_MENU_BTN)
@@ -3381,7 +3431,7 @@ func _draw_death() -> void:
 	var ty := 298.0
 	_mtext(Vector2(px, ty + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
 	var ny := ty + font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y + 16.0
-	var who := duck_name if duck_name != "" else "you"
+	var who := duck_name if duck_name != "" else "duckoducko"
 	_mtext(Vector2(px, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, msg_w)
 	ny += font.get_multiline_string_size("%s paddled %d ft" % [who, dead_m], HORIZONTAL_ALIGNMENT_CENTER, msg_w, 24).y + 10.0
 	if dead_record:
