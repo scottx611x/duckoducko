@@ -225,6 +225,7 @@ const ROSTER := [
 enum St { GROUNDED, HOPPING, MEGA }
 var in_menu := true
 var in_select := false
+var in_picker := false           # the SPECIAL picker modal (over duck-select)
 var in_shop := false
 var paused := false
 
@@ -1082,6 +1083,13 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.5).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_select.png")
+	# the SPECIAL picker with live demos (own them all to show every card)
+	specials_owned = ["mega", "wild", "laser", "slowmo", "afterburner"]; equipped_special = "wild"
+	in_picker = true
+	await get_tree().create_timer(0.1).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_picker.png")
+	in_picker = false; specials_owned = ["mega", "wild", "laser"]
 	start_game()                        # species becomes hen
 	in_shrine = false; score_label.visible = true   # skip the shrine, show gameplay HUD
 	distance = 1300.0
@@ -1308,6 +1316,7 @@ func _open_select() -> void:
 	in_menu = false
 	in_select = true
 	in_shop = false
+	in_picker = false
 	fade = 0.0
 	select_yaw = 0.0
 	name_edit.visible = false
@@ -2259,25 +2268,16 @@ func _on_drag(pos: Vector2) -> void:
 
 func _select_press(pos: Vector2) -> void:
 	spin_prev_x = pos.x
+	if in_picker:
+		_picker_press(pos)
+		return
 	if SEL_BACK_BTN.has_point(pos):
 		_sfx("click")
 		_enter_menu()
 		return
-	if SEL_SPECIAL_BTN.has_point(pos):             # swap the equipped LOFT special (owned only)
-		var owned := SPECIALS.filter(func(s): return _owns_special(s.id))
-		if owned.size() > 1:
-			var ci := 0
-			for k in owned.size():
-				if owned[k].id == equipped_special:
-					ci = k
-			equipped_special = owned[(ci + 1) % owned.size()].id
-			_save()
-			_sfx("unlock", 1.1)
-			for sp in SPECIALS:
-				if sp.id == equipped_special:
-					_flash("%s EQUIPPED" % sp.name)
-		else:
-			_sfx("click", 0.8)                     # only MEGA so far — buy more in the shop
+	if SEL_SPECIAL_BTN.has_point(pos):             # open the SPECIAL picker (cards + live demos)
+		in_picker = true
+		_sfx("click")
 		return
 	if SEL_PLAY_BTN.has_point(pos):
 		if _is_unlocked(sel_index):
@@ -5651,8 +5651,7 @@ func _draw_select() -> void:
 	ssb.border_color = Color(0.5, 0.92, 1.0, 0.85)
 	draw_style_box(ssb, SEL_SPECIAL_BTN)
 	_relic_glyph(equipped_special, SEL_SPECIAL_BTN.position + Vector2(22, 15), 10.0, Color(0.6, 0.92, 1.0))
-	var swaphint := "  ▸ tap to swap" if specials_owned.size() > 1 else ""
-	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(42, 21), "SPECIAL: %s%s" % [sname, swaphint],
+	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(42, 21), "SPECIAL: %s   ▸ change" % sname,
 		HORIZONTAL_ALIGNMENT_LEFT, SEL_SPECIAL_BTN.size.x - 50, 17, Color(0.85, 0.96, 1.0))
 
 	# roster thumbnails (locked ones ghosted to a silhouette)
@@ -5682,6 +5681,97 @@ func _draw_select() -> void:
 			_blit_modulated(th, r.get_center(), tsc, Color(0.34, 0.37, 0.44, 1.0))
 			draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 7.0), "%d" % rd.cost,
 				HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 12, Color(1, 0.9, 0.45, 0.9))
+	if in_picker:
+		_draw_special_picker()
+
+# the SPECIAL picker: a card per owned special with a live mini-DEMO of what it does
+func _picker_specials() -> Array:
+	return SPECIALS.filter(func(s): return _owns_special(s.id))
+
+func _picker_card_rect(i: int) -> Rect2:
+	return Rect2(48.0, 224.0 + i * 112.0, VIEW.x - 96.0, 100.0)
+
+func _picker_press(pos: Vector2) -> void:
+	var owned := _picker_specials()
+	for i in owned.size():
+		if _picker_card_rect(i).has_point(pos):
+			equipped_special = owned[i].id
+			_save()
+			_sfx("unlock", 1.1)
+			in_picker = false
+			_flash("%s EQUIPPED" % owned[i].name)
+			return
+	in_picker = false                              # tap outside any card closes
+	_sfx("click", 0.8)
+
+func _draw_special_picker() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.04, 0.08, 0.72))
+	_fancy_title("SPECIALS", 150.0, 30, Color(0.6, 0.92, 1.0), Color(0.4, 0.7, 1.0), 3.0)
+	_otext(Vector2(0, 188), "your LOFT meter fires this · tap to equip", 13, Color(1, 1, 1, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	var owned := _picker_specials()
+	for i in owned.size():
+		var sp: Dictionary = owned[i]
+		var rc := _picker_card_rect(i)
+		var eq: bool = sp.id == equipped_special
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.06, 0.12, 0.18, 0.98); sb.set_corner_radius_all(14)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(0.5, 0.92, 1.0, 0.95) if eq else Color(1, 1, 1, 0.16)
+		draw_style_box(sb, rc)
+		# the live DEMO box on the left
+		var demo := Rect2(rc.position + Vector2(10, 10), Vector2(80, rc.size.y - 20))
+		var db := StyleBoxFlat.new()
+		db.bg_color = Color(0.03, 0.06, 0.10, 1.0); db.set_corner_radius_all(10)
+		draw_style_box(db, demo)
+		_draw_special_demo(sp.id, demo)
+		# name + desc on the right
+		var tx := demo.position.x + demo.size.x + 14.0
+		var tw := rc.position.x + rc.size.x - tx - 14.0
+		draw_string(font, Vector2(tx, rc.position.y + 32.0), sp.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 19, Color(1, 0.92, 0.55) if not eq else Color(0.6, 0.95, 1.0))
+		_mtext(Vector2(tx, rc.position.y + 44.0 + font.get_ascent(13)), sp.desc, 13, Color(1, 1, 1, 0.72), tw)
+		if eq:
+			_otext(Vector2(rc.position.x + rc.size.x - 70.0, rc.position.y + rc.size.y - 10.0), "◆ EQUIPPED", 11, Color(0.5, 0.92, 1.0), 70, HORIZONTAL_ALIGNMENT_CENTER, 2)
+	_otext(Vector2(0, 232.0 + owned.size() * 112.0), "tap outside to close", 13, Color(1, 1, 1, 0.4), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+
+# a small looping animation per special — the "show me what it does" demo
+func _draw_special_demo(id: String, box: Rect2) -> void:
+	var c := box.get_center()
+	var t: float = fmod(anim_t, 1.6) / 1.6                  # 0..1 loop
+	match id:
+		"mega":                                            # a duck LEAPS up in an arc and slams
+			var ph := sin(t * PI)                           # 0 ground -> 1 apex -> 0 ground
+			var dp := c + Vector2(0, box.size.y * 0.32 - ph * box.size.y * 0.5)
+			if t > 0.92:                                    # landing shock
+				draw_arc(c + Vector2(0, box.size.y * 0.32), 26.0 * (t - 0.92) / 0.08, 0, TAU, 16, Color(1, 0.9, 0.5, 1.0 - (t - 0.92) / 0.08), 2.0)
+			draw_circle(dp, 9.0, Color(1.0, 0.86, 0.4))
+			draw_circle(dp + Vector2(4, -3), 2.0, Color(0.1, 0.1, 0.1))
+		"laser":                                           # a beam sweeps and pops dots
+			draw_circle(c + Vector2(-box.size.x * 0.34, 0), 8.0, Color(1.0, 0.86, 0.4))
+			var bx := lerpf(-box.size.x * 0.28, box.size.x * 0.42, t)
+			draw_rect(Rect2(c.x - box.size.x * 0.3, c.y - 2.5, bx + box.size.x * 0.3, 5.0), Color(0.5, 0.95, 1.0))
+			for k in 3:
+				var px := c.x + (k - 1) * 18.0
+				if px > c.x - box.size.x * 0.3 + bx:
+					draw_circle(Vector2(px, c.y), 4.0, Color(0.7, 0.2, 0.2))
+		"afterburner":                                     # a duck dashes right with a fire trail
+			var ax := lerpf(-box.size.x * 0.32, box.size.x * 0.34, t)
+			for k in 5:
+				draw_circle(c + Vector2(ax - k * 7.0, 0), 6.0 - k, Color(1.0, 0.55 - k * 0.06, 0.12, 0.8 - k * 0.14))
+			draw_circle(c + Vector2(ax, 0), 8.0, Color(1.0, 0.86, 0.4))
+		"slowmo":                                          # dots crawl down; a clock ticks
+			for k in 3:
+				var dy := fmod(t * 22.0 + k * 22.0, 66.0) - 33.0
+				draw_circle(Vector2(c.x + (k - 1) * 16.0, c.y + dy), 4.0, Color(0.7, 0.85, 1.0, 0.8))
+			draw_arc(c, 20.0, 0, TAU, 18, Color(0.6, 0.9, 1.0, 0.5), 2.0)
+			var ang := -PI * 0.5 + t * TAU
+			draw_line(c, c + Vector2(cos(ang), sin(ang)) * 16.0, Color(0.7, 0.95, 1.0), 2.0)
+		"wild":                                            # cycles through the other specials' glyphs
+			var ids := ["mega", "laser", "slowmo", "afterburner"]
+			var which: String = ids[int(t * 8.0) % ids.size()]
+			_relic_glyph(which, c, 18.0, Color(0.7, 0.95, 1.0))
+			draw_arc(c, 26.0, 0, TAU, 18, Color(0.6, 0.9, 1.0, 0.3), 1.5)
+		_:
+			_relic_glyph(id, c, 18.0, Color(0.7, 0.95, 1.0))
 
 func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	if tex == null:
