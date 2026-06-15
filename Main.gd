@@ -512,6 +512,12 @@ const CODEX := [
 		"lore": "Seventy pounds of wet, joyful chocolate lab in single-minded pursuit of a tennis ball. Means no harm whatsoever; will absolutely flatten you anyway. Never, ever harm-able — just hop clear."},
 	{"id": "elder", "name": "THE ANCIENT DUCK", "tag": "the shrine keeper",
 		"lore": "A bearded mallard older than the pond itself. Appears at the waterline to offer a blessing — richer for ducks who've bested the herons. Speaks mostly in riddles and quacks."},
+	{"id": "wingducks", "name": "WINGDUCKS", "tag": "your escort · legendary",
+		"lore": "Two loyal wingmen who scramble from your flanks to KAMIKAZE oncoming herons — yeeting them clean off-screen — then loop right back to formation. The best friends a duck could ask for."},
+	{"id": "frog", "name": "RIVER FROG", "tag": "log local · amphibian",
+		"lore": "A startled bullfrog squatting on a drifting log. Bounce his perch and he'll ribbit his displeasure in lowercase. Utterly harmless; deeply unimpressed."},
+	{"id": "gnome", "name": "GARDEN GNOME", "tag": "riverside oddity",
+		"lore": "One of the countless bits of bank junk the river hoards — a chipped garden gnome among the traffic cones, lost flip-flops and pool noodles. He has seen things."},
 ]
 var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
 var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
@@ -1155,7 +1161,7 @@ func _dbg() -> void:
 	get_viewport().get_texture().get_image().save_png("/tmp/s_stats.png")
 	in_stats = false; lifetime = {}; run_history = []
 	# the COMPENDIUM: most met, one still a mystery
-	codex_seen = ["gerald", "snapz", "rusty", "sadie", "elder"]
+	codex_seen = ["gerald", "snapz", "rusty", "sadie", "elder", "wingducks", "frog", "gnome"]
 	codex_viewed = codex_seen.duplicate()
 	_open_codex()
 	await get_tree().create_timer(0.2).timeout
@@ -1489,6 +1495,7 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_add_ducklings(3)
 	elif u.id == "wingducks":
 		wingducks = 2                          # (re-)deploy the escorts
+		_codex_see("wingducks")
 		wd_respawn.clear()
 	drafting = false
 	last_pick_name = u.name
@@ -2564,6 +2571,7 @@ func _update_play(delta: float) -> void:
 		var left := randf() < 0.5
 		props.append({"x": (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0)),
 			"y": -30.0, "kind": randi() % tex_props.size(), "phase": randf() * TAU})
+		if props[props.size() - 1].kind == 4: _codex_see("gnome")   # the garden gnome
 		prop_timer = randf_range(4.5, 9.0)         # junkier river, per request
 	for pr in props:
 		pr.y += speed * delta * 0.82
@@ -3300,6 +3308,7 @@ func _collide() -> void:
 					_float_text(duck_x, BASE_Y - 72.0, "+loft", Color(0.5, 0.85, 1.0))
 					if l.frog and not l.frog_gone:
 						l.frog_gone = true
+						_codex_see("frog")
 						_sfx("ribbit", randf_range(0.9, 1.15))
 						_float_text(l.x - l.w * 0.3, l.y - 18.0, "ribbit.", Color(0.65, 0.9, 0.55))
 						ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
@@ -4185,8 +4194,12 @@ func _open_codex() -> void:
 	_save()
 	_sfx("click")
 
+func _codex_pitch() -> float:
+	return minf(104.0, (VIEW.y - 166.0) / float(CODEX.size()))
+
 func _codex_rect(i: int) -> Rect2:
-	return Rect2(26.0, 152.0 + i * 104.0, VIEW.x - 52.0, 90.0)
+	var p := _codex_pitch()
+	return Rect2(26.0, 150.0 + i * p, VIEW.x - 52.0, p - 14.0)
 
 func _codex_press(pos: Vector2) -> void:
 	if codex_sel >= 0:                              # DETAIL view
@@ -4200,6 +4213,7 @@ func _codex_press(pos: Vector2) -> void:
 				"rusty": _sfx("screech", randf_range(0.95, 1.08), 1.0)
 				"snapz": _sfx("laugh", randf_range(0.9, 1.05))
 				"gerald", "eternal": _sfx("quack", randf_range(0.4, 0.55), -2.0)
+				"sadie": _sfx("quack", 0.5, -6.0)
 				_: _sfx("quack", randf_range(0.6, 0.8))
 		return
 	# LIST view
@@ -4226,6 +4240,12 @@ func _codex_tex(id: String):
 			return tex_sadie[0] if tex_sadie.size() > 0 else null
 		"elder":
 			return tex_elder
+		"frog":
+			return tex_frog
+		"wingducks":
+			return tex_duckling.get("idle", [null])[0] if not tex_duckling.is_empty() else null
+		"gnome":
+			return tex_props[4] if tex_props.size() > 4 else null
 	return null
 
 func _draw_codex() -> void:
@@ -4234,7 +4254,7 @@ func _draw_codex() -> void:
 		_draw_codex_detail(CODEX[codex_sel])
 		return
 	# LIST: a tappable row per soul; tap one to open its rotatable detail page
-	_fancy_title("COMPENDIUM", 92.0, 34, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
+	_fancy_title("CODEX", 92.0, 36, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
 	_otext(Vector2(0, 128), "%d of %d souls of the river met  ·  tap to study" % [codex_seen.size(), CODEX.size()],
@@ -4282,17 +4302,29 @@ func _draw_codex_detail(e: Dictionary) -> void:
 	var frames: Array = tex_codex_spin.get(sid, [])
 	var cx := VIEW.x * 0.5
 	var cyc := 320.0 + sin(anim_t * 2.0) * 8.0
-	if frames.size() > 0:
-		var fi: int = int(fposmod(codex_yaw, TAU) / TAU * frames.size()) % frames.size()
-		var fr: Texture2D = frames[fi]
-		var sc: float = minf(320.0 / fr.get_size().x, 240.0 / fr.get_size().y)
-		# a soft pedestal glow
-		draw_circle(Vector2(cx, cyc + 70.0), 70.0, Color(0.5, 0.7, 1.0, 0.06))
+	# REACTION: a squash-pop + a sparkle ring the instant you provoke it
+	var react := clampf(1.0 - (anim_t - menu_quack_t) / 0.4, 0.0, 1.0)
+	var pop := 1.0 + 0.18 * react * sin(react * PI)
+	if react > 0.0:
+		draw_arc(Vector2(cx, cyc), (1.0 - react) * 150.0 + 40.0, 0, TAU, 28, Color(1.0, 0.85, 0.4, react * 0.7), 3.0)
+	draw_circle(Vector2(cx, cyc + 70.0), 70.0, Color(0.5, 0.7, 1.0, 0.06))
+	var spinnable := frames.size() > 0
+	if spinnable:
+		var fr: Texture2D = frames[int(fposmod(codex_yaw, TAU) / TAU * frames.size()) % frames.size()]
+		if e.id == "rusty" and react > 0.0 and tex_hawk_screech != null:
+			fr = tex_hawk_screech                  # RUSTY's beak gapes mid-SCREECH
+		var sc: float = minf(320.0 / fr.get_size().x, 240.0 / fr.get_size().y) * pop
 		if e.id == "eternal":
 			_blit_modulated(fr, Vector2(cx, cyc), sc, Color(1.5, 0.4, 0.42))
 		else:
 			_blit_centered(fr, Vector2(cx, cyc), sc)
-	_otext(Vector2(0, 470), "< drag to spin · tap to provoke >", 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	else:                                          # no turntable (props/critters): a static portrait
+		var st = _codex_tex(e.id)
+		if st != null:
+			var sc2: float = minf(220.0 / st.get_size().x, 200.0 / st.get_size().y) * pop
+			_blit_centered(st, Vector2(cx, cyc), sc2)
+	var hint := "< drag to spin · tap to provoke >" if spinnable else "tap to provoke"
+	_otext(Vector2(0, 470), hint, 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# lore panel
 	var pr := Rect2(36.0, 520.0, VIEW.x - 72.0, 0.0)
 	var lh: float = font.get_multiline_string_size(e.lore, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 32.0, 17).y
