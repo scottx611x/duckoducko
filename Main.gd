@@ -25,6 +25,8 @@ const LASER_W := 78.0
 const WELL_DECK := ["well.", "rude.", "that's a log.", "ok.", "hm.", "a tragedy.", "splash.",
 	"physics.", "the audacity.", "log: 1 — duck: 0", "*sad quack*"]
 const HERON_DECK := ["a HERON!", "GERALD?!", "death from above.", "the sky is rude."]
+const CLOSE_DECK := ["close!", "NEAR MISS!", "phew!", "yikes!", "too close!", "cheated death!", "nimble."]
+var nearmiss_cd := 0.0          # cooldown so a flurry of herons doesn't spam the callout
 const SADIE_DECK := ["you bonked the good girl.", "SADIE?! no!!", "she forgives you. (you don't.)",
 	"bad duck. bad.", "the chuckit waits for no one."]
 
@@ -2784,6 +2786,8 @@ func _update_play(delta: float) -> void:
 	last_duck_x = duck_x
 	if duck_shake > 0.0:
 		duck_shake = maxf(0.0, duck_shake - delta)
+	if nearmiss_cd > 0.0:
+		nearmiss_cd -= delta
 
 	_update_hop(delta)
 	_update_wake(delta)
@@ -3397,6 +3401,11 @@ func _collide() -> void:
 				if absf(e.x - duck_x) >= 46.0 or is_airborne():
 					e["nm"] = true
 					_st("nearmiss")
+					if nearmiss_cd <= 0.0:             # a juicy "close!" callout (rate-limited)
+						nearmiss_cd = 0.9
+						_float_text(duck_x, BASE_Y - 96.0, CLOSE_DECK[randi() % CLOSE_DECK.size()], Color(1.0, 0.85, 0.35))
+						_spawn_parts(e.x, BASE_Y - 20.0, 5, Color(1.0, 0.95, 0.6, 0.8), 90.0)
+						_sfx("fwoosh", 1.4, -9.0)
 			if absf(e.x - duck_x) < 44.0 and absf(e.y - BASE_Y) < 42.0:
 				if is_airborne():                    # STOMP from above — splat
 					_stomp_critter(e.x, e.y, "heron")
