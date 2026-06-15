@@ -439,6 +439,7 @@ var fire_t := 0.0               # ON FIRE: seconds of burn remaining
 var fire_max := 5.0             # ON FIRE: full burn length (for the flare-up ramp)
 var heat_warned := false        # one "heating up..." per streak
 var picked := {}                # upgrade id -> stacks taken this run
+var run_boons: Array = []       # persistent shrine boons taken this run (for the relic row)
 var shield_charges := 0
 var air_hops := 0               # double-hops spent since last landing
 var hyper := false              # current MEGA is a spring-log hyper jump
@@ -1000,8 +1001,12 @@ func _dbg() -> void:
 	in_menu = false
 	alive = true
 	distance = 52000.0
-	next_boss_idx = 0
+	next_boss_idx = 2                   # GERALD THE ETERNAL (final): bigger + tinted + intro
 	_start_boss()
+	boss.t = 0.9                        # mid-entrance so the prominent intro band shows
+	await get_tree().create_timer(0.05).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_eternal.png")
 	boss.phase = "fight"
 	boss.dive_stage = "dazed"
 	boss.daze_t = 1.0
@@ -1144,6 +1149,9 @@ func _pick_boon(b: Dictionary) -> void:
 		"secondwind":
 			boon_revive = true
 			boon_pace = 0.9
+	# remember the boons with ongoing effects so they show as relics
+	if b.id in ["tailwind", "breadwinner", "famine", "highstakes", "secondwind", "glasscannon"]:
+		run_boons.append(b.id)
 	in_shrine = false
 	fade = 0.0
 	_sfx("unlock")
@@ -1364,27 +1372,45 @@ func _update_wingducks(delta: float) -> void:
 				_sfx("fwoosh", 1.4, -6.0)
 				if wingducks <= 0:
 					break
+	# during a boss the escorts dive-bomb HIM instead (each strike chips half an HP)
+	if wingducks > 0 and boss != null and boss.phase == "fight" and _missile_for(-999) == null:
+		var side: int = -1 if randf() < 0.5 else 1
+		wd_missiles.append({"x": _wingduck_pos(side).x, "y": _wingduck_pos(side).y, "tid": -999})
+		wingducks -= 1
+		_sfx("fwoosh", 1.4, -6.0)
 	# missiles home in
 	for i in range(wd_missiles.size() - 1, -1, -1):
 		var m: Dictionary = wd_missiles[i]
-		var tgt = _heron_by_id(m.tid)
-		if tgt == null:                            # laser/fire got it first — fly home
-			wd_missiles.remove_at(i)
-			wd_respawn.append(anim_t + 4.0)
-			continue
-		var to := Vector2(tgt.x - m.x, tgt.y - m.y)
+		var boss_m: bool = m.tid == -999
+		var tx := 0.0
+		var ty := 0.0
+		if boss_m:
+			if boss == null or boss.phase != "fight":   # boss left — fly home
+				wd_missiles.remove_at(i); wd_respawn.append(anim_t + 4.0); continue
+			tx = boss.x; ty = boss.y
+		else:
+			var tgt = _heron_by_id(m.tid)
+			if tgt == null:                        # laser/fire got it first — fly home
+				wd_missiles.remove_at(i); wd_respawn.append(anim_t + 4.0); continue
+			tx = tgt.x; ty = tgt.y
+		var to := Vector2(tx - m.x, ty - m.y)
 		var step := 760.0 * delta
 		if to.length() <= step + 26.0:             # YEET. explosion included.
-			ripples.append({"x": tgt.x, "y": tgt.y, "t": 0.0, "max": 130.0})
-			_spawn_parts(tgt.x, tgt.y, 20, Color(1.0, 0.62, 0.2), 260.0)
-			_spawn_parts(tgt.x, tgt.y, 10, Color(0.97, 0.87, 0.45), 200.0)
-			_float_text(tgt.x, tgt.y - 34.0, "o7", Color(1, 1, 1, 0.95))
+			ripples.append({"x": tx, "y": ty, "t": 0.0, "max": 130.0})
+			_spawn_parts(tx, ty, 20, Color(1.0, 0.62, 0.2), 260.0)
+			_spawn_parts(tx, ty, 10, Color(0.97, 0.87, 0.45), 200.0)
+			_float_text(tx, ty - 34.0, "o7", Color(1, 1, 1, 0.95))
 			_sfx("crunch", 1.1)
 			_sfx("quack", 1.5, -3.0)
 			duck_shake = 0.12
-			enemies.erase(tgt)
 			wd_missiles.remove_at(i)
-			wd_respawn.append(anim_t + 20.0)
+			if boss_m:
+				_chip_boss(0.5, Vector2(tx, ty))
+				wd_respawn.append(anim_t + 5.0)    # back into the fray quickly
+			else:
+				var tgt2 = _heron_by_id(m.tid)
+				if tgt2 != null: enemies.erase(tgt2)
+				wd_respawn.append(anim_t + 20.0)
 		else:
 			var dir := to.normalized()
 			m.x += dir.x * step
@@ -1392,6 +1418,11 @@ func _update_wingducks(delta: float) -> void:
 
 func _crumb_hits() -> void:
 	for c in crumbs:
+		if boss != null and boss.phase == "fight" \
+				and absf(boss.x - c.x) < 44.0 and absf(boss.y - c.y) < 44.0:
+			c["hit"] = true                        # CRUMB CANNON peppers the boss (3 = 1 HP)
+			_chip_boss(0.34, Vector2(c.x, c.y))
+			continue
 		for e in enemies:
 			if absf(e.x - c.x) < 36.0 and absf(e.y - c.y) < 36.0:
 				c["hit"] = true
@@ -1449,6 +1480,9 @@ func _landing_blast(radius: float, fiery := false) -> void:
 		else:
 			survivors.append(l)
 	logs = survivors
+	# THUNDER FEET: a landing shockwave near a beached boss splinters into him too
+	if boss != null and boss.phase == "fight" and absf(boss.x - duck_x) < radius + 30.0 and boss.y > BASE_Y - 60.0:
+		_chip_boss(0.5, Vector2(boss.x, BASE_Y))
 	if smashed_n > 0:
 		_sfx("crunch", randf_range(0.9, 1.1))
 		if _up("aftershock") > 0:              # AFTERSHOCK: wreckage becomes LOFT
@@ -1514,6 +1548,7 @@ func reset_game() -> void:
 	boss_waves.clear()
 	next_boss_idx = 0
 	boss_hp_bonus = 0
+	run_boons.clear()
 	boon_pace = 1.0
 	boon_feather_mult = 1
 	boon_heron_mult = 1.0
@@ -1836,7 +1871,7 @@ func _pick_hop_style() -> void:
 			_spawn_parts(duck_x, BASE_Y - 60.0, 6, Color(1, 1, 0.7, 0.9), 120.0)
 
 func mega_hop() -> void:
-	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0 or boss != null:
 		return
 	state = St.MEGA
 	mega_t = 0.0
@@ -1850,7 +1885,7 @@ func mega_hop() -> void:
 		_hit_boss(1)
 
 func fire_laser() -> void:
-	if not alive or in_menu or not loft_ready or state == St.MEGA:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or boss != null:
 		return
 	loft = 0.0
 	loft_ready = false
@@ -2018,6 +2053,8 @@ func _update_play(delta: float) -> void:
 	if _up("hotwheels") > 0:
 		if fire_t > 0.0:
 			fire_t -= delta
+			if boss != null and boss.phase == "fight":   # ON FIRE sears the boss over time
+				_chip_boss(0.55 * delta * (1.0 + 0.4 * (_up("hotwheels") - 1)), Vector2(boss.x, boss.y + 30.0))
 			# embers pop off the plume and sail up; smoke curls after them
 			for i in 3:
 				parts.append({"x": duck_x + randf_range(-20, 20), "y": BASE_Y + randf_range(-26, 8),
@@ -2072,8 +2109,9 @@ func _update_play(delta: float) -> void:
 
 	# a full meter IS the trigger: the special fires itself on a short fuse (no buttons).
 	# fires fast when grounded, but ALSO force-fires after a moment if you're hop-spamming
-	# so the meter never just sits there full.
-	if loft_ready and laser_t <= 0.0 and state != St.MEGA:
+	# so the meter never just sits there full. SUPPRESSED during a boss — bosses are a
+	# pure dodge->stomp skill check, and your charge is held for after.
+	if loft_ready and laser_t <= 0.0 and state != St.MEGA and boss == null:
 		var el := anim_t - loft_ready_t
 		if (el > 1.2 and state == St.GROUNDED) or el > 2.6:
 			if randf() < 0.5:
@@ -2219,38 +2257,39 @@ func _start_boss() -> void:
 	var final_gerald: bool = kind == "gerald" and idx >= 2
 	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
 	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
-	var bscale := 1.0
+	var bscale := 1.25                           # GERALD THE IMMENSE is a big bird
 	var title := "GERALD THE IMMENSE"
 	var intro_pool := "gerald"
+	var tint := Color(1, 1, 1)
 	if kind == "snapz":                          # the turtle is a tougher, faster brute
 		hp += 3
 		gap = 1.5
+		bscale = 1.0
 		title = "SNAPZ"
 		intro_pool = "snapz"
-	elif final_gerald:                           # the FINAL heron: bigger, meaner, eternal
-		hp += 2
-		gap *= 0.78
-		bscale = 1.4
+	elif final_gerald:                           # the FINAL heron: HUGE, undead, relentless
+		hp += 4
+		gap *= 0.66
+		bscale = 1.85
 		title = "GERALD THE ETERNAL"
 		intro_pool = "gerald_final"
+		tint = Color(1.25, 0.7, 0.78)            # a ghostly, blood-tinged pallor
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
 		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false, "kind": kind,
-		"dive_gap": gap, "scale": bscale, "title": title,
+		"dive_gap": gap, "scale": bscale, "title": title, "tint": tint, "chip": 0.0,
 		"dive_t": gap, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
 		"say": "", "say_t": -10.0, "sub": 0.0,
 		"intro": BOSS_INTROS[intro_pool][randi() % BOSS_INTROS[intro_pool].size()],
 	}
+	# the name is shown big by the intro band (_draw_boss_intro) — no redundant flash
 	if kind == "snapz":
-		_flash("SNAPZ\nawakens.")
 		_sfx("laugh", 1.0)                    # a big guttural laugh from the deep
 		_sfx("splash_big", 0.35)
 		duck_shake = maxf(duck_shake, 0.6)
-	else:
-		_flash(title)
-		if final_gerald:
-			duck_shake = maxf(duck_shake, 0.5)
+	elif final_gerald:
+		duck_shake = maxf(duck_shake, 0.5)
 	_sfx("mega", 0.45)
 	_sfx("splash_big", 0.5)
 	if music_player != null:
@@ -2283,11 +2322,25 @@ func _boss_leave() -> void:
 	_float_text(duck_x, BASE_Y - 150.0, "SPOILS OF WAR!", Color(1.0, 0.6, 0.95))
 	_grant_random_upgrade(rarity)
 
-func _hit_boss(n: int) -> void:
+# your damaging LEGENDARIES chip the boss slowly (wingducks, ON FIRE, cannon...).
+# fractional damage accumulates into whole HP. Bypasses SNAPZ's armor — these are
+# your hard-won powers, they always whittle him down.
+func _chip_boss(amount: float, where := Vector2.ZERO) -> void:
+	if boss == null or boss.phase != "fight":
+		return
+	boss.chip += amount
+	boss_flash = maxf(boss_flash, 0.18)
+	if where != Vector2.ZERO:
+		_spawn_parts(where.x, where.y, 4, Color(1.0, 0.7, 0.3), 120.0)
+	while boss.chip >= 1.0:
+		boss.chip -= 1.0
+		_hit_boss(1, true)
+
+func _hit_boss(n: int, bypass_armor := false) -> void:
 	if boss == null or boss.phase != "fight":
 		return
 	# SNAPZ is armored: shrug off everything unless his jaws are STUCK out (post-snap)
-	if boss.kind == "snapz" and boss.dive_stage != "stuck":
+	if boss.kind == "snapz" and boss.dive_stage != "stuck" and not bypass_armor:
 		_float_text(boss.x, boss.y - 40.0, "CLANG!", Color(0.7, 0.75, 0.7))
 		_sfx("bonk", 0.7, -4.0)
 		return
@@ -2781,6 +2834,8 @@ func _draw_status_icons() -> void:
 		var n: int = picked.get(u.id, 0)
 		if n > 0:
 			relics.append({"id": u.id, "rarity": u.rarity, "n": n, "glow": u.id == "hotwheels" and fire_t > 0.0})
+	for bid in run_boons:                                  # ancient-duck boons (gold relics)
+		relics.append({"id": bid, "rarity": 2, "n": 1, "glow": false, "boon": true})
 	for r in relics:
 		if x + bs > VIEW.x - 30.0:                          # wrap (rarely needed)
 			x = 22.0; y += bs + gap
@@ -2793,7 +2848,12 @@ func _draw_relic(rect: Rect2, r: Dictionary) -> void:
 	sb.bg_color = Color(0.07, 0.11, 0.16, 0.92)
 	sb.set_corner_radius_all(8)
 	sb.set_border_width_all(2)
-	if r.glow:                                             # active (e.g. ON FIRE right now)
+	if r.get("boon", false):                               # ancient-duck boon: gold, faintly haloed
+		col = Color(1.0, 0.86, 0.42)
+		sb.bg_color = Color(0.14, 0.12, 0.06, 0.92)
+		sb.border_color = Color(col.r, col.g, col.b, 0.9)
+		draw_circle(rect.get_center(), rect.size.x * 0.62, Color(1.0, 0.86, 0.4, 0.08))
+	elif r.glow:                                           # active (e.g. ON FIRE right now)
 		var p := 0.5 + 0.5 * sin(anim_t * 8.0)
 		sb.border_color = Color(1.0, 0.6, 0.2, 0.7 + 0.3 * p)
 		draw_circle(rect.get_center(), rect.size.x * 0.7, Color(1.0, 0.5, 0.15, 0.12 + 0.1 * p))
@@ -2856,6 +2916,28 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"hotwheels":                                       # a flame
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
 				c + Vector2(s * 0.3, s), c + Vector2(-s * 0.3, s), c + Vector2(-s * 0.7, s * 0.3)]), col)
+		"tailwind":                                        # wind: three speed lines
+			for dy in [-s * 0.5, 0.0, s * 0.5]:
+				draw_line(c + Vector2(-s, dy), c + Vector2(s * 0.6, dy), col, 2.0)
+				draw_line(c + Vector2(s * 0.6, dy), c + Vector2(s * 0.2, dy - s * 0.3), col, 2.0)
+		"breadwinner":                                     # a loaf of bread
+			draw_arc(c + Vector2(0, s * 0.3), s, PI, TAU, 14, col, 3.0)
+			draw_line(c + Vector2(-s, s * 0.3), c + Vector2(s, s * 0.3), col, 3.0)
+		"famine":                                          # an empty bowl
+			draw_arc(c, s * 0.9, 0.15 * PI, 0.85 * PI, 14, col, 3.0)
+		"highstakes":                                      # a die (square + pips)
+			draw_rect(Rect2(c - Vector2(s, s), Vector2(s * 2, s * 2)), col, false, 2.0)
+			for d in [Vector2(-s * 0.4, -s * 0.4), Vector2(0, 0), Vector2(s * 0.4, s * 0.4)]:
+				draw_circle(c + d, s * 0.18, col)
+		"secondwind":                                      # a heart (revive)
+			draw_circle(c + Vector2(-s * 0.4, -s * 0.2), s * 0.5, col)
+			draw_circle(c + Vector2(s * 0.4, -s * 0.2), s * 0.5, col)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.85, 0), c + Vector2(s * 0.85, 0), c + Vector2(0, s)]), col)
+		"glasscannon":                                     # a cracked diamond (risk)
+			draw_polyline(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0), c + Vector2(0, s),
+				c + Vector2(-s, 0), c + Vector2(0, -s)]), col, 2.0)
+			draw_line(c + Vector2(0, -s), c + Vector2(s * 0.3, 0), col, 1.5)
+			draw_line(c + Vector2(s * 0.3, 0), c + Vector2(-s * 0.2, s * 0.6), col, 1.5)
 		_:                                                  # fallback: a gem
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0), c + Vector2(0, s), c + Vector2(-s, 0)]), col)
 
@@ -3482,7 +3564,7 @@ func _draw_boss_gerald() -> void:
 			draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, BASE_Y + 6) - shs * 0.5, shs),
 				false, Color(0, 0, 0, 0.18 + 0.22 * sh))
 		var dazed: bool = boss.dive_stage == "dazed" and not boss.stomped
-		var mod := Color(1, 1, 1)
+		var mod: Color = boss.get("tint", Color(1, 1, 1))   # GERALD THE ETERNAL is blood-pale
 		if dazed:
 			# woozy & vulnerable: a warm pulsing glow says "HIT ME"
 			var gl := 0.5 + 0.5 * sin(anim_t * 9.0)
@@ -3510,10 +3592,7 @@ func _draw_boss_gerald() -> void:
 			s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true)
-	# title card during the entrance — name + a varying intro, in CrEePY letters
-	if boss.phase == "enter" and boss.t > 0.35:
-		_creepy_text(VIEW.x * 0.5, 250.0, boss.title, 36 if boss.title.length() > 16 else 40)
-		_creepy_text(VIEW.x * 0.5, 296.0, boss.intro, 20)
+	_draw_boss_intro()
 	# HP pips, top center — width adapts so a long health bar never clips off-screen
 	var pips: int = boss.max_hp
 	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
@@ -3576,11 +3655,24 @@ func _draw_boss_snapz() -> void:
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 18, 1.0, true)
 	_draw_boss_pips()
-	if boss.phase == "enter" and boss.t > 0.35:
-		_creepy_text(VIEW.x * 0.5, 250.0, "SNAPZ", 48)
-		_creepy_text(VIEW.x * 0.5, 300.0, boss.intro, 20)
+	_draw_boss_intro()
 
 # shared boss health pips, top-center
+# a big, dramatic boss intro — the name + a varying line in spooky red, on a dark band
+func _draw_boss_intro() -> void:
+	if boss.phase != "enter" or boss.t < 0.3:
+		return
+	var cy := 268.0
+	var a: float = clampf((boss.t - 0.3) / 0.3, 0.0, 1.0)
+	# darken the whole screen a touch, then a banded spotlight for the letters
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0, 0, 0, 0.32 * a))
+	draw_rect(Rect2(0, cy - 62.0, VIEW.x, 138.0), Color(0.0, 0.0, 0.0, 0.55 * a))
+	draw_rect(Rect2(0, cy - 62.0, VIEW.x, 3.0), Color(0.8, 0.04, 0.07, 0.8 * a))
+	draw_rect(Rect2(0, cy + 73.0, VIEW.x, 3.0), Color(0.8, 0.04, 0.07, 0.8 * a))
+	var tsz: int = 56 if boss.title.length() < 14 else 42
+	_creepy_text(VIEW.x * 0.5, cy, boss.title, tsz)
+	_creepy_text(VIEW.x * 0.5, cy + 44.0, boss.intro, 24)
+
 func _draw_boss_pips() -> void:
 	var pips: int = boss.max_hp
 	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
