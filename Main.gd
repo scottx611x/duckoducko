@@ -179,7 +179,7 @@ const META := [
 # LOFT specials: fire when your meter fills. MEGA is the starter (always owned),
 # LASER the first unlock, then two heavier hitters. Buy in the shop, swap at duck-select.
 const SPECIALS := [
-	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a colossal stomp-leap — flatten the lane and ride the arc"},
+	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a giant invincible leap — soar over the river and crush whatever you land on"},
 	{"id": "wild",   "name": "WILD CARD",   "cost": 0,   "desc": "the meter fires a RANDOM special you own — maximum whimsy"},
 	{"id": "laser",  "name": "QUACK LASER", "cost": 0,   "desc": "a searing beam vaporizes every log & heron dead ahead"},
 	{"id": "slowmo", "name": "ZEN MODE",    "cost": 320, "desc": "bullet-time! the whole river CRAWLS for a few seconds so you can thread the chaos"},
