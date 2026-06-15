@@ -957,7 +957,8 @@ func _dbg() -> void:
 	cam.zoom = Vector2.ONE
 	picked = {"spring": 2, "duckling": 1, "gold": 1}
 	run_feathers = 7
-	die("that's a log.")
+	duck_name = "Sir Quackington the Magnificent"   # long name to test wrap
+	die("the heron remembers your face and is deeply unimpressed.")
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_dead.png")
@@ -2836,6 +2837,13 @@ func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 	draw_string_outline(font, pos, txt, align, w, size, osize, Color(0.07, 0.09, 0.13, 0.85 * col.a))
 	draw_string(font, pos, txt, align, w, size, col)
 
+# outlined text that WRAPS to multiple lines within `width` (no clipping/overflow)
+func _mtext(pos: Vector2, txt: String, size: int, col: Color, width: float,
+		align := HORIZONTAL_ALIGNMENT_CENTER, osize := 6) -> void:
+	draw_multiline_string_outline(font, pos, txt, align, width, size, -1, osize,
+		Color(0.07, 0.09, 0.13, 0.85 * col.a))
+	draw_multiline_string(font, pos, txt, align, width, size, -1, col)
+
 # the run's eulogy: panel, stats, build chips, retry
 func _draw_shrine() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
@@ -2929,14 +2937,23 @@ func _draw_death() -> void:
 	sb.set_border_width_all(2)
 	sb.border_color = Color(1, 1, 1, 0.22)
 	draw_style_box(sb, panel)
-	_otext(Vector2(0, 322), dead_msg, 46, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	# the eulogy: auto-shrink to fit ~2 lines, wrap, and FLOW the rest below its height
+	var msg_w := panel.size.x - 28.0
+	var px := panel.position.x + 14.0
+	var msg_sz := 46
+	while msg_sz > 26 and font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y > 108.0:
+		msg_sz -= 4
+	var ty := 298.0
+	_mtext(Vector2(px, ty + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	var ny := ty + font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y + 16.0
 	var who := duck_name if duck_name != "" else "you"
-	_otext(Vector2(0, 374), "%s paddled %d ft" % [who, dead_m], 26, Color.WHITE)
+	_mtext(Vector2(px, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, msg_w)
+	ny += font.get_multiline_string_size("%s paddled %d ft" % [who, dead_m], HORIZONTAL_ALIGNMENT_CENTER, msg_w, 24).y + 10.0
 	if dead_record:
-		_otext(Vector2(0, 410), "★ NEW BEST ★", 24, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
+		_otext(Vector2(0, ny + 18.0), "★ NEW BEST ★", 24, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
 	else:
-		_otext(Vector2(0, 410), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
-	_feather_text(Vector2(VIEW.x * 0.5, 448), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
+		_otext(Vector2(0, ny + 16.0), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
+	_feather_text(Vector2(VIEW.x * 0.5, ny + 50.0), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
 	# the build, as rarity-colored chips (flow layout)
 	var chips: Array = []
 	for u in UPGRADES:
@@ -3658,7 +3675,7 @@ func _draw_menu() -> void:
 	_otext(Vector2(0, 200 + tbob), "DUCKODUCKO", 66, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
 	_otext(Vector2(0, 246 + tbob), "a whimsical duck hopper", 24, Color(0.95, 0.97, 1.0, 0.85))
 	var fact: String = FACTS[int(anim_t / 5.0) % FACTS.size()]
-	_otext(Vector2(0, 284), "duck fact: " + fact, 17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	_mtext(Vector2(30, 284), "duck fact: " + fact, 17, Color(1, 1, 1, 0.6), VIEW.x - 60.0, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
 	if has_art:
 		# orbiting collectibles around the centered hero
