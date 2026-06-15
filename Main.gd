@@ -314,6 +314,7 @@ var pause_yaw := 0.0             # the pause-screen duck is a spinnable turntabl
 var pause_line_t := 0.0
 var pause_power_sel := -1        # tapped relic index on the pause screen (-1 = none)
 var death_power_sel := -1        # tapped relic index on the DEATH screen (-1 = none)
+var death_relic_y := 524.0       # y of the relic row (flows with the eulogy; shared w/ input)
 var in_stats := false            # the LOGBOOK / stats screen is open
 var stats_from_death := false    # opened from death screen (back returns there, not menu)
 var flash_seq := 0               # guards overlapping center-label flashes
@@ -4017,35 +4018,43 @@ func _draw_death() -> void:
 	# the eulogy: auto-shrink to fit ~2 lines, wrap, and FLOW the rest below its height
 	var msg_w := panel.size.x - 28.0
 	var px := panel.position.x + 14.0
-	var msg_sz := 46
-	while msg_sz > 24 and font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y > 86.0:
+	var msg_sz := 44
+	while msg_sz > 24 and font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y > 84.0:
 		msg_sz -= 4
-	var ty := 298.0
-	_mtext(Vector2(px, ty + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
-	var ny := ty + font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y + 16.0
+	var ny := 282.0
+	_mtext(Vector2(px, ny + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
+	ny += font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y + 20.0
 	var who := duck_name if duck_name != "" else "ducko"
-	_mtext(Vector2(px, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, msg_w)
-	ny += font.get_multiline_string_size("%s paddled %d ft" % [who, dead_m], HORIZONTAL_ALIGNMENT_CENTER, msg_w, 24).y + 10.0
+	_otext(Vector2(0, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, VIEW.x)
+	ny += 36.0
 	if dead_record:
-		_otext(Vector2(0, ny + 18.0), "★ NEW BEST ★", 24, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
+		_otext(Vector2(0, ny + 16.0), "★ NEW BEST ★", 22, Color(1, 0.85, 0.3, 0.7 + 0.3 * sin(anim_t * 6.0)))
 	else:
-		_otext(Vector2(0, ny + 16.0), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
-	_feather_text(Vector2(VIEW.x * 0.5, ny + 50.0), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
+		_otext(Vector2(0, ny + 16.0), "best: %d ft" % best_m, 18, Color(1, 1, 1, 0.6))
+	ny += 28.0
+	_feather_text(Vector2(VIEW.x * 0.5, ny + 16.0), "+%d  ·  wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
+	ny += 40.0
 	# the build, as relic ICONS (tap any to inspect — they don't trigger a retry)
-	var rrects := _death_relic_rects()
+	var rrects := _death_relic_rects_seed(ny + 28.0)
 	if rrects.is_empty():
-		_otext(Vector2(0, 528), "no powers. raw talent only.", 16, Color(1, 1, 1, 0.5))
+		_otext(Vector2(0, ny + 14.0), "no powers. raw talent only.", 16, Color(1, 1, 1, 0.5))
+		ny += 30.0
 	else:
-		_otext(Vector2(0, 504), "YOUR RUN  (tap a power)", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		_otext(Vector2(0, ny + 12.0), "YOUR RUN  ·  tap a power", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		for i in rrects.size():
 			var rr: Dictionary = rrects[i]
 			_draw_relic(rr.rect, rr.relic)
 			if i == death_power_sel:
 				draw_arc(rr.rect.get_center(), rr.rect.size.x * 0.66, 0, TAU, 20, Color(1, 1, 1, 0.85), 2.0)
-	# inspected power's explanation, floated above the buttons
+		# advance past however many relic rows we drew
+		var bottom := death_relic_y
+		for rr in rrects:
+			bottom = maxf(bottom, rr.rect.end.y)
+		ny = bottom + 14.0
+	# inspected power's explanation, OR the retry hint — sits in the space left below
 	if death_power_sel >= 0 and death_power_sel < rrects.size():
 		var info := _power_info(rrects[death_power_sel].relic)
-		var pr := Rect2(40.0, 566.0, VIEW.x - 80.0, 0.0)
+		var pr := Rect2(40.0, minf(ny, 560.0), VIEW.x - 80.0, 0.0)
 		var dh: float = font.get_multiline_string_size(info.desc, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 24.0, 15).y
 		pr.size.y = 30.0 + dh + 10.0
 		var psb := StyleBoxFlat.new()
@@ -4055,7 +4064,7 @@ func _draw_death() -> void:
 		_otext(Vector2(pr.position.x, pr.position.y + 22.0), info.name, 17, Color(1, 0.92, 0.45), pr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 		_mtext(Vector2(pr.position.x + 12.0, pr.position.y + 30.0 + font.get_ascent(15)), info.desc, 15, Color(1, 1, 1, 0.85), pr.size.x - 24.0)
 	else:
-		_otext(Vector2(0, 618), "tap empty space to retry", 24, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)))
+		_otext(Vector2(0, 614.0), "tap empty space to retry", 22, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)))
 	var mb := StyleBoxFlat.new()
 	mb.bg_color = Color(0.10, 0.17, 0.24, 0.9)
 	mb.set_corner_radius_all(12)
@@ -4066,14 +4075,19 @@ func _draw_death() -> void:
 	draw_style_box(mb, DEATH_STATS_BTN)
 	_btn_label(DEATH_STATS_BTN, "logbook", 18, Color(0.7, 0.9, 1.0))
 
-# death-screen relic hit rects (shared by draw + tap) — centred rows
+# draw sets the relic row Y from the flowed layout, then builds the rects
+func _death_relic_rects_seed(y: float) -> Array:
+	death_relic_y = y
+	return _death_relic_rects()
+
+# death-screen relic hit rects (shared by draw + tap) — centred rows at the flowed Y
 func _death_relic_rects() -> Array:
 	var drelics := _active_relics()
 	var out: Array = []
 	var dbs := 36.0
 	var dgap := 8.0
 	var per_row: int = int((VIEW.x - 112.0 - 44.0) / (dbs + dgap))
-	var cy := 524.0
+	var cy := death_relic_y
 	for ri in drelics.size():
 		var col_i: int = ri % per_row
 		var row_i: int = ri / per_row
