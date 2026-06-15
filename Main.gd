@@ -179,7 +179,7 @@ const META := [
 const SPECIALS := [
 	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a colossal stomp-leap — flatten the lane and ride the arc"},
 	{"id": "wild",   "name": "WILD CARD",   "cost": 0,   "desc": "the meter fires a RANDOM special you own — maximum whimsy"},
-	{"id": "laser",  "name": "QUACK LASER", "cost": 150, "desc": "a searing beam vaporizes every log & heron dead ahead"},
+	{"id": "laser",  "name": "QUACK LASER", "cost": 0,   "desc": "a searing beam vaporizes every log & heron dead ahead"},
 	{"id": "tidal",  "name": "TIDAL WAVE",  "cost": 320, "desc": "a wall of water sweeps the WHOLE screen clear of hazards"},
 	{"id": "afterburner", "name": "AFTERBURNER", "cost": 520, "desc": "BLAST off ablaze — invincible & double-pace for a roaring dash"},
 ]
@@ -408,7 +408,7 @@ var hop_t := 0.0
 var mega_t := 0.0
 var laser_t := 0.0
 var dash_t := 0.0               # AFTERBURNER: invincible double-pace dash remaining
-var specials_owned: Array = ["mega", "wild"]   # LOFT specials owned (mega + wild are free)
+var specials_owned: Array = ["mega", "wild", "laser"]   # MEGA, WILD, LASER are free — the classic silly mix
 var equipped_special := "wild"         # the one that fires when LOFT fills (wild = random whimsy)
 
 # per-duck gameplay multipliers, set from ROSTER stats in start_game
@@ -936,6 +936,8 @@ func _load_save() -> void:
 			specials_owned.append("wild")
 			if equipped_special == "mega":
 				equipped_special = "wild"
+		if "laser" not in specials_owned:                # QUACK LASER is free now — part of the silly mix
+			specials_owned.append("laser")
 		if equipped_special not in specials_owned:
 			equipped_special = "wild"
 		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
@@ -1200,7 +1202,7 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_shop.png")
-	feathers = 0; meta_owned = []; specials_owned = ["mega", "wild"]; equipped_special = "wild"
+	feathers = 0; meta_owned = []; specials_owned = ["mega", "wild", "laser"]; equipped_special = "wild"
 	# a SECRET duck in select (should read "??? SECRET ???", hidden name)
 	_open_select()
 	sel_index = ROSTER.size() - 2          # disco (locked secret)
