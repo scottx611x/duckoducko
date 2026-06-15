@@ -3530,8 +3530,18 @@ func _draw_fire_volume(pos: Vector2, scale: float, intensity: float) -> void:
 		Color(1.0, 0.70, 0.18, 0.16 * intensity))
 	var ff: Texture2D = tex_fire[int(anim_t * 13.0) % tex_fire.size()]
 	var fsz: Vector2 = ff.get_size() * scale
-	var wob := Vector2(sin(anim_t * 21.0) * 1.6, 0)
-	# bloom pass (same frame, fatter + faint), then the crisp volume
+	# the duck rushes forward (UP), so flame streams BEHIND it: downward, leaning
+	# opposite to your steering. A comet-tail of fading, shrinking copies.
+	var lean: float = clampf(-duck_vx / 240.0, -1.2, 1.2)
+	var back := Vector2(lean * 15.0, 21.0)                 # one "step" behind
+	for i in range(4, 0, -1):                              # far tail first (under the rest)
+		var tp: Vector2 = pos + back * float(i) + Vector2(sin(anim_t * 18.0 + i) * 3.0, 0)
+		var ts: Vector2 = fsz * (1.0 - 0.15 * i)
+		var tf: Texture2D = tex_fire[(int(anim_t * 13.0) + i) % tex_fire.size()]
+		draw_texture_rect(tf, Rect2(tp - ts * 0.5, ts), false,
+			Color(1.0, 0.66 - 0.06 * i, 0.26, (0.5 * intensity) * (1.0 - 0.18 * i)))
+	# bloom pass (fatter + faint) then the crisp volume, both leaned slightly back
+	var wob := Vector2(lean * 4.0 + sin(anim_t * 21.0) * 1.6, 0)
 	draw_texture_rect(ff, Rect2(pos - fsz * 0.56 + wob, fsz * 1.12), false,
 		Color(1.0, 0.9, 0.7, 0.30 * intensity))
 	draw_texture_rect(ff, Rect2(pos - fsz * 0.5 + wob, fsz), false,
