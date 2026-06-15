@@ -352,6 +352,14 @@ const SNAPZ_TAUNTS := ["snap.", "come closer...", "i have waited.", "SNAP SNAP."
 	"the deep is mine.", "tasty little duck.", "you cannot see me down here.",
 	"HEH HEH HEH.", "MWA HA HA HA.", "guh huh huh huh."]
 const SNAPZ_STOMP_LINES := ["HSSS!", "my shell!", "grrrk.", "you DARE?", "snap... ow."]
+# a brief, varying intro per boss — rendered in the creepy spooky letters
+const BOSS_INTROS := {
+	"gerald": ["he remembers you.", "the heron hungers.", "you again, morsel?",
+		"his patience has ended.", "the long-legged death.", "round two, little duck."],
+	"snapz": ["something stirs in the deep.", "the mud begins to bubble.",
+		"ancient. patient. starving.", "the bottom-feeder rises.", "he has waited an age.",
+		"the water goes still..."],
+}
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
 var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx, vy}
@@ -609,10 +617,10 @@ func _ready() -> void:
 	center_label.visible = false
 	hud.add_child(center_label)
 
-	loft_bar = (load("res://LoftBar.gd")).new()
-	loft_bar.size = Vector2(280, 14)               # slim, top-center, out of the way
+	loft_bar = (load("res://LoftBar.gd")).new()    # kept alive but NOT shown — LOFT charge
+	loft_bar.size = Vector2(280, 14)               # now lives on the run-timeline duck marker
 	loft_bar.position = Vector2(VIEW.x * 0.5 - 140, 22)
-	hud.add_child(loft_bar)
+	# (deliberately not add_child'd: the slim bar is replaced by the run timeline)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
 			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh"]:
@@ -889,7 +897,9 @@ func _dbg() -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_select.png")
 	start_game()                        # species becomes hen
+	in_shrine = false; score_label.visible = true   # skip the shrine, show gameplay HUD
 	distance = 1300.0
+	loft = 0.62                          # show the timeline's charge ring mid-fill
 	logs.append({"x": 130.0, "y": 200.0, "w": 170.0, "h": 46.0, "missed": false, "phase": 0.0, "frog": true, "frog_gone": false})
 	logs.append({"x": 380.0, "y": 480.0, "w": 150.0, "h": 46.0, "missed": false, "spring": true, "phase": 1.3, "frog": false, "frog_gone": false})
 	enemies.append({"x": 300.0, "y": 360.0, "vy": 0.0, "id": _next_enemy_id()})
@@ -2053,12 +2063,16 @@ func _update_play(delta: float) -> void:
 			_float_text(duck_x, BASE_Y - 120.0, "+%d feathers" % (2 * _up("nestegg")), Color(1, 0.85, 0.35))
 		next_milestone += 100
 
-	# a full meter IS the trigger: the special fires itself on a short fuse (no buttons)
-	if loft_ready and anim_t - loft_ready_t > 1.2 and state == St.GROUNDED and laser_t <= 0.0:
-		if randf() < 0.5:
-			mega_hop()
-		else:
-			fire_laser()
+	# a full meter IS the trigger: the special fires itself on a short fuse (no buttons).
+	# fires fast when grounded, but ALSO force-fires after a moment if you're hop-spamming
+	# so the meter never just sits there full.
+	if loft_ready and laser_t <= 0.0 and state != St.MEGA:
+		var el := anim_t - loft_ready_t
+		if (el > 1.2 and state == St.GROUNDED) or el > 2.6:
+			if randf() < 0.5:
+				mega_hop()
+			else:
+				fire_laser()
 
 	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck;
 	# never mid-boss — Gerald does not pause for shopping)
@@ -2196,13 +2210,18 @@ func _start_boss() -> void:
 	boss_globs.clear()
 	var kind := "snapz" if idx == 1 else "gerald"   # the 15k-mark boss is the turtle
 	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
+	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
+	if kind == "snapz":                          # the turtle is a tougher, faster brute
+		hp += 3
+		gap = 1.5
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
 		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false, "kind": kind,
-		"dive_gap": 2.4 - 0.4 * idx,          # harder Geralds dive more often
-		"dive_t": 2.4 - 0.4 * idx, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
+		"dive_gap": gap,
+		"dive_t": gap, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
 		"say": "", "say_t": -10.0, "sub": 0.0,
+		"intro": BOSS_INTROS[kind][randi() % BOSS_INTROS[kind].size()],
 	}
 	if kind == "snapz":
 		_flash("SNAPZ\nawakens.")
@@ -2271,9 +2290,14 @@ func _hit_boss(n: int) -> void:
 	if not boss.phase2 and boss.hp <= boss.max_hp / 2:
 		boss.phase2 = true
 		boss.dive_gap *= 0.62
-		_flash("GERALD IS FURIOUS")
-		_gerald_say("NOW you've done it.")
-		_sfx("quack", 0.6, 1.0)
+		if boss.kind == "snapz":
+			_flash("SNAPZ IS ENRAGED")
+			_gerald_say("RRRAAGH. SNAP SNAP.")
+			_sfx("laugh", 0.85)
+		else:
+			_flash("GERALD IS FURIOUS")
+			_gerald_say("NOW you've done it.")
+			_sfx("quack", 0.6, 1.0)
 	else:
 		_flash("HIT! %d left" % boss.hp)
 
@@ -2395,7 +2419,7 @@ func _snapz_fight(delta: float) -> void:
 			boss.y = lerpf(250.0, BASE_Y - 6.0, p)
 			if p >= 1.0:
 				boss.dive_stage = "stuck"; boss.t = 0.0
-				boss.daze_t = 1.5 - 0.12 * boss.idx
+				boss.daze_t = 1.05                # a tighter stomp window than Gerald
 				boss.stomped = false
 				boss_waves.append({"x": boss.dive_x, "r": 18.0})
 				ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 170.0})
@@ -2412,7 +2436,13 @@ func _snapz_fight(delta: float) -> void:
 					and absf(duck_x - boss.x) < 78.0:
 				_boss_stomped()
 			if boss.daze_t <= 0.0:
-				boss.dive_stage = "dive"; boss.t = 0.0
+				# if you DIDN'T punish him, he often re-lunges instead of retreating
+				if not boss.stomped and randf() < 0.45:
+					boss.dive_stage = "warn"; boss.t = 0.0
+					boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+					_gerald_say("AGAIN!")
+				else:
+					boss.dive_stage = "dive"; boss.t = 0.0
 		"dive":   # sink back and fade into the murk, then lurk again
 			boss.sub = move_toward(boss.sub, 1.0, delta * 2.5)
 			boss.y = lerpf(BASE_Y - 14.0, 250.0, clampf(boss.t / 0.5, 0.0, 1.0))
@@ -2733,6 +2763,53 @@ func _draw_status_icons() -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(x + 9, fy - 7.0 * fl),
 			Vector2(x + 14, fy + 3), Vector2(x + 9, fy + 8), Vector2(x + 4, fy + 3)]),
 			Color(1.0, 0.85, 0.3, 0.95))
+
+# the run timeline: a slim "road ahead" showing your progress + the bosses lying in
+# wait, all placed by real distance. Replaces the old LOFT bar (charge now rings the
+# duck marker). Hidden during a boss (the HP pips take over).
+func _draw_run_timeline() -> void:
+	var cur := distance / 10.0
+	var span: float = maxf(32000.0, cur + 2400.0)          # 0..~last boss, grows when endless
+	var x0 := 26.0
+	var x1 := VIEW.x - 26.0
+	var w := x1 - x0
+	var y := 96.0
+	var fx := func(ft: float) -> float: return x0 + clampf(ft / span, 0.0, 1.0) * w
+	# the road
+	draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.05, 0.09, 0.13, 0.7), 8.0)
+	draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.3, 0.45, 0.55, 0.35), 2.0)
+	var dx: float = fx.call(cur)
+	draw_line(Vector2(x0, y), Vector2(dx, y), Color(0.45, 0.72, 0.92, 0.7), 6.0)   # travelled
+	# bosses lying in wait, each at its true distance
+	for i in BOSS_MARKS.size():
+		var bx: float = fx.call(float(BOSS_MARKS[i]))
+		var beaten: bool = i < next_boss_idx
+		var is_snapz: bool = i == 1
+		var btex: Texture2D = (tex_snapz[0] if is_snapz else tex_gerald[0]) if (not tex_gerald.is_empty()) else null
+		var bob: float = 0.0 if beaten else absf(sin(anim_t * 2.0 + i)) * 2.0
+		if btex != null:
+			var bs := 30.0 / float(btex.get_size().x) * btex.get_size()
+			var col := Color(0.4, 0.5, 0.5, 0.7) if beaten else Color(1, 1, 1)
+			draw_texture_rect(btex, Rect2(Vector2(bx, y - 16 - bob) - bs * 0.5, bs), false, col)
+		if beaten:
+			_otext(Vector2(bx - 14, y - 6), "✓", 16, Color(0.5, 0.95, 0.6, 0.9), 28, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		else:
+			var km: String = "%dk" % (BOSS_MARKS[i] / 1000)
+			_otext(Vector2(bx - 24, y + 8), km, 13, Color(1, 0.85, 0.4, 0.85), 48, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	# the duck marker, with its LOFT special charge ringing it
+	var hero: Texture2D = ducks[species].get("hero") if ducks.has(species) else null
+	var mr := 14.0
+	draw_circle(Vector2(dx, y), mr + 2.0, Color(0.08, 0.12, 0.16, 0.9))
+	if loft_ready:                                          # SPECIAL ready: a gold pulse
+		var pulse := 0.5 + 0.5 * sin(anim_t * 6.0)
+		draw_circle(Vector2(dx, y), mr + 4.0 + pulse * 3.0, Color(1.0, 0.86, 0.32, 0.25 + 0.2 * pulse))
+	else:                                                  # charging: a gold arc fills the ring
+		draw_arc(Vector2(dx, y), mr + 2.0, -PI * 0.5, -PI * 0.5 + loft * TAU, 24, Color(1.0, 0.82, 0.35, 0.9), 3.0)
+	if hero != null:
+		var hs: Vector2 = 22.0 / float(hero.get_size().x) * hero.get_size()
+		draw_texture_rect(hero, Rect2(Vector2(dx, y) - hs * 0.5, hs), false)
+	else:
+		draw_circle(Vector2(dx, y), mr - 4.0, Color(0.97, 0.84, 0.27))
 
 func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 		align := HORIZONTAL_ALIGNMENT_CENTER, osize := 6) -> void:
@@ -3175,6 +3252,8 @@ func _draw() -> void:
 
 	if alive:
 		_draw_status_icons()
+		if boss == null and not in_menu and not in_select and not in_shop and not in_shrine and not drafting:
+			_draw_run_timeline()
 	# DEV (scootybooty): boss-test shortcut buttons along the bottom
 	if dev_unlocked and alive and boss == null and not drafting and not paused and not in_menu \
 			and not in_select and not in_shop and not in_shrine:
@@ -3320,12 +3399,10 @@ func _draw_boss_gerald() -> void:
 			s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true)
-	# title card during the entrance
-	if boss.phase == "enter":
-		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
-		_otext(Vector2(0, 250), "GERALD THE IMMENSE", 40, Color(1, 0.3, 0.25, ta), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
-		_otext(Vector2(0, 296), ["he remembers you.", "round two.", "the final heron."][boss.idx],
-			20, Color(1, 1, 1, 0.8 * ta))
+	# title card during the entrance — name + a varying intro, in CrEePY letters
+	if boss.phase == "enter" and boss.t > 0.35:
+		_creepy_text(VIEW.x * 0.5, 250.0, "GERALD THE IMMENSE", 38)
+		_creepy_text(VIEW.x * 0.5, 296.0, boss.intro, 20)
 	# HP pips, top center — width adapts so a long health bar never clips off-screen
 	var pips: int = boss.max_hp
 	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
@@ -3382,17 +3459,15 @@ func _draw_boss_snapz() -> void:
 			draw_line(Vector2(boss.x - 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
 			draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
 			_otext(Vector2(0, by2 - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
-		# SNAPZ speaks — CREEPY jittery text, but a sickly swamp-GREEN (not Gerald's red)
+		# SNAPZ speaks — the same CrEePY jittery red as Gerald (boss text stays red)
 		if boss.say != "" and anim_t - boss.say_t < 1.9 and sub < 0.5:
 			var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
-				Color(0.03, 0.08, 0.04, 0.95), Color(0.35, 0.7, 0.4, 0.95), 18, 1.0, true,
-				Color(0.12, 0.42, 0.12), Color(0.45, 0.98, 0.4))
+				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 18, 1.0, true)
 	_draw_boss_pips()
-	if boss.phase == "enter":
-		var ta := clampf(boss.t / 0.5, 0.0, 1.0) * clampf((1.7 - boss.t) / 0.3, 0.0, 1.0)
-		_otext(Vector2(0, 250), "SNAPZ", 48, Color(0.5, 0.8, 0.4, ta), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
-		_otext(Vector2(0, 300), "something stirs in the deep...", 20, Color(1, 1, 1, 0.8 * ta))
+	if boss.phase == "enter" and boss.t > 0.35:
+		_creepy_text(VIEW.x * 0.5, 250.0, "SNAPZ", 48)
+		_creepy_text(VIEW.x * 0.5, 300.0, boss.intro, 20)
 
 # shared boss health pips, top-center
 func _draw_boss_pips() -> void:
