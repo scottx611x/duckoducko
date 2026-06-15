@@ -399,6 +399,7 @@ var meta_owned: Array = []      # persistent shop purchases (ids)
 var sel_index := 0
 var select_yaw := 0.0
 var spin_prev_x := 0.0
+var spin_prev_y := 0.0
 var species := "mallard"        # which roster duck is in play
 var mega_style := "tumble"      # "tumble" or "fly" — picked per mega hop
 var state := St.GROUNDED
@@ -500,30 +501,36 @@ const SHOP_GREETS := [
 ]
 # THE COMPENDIUM: characters & creatures, revealed as you meet them (with lore)
 const CODEX := [
-	{"id": "gerald", "name": "GERALD THE IMMENSE", "tag": "boss · the heron",
+	{"id": "gerald", "cat": "boss", "name": "GERALD THE IMMENSE", "tag": "boss · the heron",
 		"lore": "The river's self-appointed landlord: a great blue heron with a grudge and a beak like a boat-hook. Hurls feathers he insists are overdue 'rent'. Dodge his dive, then stomp him while he's dazed."},
-	{"id": "snapz", "name": "SNAPZ", "tag": "boss · the snapper",
+	{"id": "snapz", "cat": "boss", "name": "SNAPZ", "tag": "boss · the snapper",
 		"lore": "An ancient snapping turtle the size of a manhole cover — armoured, ill-tempered, and far quicker than something that old should be. His shell shrugs off everything; only his jammed, gaping jaws can be stomped."},
-	{"id": "eternal", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
+	{"id": "eternal", "cat": "boss", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
 		"lore": "Gerald came back. Wrong. Bigger, bloodier, and no longer entirely alive, he has crossed back from beyond to reclaim HIS river. He now double-slams and summons spectral herons. The last test of the current."},
-	{"id": "rusty", "name": "RUSTY", "tag": "guide · red-tailed hawk",
-		"lore": "A red-tailed hawk who appointed himself your mentor. Swoops in early to drop a tip (and a theatrical SKREE), then minds the feather shop from his perch. Insists he is NOT just decorative."},
-	{"id": "sadie", "name": "SADIE", "tag": "hazard · the good girl",
-		"lore": "Seventy pounds of wet, joyful chocolate lab in single-minded pursuit of a tennis ball. Means no harm whatsoever; will absolutely flatten you anyway. Never, ever harm-able — just hop clear."},
-	{"id": "elder", "name": "THE ANCIENT DUCK", "tag": "the shrine keeper",
-		"lore": "A bearded mallard older than the pond itself. Appears at the waterline to offer a blessing — richer for ducks who've bested the herons. Speaks mostly in riddles and quacks."},
-	{"id": "wingducks", "name": "WINGDUCKS", "tag": "your escort · legendary",
-		"lore": "Two loyal wingmen who scramble from your flanks to KAMIKAZE oncoming herons — yeeting them clean off-screen — then loop right back to formation. The best friends a duck could ask for."},
-	{"id": "frog", "name": "RIVER FROG", "tag": "log local · amphibian",
+	{"id": "heron", "cat": "enemy", "name": "HERON", "tag": "enemy · aerial",
+		"lore": "A lesser cousin of Gerald that dives your lane from the sky. You can't out-hop a heron — STEER clear, torch it ON FIRE, or stomp it from above. They thicken the deeper you paddle."},
+	{"id": "turtle", "cat": "enemy", "name": "SNAPPING TURTLE", "tag": "enemy · the murk",
+		"lore": "A wild snapper (a feral cousin of SNAPZ) that lurks under the murk, locks onto your lane, then ERUPTS in a bite. Dodge the churn, or hop onto his surfaced shell to stomp him."},
+	{"id": "frog", "cat": "enemy", "name": "RIVER FROG", "tag": "log local · amphibian",
 		"lore": "A startled bullfrog squatting on a drifting log. Bounce his perch and he'll ribbit his displeasure in lowercase. Utterly harmless; deeply unimpressed."},
-	{"id": "gnome", "name": "GARDEN GNOME", "tag": "riverside oddity",
-		"lore": "One of the countless bits of bank junk the river hoards — a chipped garden gnome among the traffic cones, lost flip-flops and pool noodles. He has seen things."},
+	{"id": "rusty", "cat": "friend", "name": "RUSTY", "tag": "guide · red-tailed hawk",
+		"lore": "A red-tailed hawk who appointed himself your mentor. Swoops in early to drop a tip (and a theatrical SKREE), then minds the feather shop from his perch. Insists he is NOT just decorative."},
+	{"id": "sadie", "cat": "friend", "name": "SADIE", "tag": "the good girl",
+		"lore": "Seventy pounds of wet, joyful chocolate lab in single-minded pursuit of a tennis ball. Means no harm whatsoever; will absolutely flatten you anyway. Never, ever harm-able — just hop clear."},
+	{"id": "elder", "cat": "friend", "name": "THE ANCIENT DUCK", "tag": "the shrine keeper",
+		"lore": "A bearded mallard older than the pond itself. Appears at the waterline to offer a blessing — richer for ducks who've bested the herons. Speaks mostly in riddles and quacks."},
+	{"id": "wingducks", "cat": "friend", "name": "WINGDUCKS", "tag": "your escort · legendary",
+		"lore": "Two loyal wingmen who scramble from your flanks to KAMIKAZE oncoming herons — yeeting them clean off-screen — then loop right back to formation. The best friends a duck could ask for."},
 ]
+const CODEX_CATS := [["boss", "BOSSES"], ["enemy", "ENEMIES"], ["friend", "FRIENDS"],
+	["power", "POWER-UPS"], ["snack", "SNACKS"], ["trash", "RIVER TRASH"]]
+const PROP_NAMES := ["boat", "bottle", "flipflop", "cone", "gnome", "boot", "noodle", "umbrella"]
 var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
 var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
 var in_codex := false
-var codex_sel := -1             # which CODEX entry's detail view is open (-1 = list)
+var codex_sel := -1             # index into _codex_items() whose detail is open (-1 = list)
 var codex_yaw := 0.0            # turntable angle in the detail view (drag to spin)
+var codex_scroll := 0.0        # the categorised list scrolls (drag vertically)
 var tex_codex_spin: Dictionary = {}   # id -> 16-frame yaw turntable
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
@@ -1160,15 +1167,17 @@ func _dbg() -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_stats.png")
 	in_stats = false; lifetime = {}; run_history = []
-	# the COMPENDIUM: most met, one still a mystery
-	codex_seen = ["gerald", "snapz", "rusty", "sadie", "elder", "wingducks", "frog", "gnome"]
+	# the CODEX: a spread across every category (one boss still a mystery)
+	codex_seen = ["gerald", "snapz", "heron", "turtle", "frog", "rusty", "sadie", "elder", "wingducks",
+		"spring", "gold", "thunder", "magnet", "hotwheels", "cannon", "double",
+		"snack_feather", "snack_berry", "snack_bug", "trash_gnome", "trash_boat", "trash_cone"]
 	codex_viewed = codex_seen.duplicate()
 	_open_codex()
 	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_codex.png")
-	codex_sel = 0; codex_yaw = 1.4                  # GERALD's rotatable detail page
-	await get_tree().create_timer(0.1).timeout
+	codex_sel = 0; codex_yaw = 1.4; menu_quack_t = anim_t   # GERALD detail, mid-PROVOKE (pop+ring)
+	await get_tree().create_timer(0.08).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_codex_detail.png")
 	in_codex = false; codex_sel = -1; codex_seen = []; codex_viewed = []
@@ -1485,6 +1494,7 @@ func _has_synergy(id: String) -> bool:
 
 func _pick_upgrade(u: Dictionary) -> void:
 	_st("upgrades")
+	_codex_see(u.id)                               # power-up catalogued in the CODEX
 	var combo := _has_synergy(u.id)
 	picked[u.id] = picked.get(u.id, 0) + 1
 	if u.id == "shield":
@@ -1667,6 +1677,7 @@ func _update_turtle(delta: float) -> void:
 			if turtle_timer <= 0.0:
 				haz_turtle = {"x": clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0),
 					"stage": "lurk", "t": 0.0, "snap_x": duck_x, "sub": 1.0}
+				_codex_see("turtle")
 				_sfx("fwoosh", 0.5, -6.0)
 		return
 	var tt = haz_turtle
@@ -2104,6 +2115,8 @@ func _on_press(pos: Vector2) -> void:
 		_stats_press(pos)
 		return
 	if in_codex:
+		pressed = true; press_pos = pos; moved = false   # so _on_release can fire a tap
+		press_time = Time.get_ticks_msec() / 1000.0
 		_codex_press(pos)
 		return
 	if not alive:
@@ -2194,9 +2207,15 @@ func _on_press(pos: Vector2) -> void:
 	press_time = Time.get_ticks_msec() / 1000.0
 
 func _on_drag(pos: Vector2) -> void:
-	if in_codex and codex_sel >= 0:                # spin the compendium turntable
+	if in_codex and codex_sel >= 0:                # spin the codex turntable
 		codex_yaw += (pos.x - spin_prev_x) * 0.016
 		spin_prev_x = pos.x
+		return
+	if in_codex:                                   # scroll the categorised list
+		if (pos - press_pos).length() > 14.0:
+			moved = true                           # a real drag = scroll, NOT a tap
+		codex_scroll = clampf(codex_scroll - (pos.y - spin_prev_y), 0.0, _codex_max_scroll())
+		spin_prev_y = pos.y
 		return
 	if in_select:
 		select_yaw += (pos.x - spin_prev_x) * 0.012
@@ -2273,6 +2292,10 @@ func _on_release() -> void:
 		return
 	pressed = false
 	var dur := Time.get_ticks_msec() / 1000.0 - press_time
+	if in_codex:                                   # a clean tap on a list row opens its detail
+		if not moved and codex_sel < 0:
+			_codex_tap_list(press_pos)
+		return
 	if not moved and dur < 0.30:
 		hop()
 
@@ -2571,7 +2594,7 @@ func _update_play(delta: float) -> void:
 		var left := randf() < 0.5
 		props.append({"x": (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0)),
 			"y": -30.0, "kind": randi() % tex_props.size(), "phase": randf() * TAU})
-		if props[props.size() - 1].kind == 4: _codex_see("gnome")   # the garden gnome
+		_codex_see("trash_" + PROP_NAMES[props[props.size() - 1].kind])   # catalogue the junk
 		prop_timer = randf_range(4.5, 9.0)         # junkier river, per request
 	for pr in props:
 		pr.y += speed * delta * 0.82
@@ -3240,6 +3263,7 @@ func _spawn(delta: float) -> void:
 	if heron_timer <= 0.0 and distance > HERON_START:
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
+		_codex_see("heron")
 		# herons get hungrier deep in the run (down to ~60% of the early gap; GLASS CANNON worse)
 		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0) / boon_heron_mult
 
@@ -3386,6 +3410,7 @@ func _collide() -> void:
 func _collect(it: Dictionary) -> void:
 	it.got = true
 	_st("snacks")
+	_codex_see("snack_" + str(it.kind))
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL: score & feathers, NOT loft
 	var loft_mult := boon_loft_mult                # FAMINE FEAST: fewer snacks, double loft
@@ -4182,6 +4207,7 @@ func _stats_graph(area: Rect2) -> void:
 func _open_codex() -> void:
 	in_codex = true
 	codex_sel = -1
+	codex_scroll = 0.0
 	in_menu = false
 	fade = 0.0
 	name_edit.visible = false
@@ -4194,37 +4220,87 @@ func _open_codex() -> void:
 	_save()
 	_sfx("click")
 
-func _codex_pitch() -> float:
-	return minf(104.0, (VIEW.y - 166.0) / float(CODEX.size()))
+func _rarity_word(r: int) -> String:
+	return ["common", "uncommon", "rare", "legendary"][clampi(r, 0, 3)]
 
-func _codex_rect(i: int) -> Rect2:
-	var p := _codex_pitch()
-	return Rect2(26.0, 150.0 + i * p, VIEW.x - 52.0, p - 14.0)
+# the WHOLE catalogue, flat + ordered: characters, then power-ups, snacks, river trash
+func _codex_items() -> Array:
+	var out: Array = []
+	for e in CODEX:
+		out.append({"key": e.id, "cat": e.cat, "name": e.name, "sub": e.tag, "lore": e.lore, "type": "char", "ref": e})
+	for u in UPGRADES:
+		if u.id == "wingducks":
+			continue                               # already a FRIEND entry
+		out.append({"key": u.id, "cat": "power", "name": u.name, "sub": _rarity_word(u.rarity) + " power-up",
+			"lore": u.desc, "type": "power", "ref": u})
+	for d in ITEM_DEFS:
+		out.append({"key": "snack_" + d.name, "cat": "snack", "name": d.name.to_upper(), "sub": "a river snack",
+			"lore": "A tasty %s bobbing down the river — grab it to top up your LOFT and bank a few feet." % d.name,
+			"type": "snack", "ref": d})
+	for pn in PROP_NAMES:
+		out.append({"key": "trash_" + pn, "cat": "trash", "name": pn.to_upper(), "sub": "riverside flotsam",
+			"lore": "A %s among the bank junk the river hoards. Pure scenery — it drifts past and can't touch you." % pn,
+			"type": "trash", "ref": pn})
+	return out
+
+func _codex_seen_item(it: Dictionary) -> bool:
+	return it.key in codex_seen
+
+# rows in CONTENT space (before the scroll offset): category headers + entry rows
+const CODEX_VY0 := 132.0
+const CODEX_EH := 58.0
+const CODEX_HH := 34.0
+func _codex_layout() -> Array:
+	var items := _codex_items()
+	var rows: Array = []
+	var cy := 0.0
+	for pair in CODEX_CATS:
+		var any := false
+		for i in items.size():
+			if items[i].cat == pair[0]:
+				if not any:
+					rows.append({"cy": cy, "h": CODEX_HH, "kind": "head", "title": pair[1]})
+					cy += CODEX_HH; any = true
+				rows.append({"cy": cy, "h": CODEX_EH, "kind": "row", "idx": i, "item": items[i]})
+				cy += CODEX_EH
+	return rows
+
+func _codex_max_scroll() -> float:
+	var rows := _codex_layout()
+	var total: float = 0.0 if rows.is_empty() else rows[rows.size() - 1].cy + rows[rows.size() - 1].h
+	return maxf(0.0, total - (VIEW.y - CODEX_VY0 - 12.0))
 
 func _codex_press(pos: Vector2) -> void:
+	spin_prev_x = pos.x
+	spin_prev_y = pos.y
 	if codex_sel >= 0:                              # DETAIL view
-		spin_prev_x = pos.x
 		if SEL_BACK_BTN.has_point(pos):
 			_sfx("click"); codex_sel = -1
 			return
-		if pos.y < 540.0:                          # tap the turntable -> the creature REACTS
+		if pos.y < 470.0:                          # tap the portrait -> it REACTS
 			menu_quack_t = anim_t
-			match CODEX[codex_sel].id:
+			match _codex_items()[codex_sel].key:
 				"rusty": _sfx("screech", randf_range(0.95, 1.08), 1.0)
-				"snapz": _sfx("laugh", randf_range(0.9, 1.05))
-				"gerald", "eternal": _sfx("quack", randf_range(0.4, 0.55), -2.0)
-				"sadie": _sfx("quack", 0.5, -6.0)
+				"snapz", "turtle": _sfx("laugh", randf_range(0.9, 1.05))
+				"gerald", "eternal", "heron": _sfx("quack", randf_range(0.4, 0.55), -2.0)
+				"frog": _sfx("ribbit", randf_range(0.9, 1.15))
 				_: _sfx("quack", randf_range(0.6, 0.8))
 		return
-	# LIST view
-	if SEL_BACK_BTN.has_point(pos):
+	if SEL_BACK_BTN.has_point(pos):                # LIST: back only acts on press
 		_sfx("click")
 		in_codex = false
 		_enter_menu()
+
+# a clean TAP on a list row (fired from _on_release) opens that entry's detail
+func _codex_tap_list(pos: Vector2) -> void:
+	if SEL_BACK_BTN.has_point(pos):
 		return
-	for i in CODEX.size():
-		if _codex_rect(i).has_point(pos) and CODEX[i].id in codex_seen:
-			codex_sel = i; codex_yaw = 0.0
+	for row in _codex_layout():
+		if row.kind != "row":
+			continue
+		var sy: float = CODEX_VY0 + row.cy - codex_scroll
+		if Rect2(26.0, sy, VIEW.x - 52.0, row.h - 8.0).has_point(pos) and _codex_seen_item(row.item):
+			codex_sel = row.idx; codex_yaw = 0.0; menu_quack_t = -9.0
 			_sfx("click", 1.2)
 			return
 
@@ -4232,8 +4308,10 @@ func _codex_tex(id: String):
 	match id:
 		"gerald", "eternal":
 			return tex_gerald[0] if tex_gerald.size() > 0 else null
-		"snapz":
+		"snapz", "turtle":
 			return tex_snapz[0] if tex_snapz.size() > 0 else null
+		"heron":
+			return tex_heron[0] if tex_heron.size() > 0 else null
 		"rusty":
 			return tex_hawk[0] if tex_hawk.size() > 0 else null
 		"sadie":
@@ -4242,100 +4320,139 @@ func _codex_tex(id: String):
 			return tex_elder
 		"frog":
 			return tex_frog
-		"wingducks":                               # a wingduck is a little flying duck (wings-out hop frame)
+		"wingducks":                               # a little wings-out flying duck
 			var md: Dictionary = ducks.get("mallard", {})
 			var hops: Array = md.get("hop", [])
 			return hops[0] if hops.size() > 0 else null
-		"gnome":
-			return tex_props[4] if tex_props.size() > 4 else null
 	return null
+
+# draw an entry's icon (portrait / power glyph / snack or trash sprite) inside box
+func _codex_icon(it: Dictionary, box: Rect2) -> void:
+	match it.type:
+		"char":
+			var t = _codex_tex(it.key)
+			if t != null:
+				var f: float = minf((box.size.x - 12.0) / t.get_size().x, (box.size.y - 12.0) / t.get_size().y)
+				if it.key == "eternal":
+					_blit_modulated(t, box.get_center(), f, Color(1.5, 0.4, 0.42))
+				else:
+					_blit_centered(t, box.get_center(), f)
+		"power":
+			draw_circle(box.get_center(), box.size.y * 0.34, Color(0.5, 0.8, 1.0, 0.12))
+			_relic_glyph(it.key, box.get_center(), box.size.y * 0.26, Color(0.7, 0.9, 1.0))
+		"snack":
+			var ts = tex_items.get(it.ref.name)
+			if ts != null:
+				_blit_centered(ts, box.get_center(), minf((box.size.x - 14.0) / ts.get_size().x, (box.size.y - 14.0) / ts.get_size().y))
+		"trash":
+			var pi: int = PROP_NAMES.find(it.ref)
+			if pi >= 0 and pi < tex_props.size():
+				var tp: Texture2D = tex_props[pi]
+				_blit_centered(tp, box.get_center(), minf((box.size.x - 12.0) / tp.get_size().x, (box.size.y - 12.0) / tp.get_size().y))
 
 func _draw_codex() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.04, 0.05, 0.09, 1.0))
 	if codex_sel >= 0:
-		_draw_codex_detail(CODEX[codex_sel])
+		_draw_codex_detail(_codex_items()[codex_sel])
 		return
-	# LIST: a tappable row per soul; tap one to open its rotatable detail page
+	# LIST: categorised + scrollable. draw rows first, then a mask over the header zone
+	codex_scroll = clampf(codex_scroll, 0.0, _codex_max_scroll())
+	var items := _codex_items()
+	var seen_n := 0
+	for it in items:
+		if _codex_seen_item(it):
+			seen_n += 1
+	for row in _codex_layout():
+		var sy: float = CODEX_VY0 + row.cy - codex_scroll
+		if sy + row.h < CODEX_VY0 - 4.0 or sy > VIEW.y:
+			continue
+		if row.kind == "head":
+			draw_string(font, Vector2(34.0, sy + 24.0), row.title, HORIZONTAL_ALIGNMENT_LEFT, 400, 17, Color(1, 0.86, 0.45, 0.85))
+			draw_line(Vector2(34.0, sy + 30.0), Vector2(VIEW.x - 34.0, sy + 30.0), Color(1, 0.86, 0.45, 0.2), 1.0)
+			continue
+		var it: Dictionary = row.item
+		var seen: bool = _codex_seen_item(it)
+		var rc := Rect2(26.0, sy, VIEW.x - 52.0, row.h - 8.0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.09, 0.14, 0.95); sb.set_corner_radius_all(12)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(0.9, 0.7, 0.4, 0.5) if seen else Color(1, 1, 1, 0.1)
+		draw_style_box(sb, rc)
+		var box := Rect2(rc.position + Vector2(8, 6), Vector2(50, rc.size.y - 12))
+		if seen:
+			_codex_icon(it, box)
+		else:
+			_otext(Vector2(box.position.x, box.get_center().y + 10.0), "?", 32, Color(1, 1, 1, 0.22), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		var tx := box.position.x + box.size.x + 14.0
+		var tw := rc.size.x - 100.0
+		if seen:
+			draw_string(font, Vector2(tx, rc.position.y + 28.0), it.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 17, Color(1, 0.92, 0.55))
+			draw_string(font, Vector2(tx, rc.position.y + 45.0), it.sub, HORIZONTAL_ALIGNMENT_LEFT, tw, 12, Color(0.7, 0.85, 1.0, 0.75))
+			_otext(Vector2(rc.position.x + rc.size.x - 26.0, rc.position.y + rc.size.y * 0.5 + 8.0), "›", 26, Color(1, 1, 1, 0.35), 22, HORIZONTAL_ALIGNMENT_CENTER, 2)
+		else:
+			draw_string(font, Vector2(tx, rc.position.y + 36.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 18, Color(1, 1, 1, 0.35))
+	# mask the header zone so scrolled rows vanish cleanly behind the title
+	draw_rect(Rect2(0, 0, VIEW.x, CODEX_VY0 - 6.0), Color(0.04, 0.05, 0.09, 1.0))
 	_fancy_title("CODEX", 92.0, 36, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
-	_otext(Vector2(0, 128), "%d of %d souls of the river met  ·  tap to study" % [codex_seen.size(), CODEX.size()],
-		14, Color(1, 1, 1, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-	for i in CODEX.size():
-		var e: Dictionary = CODEX[i]
-		var seen: bool = e.id in codex_seen
-		var rc := _codex_rect(i)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.07, 0.09, 0.14, 0.95); sb.set_corner_radius_all(14)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(0.9, 0.7, 0.4, 0.55) if seen else Color(1, 1, 1, 0.12)
-		draw_style_box(sb, rc)
-		var box := Rect2(rc.position + Vector2(10, 10), Vector2(70, rc.size.y - 20))
-		var bsb := StyleBoxFlat.new()
-		bsb.bg_color = Color(0.03, 0.05, 0.09, 0.9); bsb.set_corner_radius_all(10)
-		draw_style_box(bsb, box)
-		var tex = _codex_tex(e.id)
-		if seen and tex != null:
-			var fit: float = minf((box.size.x - 12.0) / tex.get_size().x, (box.size.y - 12.0) / tex.get_size().y)
-			if e.id == "eternal":
-				_blit_modulated(tex, box.get_center(), fit, Color(1.5, 0.4, 0.42))
-			else:
-				_blit_centered(tex, box.get_center(), fit)
-		else:
-			_otext(Vector2(box.position.x, box.get_center().y + 12.0), "?", 44, Color(1, 1, 1, 0.25), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-		var tx := box.position.x + box.size.x + 16.0
-		var tw := rc.position.x + rc.size.x - tx - 30.0
-		if seen:
-			draw_string(font, Vector2(tx, rc.position.y + 38.0), e.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 20, Color(1, 0.92, 0.55))
-			draw_string(font, Vector2(tx, rc.position.y + 60.0), e.tag, HORIZONTAL_ALIGNMENT_LEFT, tw, 13, Color(0.7, 0.85, 1.0, 0.8))
-			_otext(Vector2(rc.position.x + rc.size.x - 28.0, rc.position.y + 52.0), "›", 30, Color(1, 1, 1, 0.4), 24, HORIZONTAL_ALIGNMENT_CENTER, 2)
-		else:
-			draw_string(font, Vector2(tx, rc.position.y + 42.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 22, Color(1, 1, 1, 0.4))
-			draw_string(font, Vector2(tx, rc.position.y + 64.0), "not yet encountered", HORIZONTAL_ALIGNMENT_LEFT, tw, 14, Color(1, 1, 1, 0.35))
+	_otext(Vector2(0, 124), "%d of %d catalogued  ·  drag to scroll · tap to study" % [seen_n, items.size()],
+		13, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
-# the detail page: a big TURNTABLE sprite (drag to spin, tap to react) + full lore
-func _draw_codex_detail(e: Dictionary) -> void:
+# the detail page: a big portrait (turntable where it exists) + full lore
+func _draw_codex_detail(it: Dictionary) -> void:
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
-	_fancy_title(e.name, 118.0, 28, Color(1, 0.92, 0.55), Color(0.9, 0.6, 0.3), 3.0)
-	_otext(Vector2(0, 150), e.tag, 15, Color(0.7, 0.85, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-	# the rotatable turntable
-	var sid: String = "gerald" if e.id == "eternal" else e.id
-	var frames: Array = tex_codex_spin.get(sid, [])
+	_fancy_title(it.name, 116.0, 26, Color(1, 0.92, 0.55), Color(0.9, 0.6, 0.3), 3.0)
+	_otext(Vector2(0, 148), it.sub, 15, Color(0.7, 0.85, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	var cx := VIEW.x * 0.5
-	var cyc := 320.0 + sin(anim_t * 2.0) * 8.0
-	# REACTION: a squash-pop + a sparkle ring the instant you provoke it
-	var react := clampf(1.0 - (anim_t - menu_quack_t) / 0.4, 0.0, 1.0)
-	var pop := 1.0 + 0.18 * react * sin(react * PI)
+	var cyc := 312.0 + sin(anim_t * 2.0) * 8.0
+	# REACTION on tap: a big squash-pop + an expanding flash ring + a flash tint
+	var react := clampf(1.0 - (anim_t - menu_quack_t) / 0.45, 0.0, 1.0)
+	var pop := 1.0 + 0.32 * react * sin(react * PI)
+	draw_circle(Vector2(cx, cyc + 64.0), 66.0, Color(0.5, 0.7, 1.0, 0.06))
 	if react > 0.0:
-		draw_arc(Vector2(cx, cyc), (1.0 - react) * 150.0 + 40.0, 0, TAU, 28, Color(1.0, 0.85, 0.4, react * 0.7), 3.0)
-	draw_circle(Vector2(cx, cyc + 70.0), 70.0, Color(0.5, 0.7, 1.0, 0.06))
+		draw_arc(Vector2(cx, cyc), (1.0 - react) * 170.0 + 30.0, 0, TAU, 30, Color(1.0, 0.86, 0.4, react * 0.8), 4.0)
+	# pick the turntable for ids that HAVE one (gerald/snapz/rusty/sadie/elder, eternal→gerald, turtle→snapz)
+	var sid := ""
+	if it.type == "char":
+		sid = "gerald" if it.key == "eternal" else ("snapz" if it.key == "turtle" else it.key)
+	var frames: Array = tex_codex_spin.get(sid, [])
 	var spinnable := frames.size() > 0
 	if spinnable:
 		var fr: Texture2D = frames[int(fposmod(codex_yaw, TAU) / TAU * frames.size()) % frames.size()]
-		if e.id == "rusty" and react > 0.0 and tex_hawk_screech != null:
-			fr = tex_hawk_screech                  # RUSTY's beak gapes mid-SCREECH
-		var sc: float = minf(320.0 / fr.get_size().x, 240.0 / fr.get_size().y) * pop
-		if e.id == "eternal":
-			_blit_modulated(fr, Vector2(cx, cyc), sc, Color(1.5, 0.4, 0.42))
+		if it.key == "rusty" and react > 0.0 and tex_hawk_screech != null:
+			fr = tex_hawk_screech
+		var sc: float = minf(300.0 / fr.get_size().x, 230.0 / fr.get_size().y) * pop
+		if it.key == "eternal":
+			_blit_modulated(fr, Vector2(cx, cyc), sc, Color(1.5, 0.4, 0.42).lerp(Color(2.2, 0.6, 0.6), react))
 		else:
-			_blit_centered(fr, Vector2(cx, cyc), sc)
-	else:                                          # no turntable (props/critters): a static portrait
-		var st = _codex_tex(e.id)
+			_blit_centered(fr, Vector2(cx, cyc), sc * (1.0 + 0.0))
+	elif it.type == "power":                       # big relic glyph on a disc
+		draw_circle(Vector2(cx, cyc), 86.0 * pop, Color(0.18, 0.3, 0.42, 0.5))
+		_relic_glyph(it.key, Vector2(cx, cyc), 54.0 * pop, Color(0.75, 0.92, 1.0).lightened(0.3 * react))
+	else:                                          # static sprite (snack / trash / heron / wingducks)
+		var st
+		if it.type == "char":
+			st = _codex_tex(it.key)
+		elif it.type == "snack":
+			st = tex_items.get(it.ref.name)
+		else:
+			var pi: int = PROP_NAMES.find(it.ref)
+			st = tex_props[pi] if pi >= 0 and pi < tex_props.size() else null
 		if st != null:
-			var sc2: float = minf(220.0 / st.get_size().x, 200.0 / st.get_size().y) * pop
-			_blit_centered(st, Vector2(cx, cyc), sc2)
-	var hint := "< drag to spin · tap to provoke >" if spinnable else "tap to provoke"
-	_otext(Vector2(0, 470), hint, 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+			_blit_centered(st, Vector2(cx, cyc), minf(200.0 / st.get_size().x, 190.0 / st.get_size().y) * pop)
+	var hint := "< drag to spin · tap to provoke >" if spinnable else "tap to poke"
+	_otext(Vector2(0, 452.0), hint, 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# lore panel
-	var pr := Rect2(36.0, 520.0, VIEW.x - 72.0, 0.0)
-	var lh: float = font.get_multiline_string_size(e.lore, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 32.0, 17).y
+	var pr := Rect2(36.0, 500.0, VIEW.x - 72.0, 0.0)
+	var lh: float = font.get_multiline_string_size(it.lore, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 32.0, 17).y
 	pr.size.y = 36.0 + lh
 	var psb := StyleBoxFlat.new()
 	psb.bg_color = Color(0.06, 0.09, 0.14, 0.96); psb.set_corner_radius_all(16)
 	psb.set_border_width_all(2); psb.border_color = Color(0.9, 0.7, 0.4, 0.5)
 	draw_style_box(psb, pr)
-	_mtext(Vector2(pr.position.x + 16.0, pr.position.y + 18.0 + font.get_ascent(17)), e.lore, 17, Color(1, 1, 1, 0.82), pr.size.x - 32.0)
+	_mtext(Vector2(pr.position.x + 16.0, pr.position.y + 18.0 + font.get_ascent(17)), it.lore, 17, Color(1, 1, 1, 0.82), pr.size.x - 32.0)
 
 func _flash(msg: String, dur := 1.0) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
