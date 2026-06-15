@@ -903,6 +903,9 @@ func _dbg() -> void:
 	in_shrine = false; score_label.visible = true   # skip the shrine, show gameplay HUD
 	distance = 1300.0
 	loft = 0.62                          # show the timeline's charge ring mid-fill
+	shield_charges = 2                   # show the relic row (shield + a build)
+	picked = {"spring": 1, "gold": 1, "thunder": 1, "loft": 2, "magnet": 1, "hotwheels": 1}
+	fire_t = 3.0
 	logs.append({"x": 130.0, "y": 200.0, "w": 170.0, "h": 46.0, "missed": false, "phase": 0.0, "frog": true, "frog_gone": false})
 	logs.append({"x": 380.0, "y": 480.0, "w": 150.0, "h": 46.0, "missed": false, "spring": true, "phase": 1.3, "frog": false, "frog_gone": false})
 	enemies.append({"x": 300.0, "y": 360.0, "vy": 0.0, "id": _next_enemy_id()})
@@ -2766,23 +2769,95 @@ func _feather_text(pos: Vector2, txt: String, size: int, col: Color, anchor := "
 # in-run status icons (top-left, under the meters): shield charges + ON FIRE
 func _draw_status_icons() -> void:
 	var x := 22.0
-	var y := 56.0
-	if shield_charges > 0 and has_art and tex_items.has("feather"):
-		var tex: Texture2D = tex_items["feather"]
-		var isz: Vector2 = tex.get_size() * Vector2(1.6, 1.6)
-		draw_texture_rect(tex, Rect2(Vector2(x, y), isz), false)
-		_otext(Vector2(x + isz.x + 4.0, y + isz.y - 8.0), "×%d" % shield_charges, 19,
-			Color(1, 1, 1, 0.92), 80.0, HORIZONTAL_ALIGNMENT_LEFT, 4)
-		x += isz.x + 52.0
-	if fire_t > 0.0:
-		var fl := 0.7 + 0.3 * sin(anim_t * 17.0)
-		var fy := y + 22.0
-		draw_colored_polygon(PackedVector2Array([Vector2(x + 9, fy - 16.0 * fl - 6.0),
-			Vector2(x + 18, fy), Vector2(x + 13, fy + 9), Vector2(x + 5, fy + 9), Vector2(x, fy - 2)]),
-			Color(1.0, 0.45, 0.1, 0.95))
-		draw_colored_polygon(PackedVector2Array([Vector2(x + 9, fy - 7.0 * fl),
-			Vector2(x + 14, fy + 3), Vector2(x + 9, fy + 8), Vector2(x + 4, fy + 3)]),
-			Color(1.0, 0.85, 0.3, 0.95))
+	# RELIC ROW (StS-style): a badge per active power, rarity-coloured, with a glyph
+	# + stack count. The shield finally gets its OWN icon (no more feather confusion).
+	var bs := 30.0
+	var gap := 5.0
+	var y := 50.0
+	var relics: Array = []
+	if shield_charges > 0:                                  # a state "relic": shields left
+		relics.append({"id": "_shield", "rarity": 1, "n": shield_charges, "glow": false})
+	for u in UPGRADES:                                     # one per upgrade you've drafted
+		var n: int = picked.get(u.id, 0)
+		if n > 0:
+			relics.append({"id": u.id, "rarity": u.rarity, "n": n, "glow": u.id == "hotwheels" and fire_t > 0.0})
+	for r in relics:
+		if x + bs > VIEW.x - 30.0:                          # wrap (rarely needed)
+			x = 22.0; y += bs + gap
+		_draw_relic(Rect2(x, y, bs, bs), r)
+		x += bs + gap
+
+func _draw_relic(rect: Rect2, r: Dictionary) -> void:
+	var col: Color = RARITY_COL[r.rarity]
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.11, 0.16, 0.92)
+	sb.set_corner_radius_all(8)
+	sb.set_border_width_all(2)
+	if r.glow:                                             # active (e.g. ON FIRE right now)
+		var p := 0.5 + 0.5 * sin(anim_t * 8.0)
+		sb.border_color = Color(1.0, 0.6, 0.2, 0.7 + 0.3 * p)
+		draw_circle(rect.get_center(), rect.size.x * 0.7, Color(1.0, 0.5, 0.15, 0.12 + 0.1 * p))
+	else:
+		sb.border_color = Color(col.r, col.g, col.b, 0.85)
+	draw_style_box(sb, rect)
+	_relic_glyph(r.id, rect.get_center(), rect.size.x * 0.3, col.lightened(0.25))
+	if r.n > 1:
+		_otext(rect.position + Vector2(rect.size.x - 11, rect.size.y - 4), "%d" % r.n, 12,
+			Color(1, 1, 1, 0.95), 16, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
+# a small distinct emblem per power — relic-style, drawn procedurally
+func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
+	match id:
+		"_shield", "shield":                               # a proper SHIELD crest
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
+				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
+			draw_line(c + Vector2(0, -s * 0.5), c + Vector2(0, s * 0.6), Color(0.07, 0.11, 0.16), 2.0)
+		"spring", "springy", "bounce":                     # a coiled spring
+			var pts := PackedVector2Array()
+			for i in 7: pts.append(c + Vector2((-s if i % 2 == 0 else s) * 0.8, -s + i * s / 3.0))
+			draw_polyline(pts, col, 2.0)
+		"magnet":                                          # a horseshoe magnet
+			draw_arc(c + Vector2(0, -s * 0.2), s * 0.8, PI, TAU, 12, col, 3.0)
+			draw_line(c + Vector2(-s * 0.8, -s * 0.2), c + Vector2(-s * 0.8, s), col, 3.0)
+			draw_line(c + Vector2(s * 0.8, -s * 0.2), c + Vector2(s * 0.8, s), col, 3.0)
+		"snacks", "nova", "aftershock":                    # radar / sonic rings
+			draw_arc(c, s * 0.5, 0, TAU, 16, col, 2.0)
+			draw_arc(c, s, 0, TAU, 20, Color(col.r, col.g, col.b, 0.6), 2.0)
+		"zen":                                             # a calm wave
+			var wp := PackedVector2Array()
+			for i in 9: wp.append(c + Vector2(-s + i * s / 4.0, sin(i * 0.9) * s * 0.4))
+			draw_polyline(wp, col, 2.0)
+		"loft":                                            # an up-chevron (lift)
+			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.4), c + Vector2(0, -s * 0.7), c + Vector2(s, s * 0.4)]), col, 3.0)
+		"double":                                          # two up-chevrons
+			draw_polyline(PackedVector2Array([c + Vector2(-s, 0), c + Vector2(0, -s), c + Vector2(s, 0)]), col, 2.5)
+			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.7), c + Vector2(0, -s * 0.3), c + Vector2(s, s * 0.7)]), col, 2.5)
+		"duckling", "trio", "school":                      # duckling brood (1-3 dots)
+			var nn := 3 if id != "duckling" else 1
+			for i in nn:
+				draw_circle(c + Vector2((i - (nn - 1) * 0.5) * s * 0.8, 0), s * 0.4, col)
+		"gold":                                            # a coin
+			draw_circle(c, s, col); draw_circle(c, s * 0.7, Color(0.07, 0.11, 0.16))
+			draw_circle(c, s * 0.45, col)
+		"nestegg":                                         # an egg
+			draw_circle(c + Vector2(0, s * 0.15), s * 0.7, col)
+		"snackhawk", "wingducks":                          # wings / talon (a W)
+			draw_polyline(PackedVector2Array([c + Vector2(-s, -s * 0.3), c + Vector2(-s * 0.4, s * 0.4),
+				c + Vector2(0, -s * 0.4), c + Vector2(s * 0.4, s * 0.4), c + Vector2(s, -s * 0.3)]), col, 2.0)
+		"buffet":                                          # a fork
+			draw_line(c + Vector2(0, -s), c + Vector2(0, s), col, 2.0)
+			for dx in [-s * 0.5, 0.0, s * 0.5]: draw_line(c + Vector2(dx, -s), c + Vector2(dx, -s * 0.2), col, 2.0)
+		"thunder":                                         # a lightning bolt
+			draw_colored_polygon(PackedVector2Array([c + Vector2(s * 0.2, -s), c + Vector2(-s * 0.5, s * 0.2),
+				c + Vector2(0, s * 0.2), c + Vector2(-s * 0.2, s), c + Vector2(s * 0.5, -s * 0.2), c + Vector2(0, -s * 0.2)]), col)
+		"cannon":                                          # a cannon
+			draw_circle(c + Vector2(-s * 0.3, s * 0.3), s * 0.5, col)
+			draw_line(c + Vector2(-s * 0.2, 0), c + Vector2(s, -s * 0.6), col, 4.0)
+		"hotwheels":                                       # a flame
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
+				c + Vector2(s * 0.3, s), c + Vector2(-s * 0.3, s), c + Vector2(-s * 0.7, s * 0.3)]), col)
+		_:                                                  # fallback: a gem
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0), c + Vector2(0, s), c + Vector2(-s, 0)]), col)
 
 # the run timeline: a slim "road ahead" showing your progress + the bosses lying in
 # wait, all placed by real distance. Replaces the old LOFT bar (charge now rings the
