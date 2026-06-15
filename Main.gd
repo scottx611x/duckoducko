@@ -337,7 +337,8 @@ var boss_hp_bonus := 0
 # by hopping his dive-shockwaves back at him.
 const BOSS_MARKS := [5000, 15000, 30000]   # feet
 var next_boss_idx := 0
-var bosses_cleared := 0     # lifetime: highest boss tier ever beaten (gates the shrine)
+var bosses_cleared := 0     # lifetime: highest boss tier ever beaten (kept for stats)
+var prev_run_bosses := 0    # bosses beaten in your LAST run — sets this run's boon tier
 var cheat_unlock := false   # scootybooty ACTIVE: name-gated full unlock + dev boss buttons
                             # (transient — changing your name away revokes it)
 const DEV_BOSS_BTNS := [
@@ -402,6 +403,7 @@ var duck_vx := 0.0
 var duck_shake := 0.0
 
 var speed := BASE_SPEED
+var speed_step := 0             # stepped speed gear — kicks up every ~1300 ft (felt accel)
 var distance := 0.0
 var alive := true
 var dead_msg := ""
@@ -818,6 +820,7 @@ func _load_save() -> void:
 		meta_owned = cfg.get_value("save", "meta", [])
 		last_species = cfg.get_value("save", "last_species", "mallard")
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
+		prev_run_bosses = cfg.get_value("save", "prev_run_bosses", 0)
 		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
 		if not ducks.has(last_species):
 			last_species = "mallard"
@@ -831,6 +834,7 @@ func _save() -> void:
 	cfg.set_value("save", "meta", meta_owned)
 	cfg.set_value("save", "last_species", last_species)
 	cfg.set_value("save", "bosses_cleared", bosses_cleared)
+	cfg.set_value("save", "prev_run_bosses", prev_run_bosses)
 	cfg.save("user://save.cfg")
 
 func _meta(id: String) -> bool:
@@ -1156,7 +1160,7 @@ func _open_shrine() -> void:
 	in_shrine = true
 	shrine_open_t = anim_t
 	# only boons you've EARNED (tier <= bosses bested) can appear; beat bosses for richer ones
-	var pool: Array = BOONS.filter(func(b): return b.tier <= bosses_cleared)
+	var pool: Array = BOONS.filter(func(b): return b.tier <= prev_run_bosses)
 	pool.shuffle()
 	shrine_boons = pool.slice(0, 3)
 	shrine_line = randi() % ELDER_LINES.size()
@@ -1387,25 +1391,19 @@ func _spawn_hawk() -> void:
 		return
 	var dir := -1.0 if randf() < 0.5 else 1.0       # dir = travel direction (1 = ->)
 	var sx := -70.0 if dir > 0.0 else VIEW.x + 70.0
-	# a banner-line if a boss is bearing down, otherwise a random tip/cheer
-	var boss_near: bool = boss == null and next_boss_idx < BOSS_MARKS.size() \
-		and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] - 1200
-	var line: String = "INCOMING BOSS! chin up, beak out, my magnificent dweeb!" if boss_near \
-		else HAWK_LINES[randi() % HAWK_LINES.size()]
+	# RUSTY is an early-game GUIDE: a friendly tip or cheer, nothing to do with bosses
 	hawk = {"x": sx, "y": randf_range(120.0, 200.0), "dir": dir, "t": 0.0,
-		"line": line, "said": false, "say_t": -99.0}
+		"line": HAWK_LINES[randi() % HAWK_LINES.size()], "said": false, "say_t": -99.0}
 	_sfx("fwoosh", 0.4, -8.0)                        # a distant raptor SKREE-ish whoosh
 
 func _update_hawk(delta: float) -> void:
 	if tex_hawk.is_empty():
 		return
 	if hawk == null:
-		# he visits during normal play (not mid-boss-duel), more eagerly as a boss nears
-		if boss == null:
+		# RUSTY only guides you through the EARLY game, then leaves you to it
+		if boss == null and int(distance / 10.0) < 4500:
 			hawk_timer -= delta
-			var boss_imminent: bool = next_boss_idx < BOSS_MARKS.size() \
-				and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] - 1500
-			if hawk_timer <= 0.0 or (boss_imminent and hawk_timer < 30.0):
+			if hawk_timer <= 0.0:
 				_spawn_hawk()
 		return
 	hawk.t += delta
@@ -1430,10 +1428,10 @@ func _update_hawk(delta: float) -> void:
 		or (hawk.dir < 0.0 and hawk.x < -90.0)
 	if off_far:
 		hawk = null
-		hawk_timer = randf_range(40.0, 70.0)        # an occasional friendly visit
+		hawk_timer = randf_range(26.0, 42.0)        # a few early-game visits, then he's gone
 	elif boss != null:                              # if a duel begins, he tactfully bows out
 		hawk = null
-		hawk_timer = randf_range(40.0, 70.0)
+		hawk_timer = 9999.0
 
 func _draw_hawk() -> void:
 	if hawk == null or tex_hawk.is_empty():
@@ -1721,6 +1719,7 @@ func reset_game() -> void:
 	duck_vx = 0.0
 	duck_shake = 0.0
 	speed = BASE_SPEED
+	speed_step = 0
 	distance = 0.0
 	alive = true
 	dead_msg = ""
@@ -2133,6 +2132,8 @@ func die(msg: String) -> void:
 	alive = false
 	dead_msg = msg
 	_sfx("bonk")
+	prev_run_bosses = next_boss_idx         # THIS run's boss count sets the next shrine's tier
+	_save()
 	dead_m = int(distance / 10.0)
 	if _meta("pockets"):
 		run_feathers *= 2                   # DEEP POCKETS pays at the bank
@@ -2185,7 +2186,18 @@ func _process(delta: float) -> void:
 func _update_play(delta: float) -> void:
 	# speed climbs forever but flattens out — late game gets harder via drifting
 	# logs and hungrier herons, not raw scroll speed
-	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) * duck_pace_mul
+	# the river quickens in NOTICEABLE steps: every ~1300 ft you kick into a higher
+	# gear (with a whoosh), on top of the gentle underlying ramp — so progress feels
+	# like accelerating, not just slowly creeping faster.
+	var tier: int = mini(14, int(distance / 10.0 / 1300.0))
+	if tier > speed_step:
+		speed_step = tier
+		if alive and boss == null:
+			_flash("FASTER!")
+			_sfx("fwoosh", 1.15, -3.0)
+			duck_shake = maxf(duck_shake, 0.15)
+	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) \
+		* duck_pace_mul * (1.0 + 0.05 * speed_step)
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
 	if boss == null:                                    # distance freezes during a boss duel
 		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
@@ -2559,13 +2571,12 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 	_sfx("crunch", 0.7)
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
 	if boss.hp <= 0:
-		var was := bosses_cleared
 		next_boss_idx += 1
 		if next_boss_idx > bosses_cleared:
-			bosses_cleared = next_boss_idx          # lifetime progress: tiers up the shrine boons
+			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
 			_save()
-			if bosses_cleared > was and bosses_cleared <= 2:
-				_flash("BLESSINGS EMPOWERED!\nthe shrine offers richer boons")
+		if next_boss_idx <= 2:                       # this run's progress -> next shrine's tier
+			_flash("BLESSING EARNED!\nnext run's shrine grows richer")
 		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
@@ -3258,9 +3269,9 @@ func _draw_shrine() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
 	var ot := anim_t - shrine_open_t
 	_otext(Vector2(0, 122), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
-	# boon power tier: tells the player that besting bosses unlocks richer blessings
-	var tier_txt := "BLESSINGS · TIER %d/2 — best a boss for richer ones" % bosses_cleared if bosses_cleared < 2 \
-		else "BLESSINGS · TIER 2 — fully empowered"
+	# boon power tier reflects LAST run's bosses — do better to earn richer blessings
+	var tier_txt := "BLESSINGS · TIER %d/2 — from last run (beat bosses for more)" % prev_run_bosses if prev_run_bosses < 2 \
+		else "BLESSINGS · TIER 2 — last run was glorious"
 	_otext(Vector2(0, 154), tier_txt, 15, Color(0.7, 0.95, 1.0, 0.8), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# he cycles through his sage musings; each new line restarts the beak-flap
 	const LINE_DUR := 4.0
