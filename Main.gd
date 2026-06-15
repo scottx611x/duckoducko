@@ -3191,10 +3191,19 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"double":                                          # two up-chevrons
 			draw_polyline(PackedVector2Array([c + Vector2(-s, 0), c + Vector2(0, -s), c + Vector2(s, 0)]), col, 2.5)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.7), c + Vector2(0, -s * 0.3), c + Vector2(s, s * 0.7)]), col, 2.5)
-		"duckling", "trio", "school":                      # duckling brood (1-3 dots)
-			var nn := 3 if id != "duckling" else 1
+		"duckling", "trio", "school", "clutch":            # duckling brood of dots
+			var nn := 1 if id == "duckling" else (4 if id == "clutch" else 3)
 			for i in nn:
-				draw_circle(c + Vector2((i - (nn - 1) * 0.5) * s * 0.8, 0), s * 0.4, col)
+				draw_circle(c + Vector2((i - (nn - 1) * 0.5) * s * 0.62, 0), s * 0.32, col)
+		"preheat":                                         # a charged-up spark (flame + up)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
+				c + Vector2(0, s * 0.1), c + Vector2(-s * 0.7, s * 0.3)]), col)
+		"goosedown":                                       # a shield (like the shield relic)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
+				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
+		"lucky":                                           # a lucky four-leaf clover
+			for a in [0.0, 90.0, 180.0, 270.0]:
+				draw_circle(c + Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a))) * s * 0.5, s * 0.4, col)
 		"gold":                                            # a coin
 			draw_circle(c, s, col); draw_circle(c, s * 0.7, Color(0.07, 0.11, 0.16))
 			draw_circle(c, s * 0.45, col)
@@ -3364,14 +3373,22 @@ func _draw_shrine() -> void:
 		var bc := Color(1.0, 0.55, 0.3) if deal else Color(0.5, 0.85, 1.0)
 		sb.border_color = Color(bc.r, bc.g, bc.b, ap * pulse)
 		draw_style_box(sb, rc)
+		# the boon's emblem on the right (a glyph circle), matching the relic style
+		var gc := Vector2(rc.position.x + rc.size.x - 42.0, rc.position.y + rc.size.y * 0.5)
+		var gsb := StyleBoxFlat.new()
+		gsb.bg_color = Color(bc.r * 0.3, bc.g * 0.3, bc.b * 0.35, 0.9 * ap)
+		gsb.set_corner_radius_all(24)
+		draw_style_box(gsb, Rect2(gc - Vector2(26, 26), Vector2(52, 52)))
+		_relic_glyph(b.id, gc, 16.0, Color(bc.r, bc.g, bc.b, ap))
+		var tw: float = rc.size.x - 96.0          # leave room for the emblem
 		if deal:
 			draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 24), "RISK / REWARD",
-				HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 13, Color(1.0, 0.55, 0.3, ap))
+				HORIZONTAL_ALIGNMENT_LEFT, tw, 13, Color(1.0, 0.55, 0.3, ap))
 		draw_string(font, Vector2(rc.position.x + 20, rc.position.y + 52), b.name,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 27, Color(1, 1, 1, ap))
+			HORIZONTAL_ALIGNMENT_LEFT, tw, 27, Color(1, 1, 1, ap))
 		# wrap the description so long blessings never clip off the card edge
 		draw_multiline_string(font, Vector2(rc.position.x + 20, rc.position.y + 78), b.desc,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 40, 17, -1, Color(1, 1, 1, 0.75 * ap))
+			HORIZONTAL_ALIGNMENT_LEFT, tw, 17, -1, Color(1, 1, 1, 0.75 * ap))
 
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
