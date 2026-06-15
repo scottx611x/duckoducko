@@ -356,6 +356,9 @@ const SNAPZ_STOMP_LINES := ["HSSS!", "my shell!", "grrrk.", "you DARE?", "snap..
 const BOSS_INTROS := {
 	"gerald": ["he remembers you.", "the heron hungers.", "you again, morsel?",
 		"his patience has ended.", "the long-legged death.", "round two, little duck."],
+	"gerald_final": ["he has crossed back from beyond.", "the ETERNAL heron returns.",
+		"death wears feathers.", "you cannot kill what will not stay dead.",
+		"the final, famished king.", "this time, he does not leave."],
 	"snapz": ["something stirs in the deep.", "the mud begins to bubble.",
 		"ancient. patient. starving.", "the bottom-feeder rises.", "he has waited an age.",
 		"the water goes still..."],
@@ -2209,19 +2212,31 @@ func _start_boss() -> void:
 	boss_waves.clear()
 	boss_globs.clear()
 	var kind := "snapz" if idx == 1 else "gerald"   # the 15k-mark boss is the turtle
+	var final_gerald: bool = kind == "gerald" and idx >= 2
 	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
 	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
+	var bscale := 1.0
+	var title := "GERALD THE IMMENSE"
+	var intro_pool := "gerald"
 	if kind == "snapz":                          # the turtle is a tougher, faster brute
 		hp += 3
 		gap = 1.5
+		title = "SNAPZ"
+		intro_pool = "snapz"
+	elif final_gerald:                           # the FINAL heron: bigger, meaner, eternal
+		hp += 2
+		gap *= 0.78
+		bscale = 1.4
+		title = "GERALD THE ETERNAL"
+		intro_pool = "gerald_final"
 	boss = {
 		"hp": hp, "max_hp": hp, "x": VIEW.x * 0.5, "y": -160.0,
 		"phase": "enter", "t": 0.0, "idx": idx, "phase2": false, "kind": kind,
-		"dive_gap": gap,
+		"dive_gap": gap, "scale": bscale, "title": title,
 		"dive_t": gap, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
 		"say": "", "say_t": -10.0, "sub": 0.0,
-		"intro": BOSS_INTROS[kind][randi() % BOSS_INTROS[kind].size()],
+		"intro": BOSS_INTROS[intro_pool][randi() % BOSS_INTROS[intro_pool].size()],
 	}
 	if kind == "snapz":
 		_flash("SNAPZ\nawakens.")
@@ -2229,7 +2244,9 @@ func _start_boss() -> void:
 		_sfx("splash_big", 0.35)
 		duck_shake = maxf(duck_shake, 0.6)
 	else:
-		_flash("GERALD THE IMMENSE")
+		_flash(title)
+		if final_gerald:
+			duck_shake = maxf(duck_shake, 0.5)
 	_sfx("mega", 0.45)
 	_sfx("splash_big", 0.5)
 	if music_player != null:
@@ -2468,6 +2485,8 @@ func _boss_stomped() -> void:
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
 func _boss_spit() -> void:
 	var n: int = 3 if boss.phase2 else 2
+	if boss.idx >= 2:                            # the ETERNAL gerald hurls a wider volley
+		n += 1
 	_sfx("fwoosh", 1.3, -4.0)
 	var bx: float = boss.x
 	var by: float = boss.y
@@ -3363,7 +3382,7 @@ func _draw_boss_gerald() -> void:
 	if not tex_gerald.is_empty():
 		var fr: int = 0 if boss.dive_stage in ["down", "up"] else (int(anim_t * 6.0) % 2)
 		var gt: Texture2D = tex_gerald[fr]
-		var gsz := gt.get_size() * 1.7
+		var gsz: Vector2 = gt.get_size() * 1.7 * boss.scale
 		# shadow he casts on the water grows as he dives
 		var sh := clampf((boss.y - 100.0) / (BASE_Y - 100.0), 0.0, 1.0)
 		if tex_shadow != null and boss.phase == "fight":
@@ -3394,14 +3413,14 @@ func _draw_boss_gerald() -> void:
 		# GERALD's speech: a clear dark bubble near his head (kept on-screen)
 		if boss.say != "" and anim_t - boss.say_t < 1.9 and not tex_gerald.is_empty():
 			var s_above: bool = boss.y > 320.0        # he's low -> bubble above; high -> below
-			var s_gsz: Vector2 = tex_gerald[0].get_size() * 1.7
+			var s_gsz: Vector2 = tex_gerald[0].get_size() * 1.7 * boss.scale
 			var s_by: float = boss.y - s_gsz.y * 0.5 - 24.0 if s_above else boss.y + s_gsz.y * 0.44 + 24.0
 			s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true)
 	# title card during the entrance — name + a varying intro, in CrEePY letters
 	if boss.phase == "enter" and boss.t > 0.35:
-		_creepy_text(VIEW.x * 0.5, 250.0, "GERALD THE IMMENSE", 38)
+		_creepy_text(VIEW.x * 0.5, 250.0, boss.title, 36 if boss.title.length() > 16 else 40)
 		_creepy_text(VIEW.x * 0.5, 296.0, boss.intro, 20)
 	# HP pips, top center — width adapts so a long health bar never clips off-screen
 	var pips: int = boss.max_hp
