@@ -182,7 +182,7 @@ const SPECIALS := [
 	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a colossal stomp-leap — flatten the lane and ride the arc"},
 	{"id": "wild",   "name": "WILD CARD",   "cost": 0,   "desc": "the meter fires a RANDOM special you own — maximum whimsy"},
 	{"id": "laser",  "name": "QUACK LASER", "cost": 0,   "desc": "a searing beam vaporizes every log & heron dead ahead"},
-	{"id": "tidal",  "name": "TIDAL WAVE",  "cost": 320, "desc": "a wall of water sweeps the WHOLE screen clear of hazards"},
+	{"id": "slowmo", "name": "ZEN MODE",    "cost": 320, "desc": "bullet-time! the whole river CRAWLS for a few seconds so you can thread the chaos"},
 	{"id": "afterburner", "name": "AFTERBURNER", "cost": 520, "desc": "BLAST off ablaze — invincible & double-pace for a roaring dash"},
 ]
 const SEL_SPECIAL_BTN := Rect2(70.0, 706.0, 350.0, 30.0)   # swap chip on the select screen
@@ -412,6 +412,7 @@ var hop_t := 0.0
 var mega_t := 0.0
 var laser_t := 0.0
 var dash_t := 0.0               # AFTERBURNER: invincible double-pace dash remaining
+var slowmo_t := 0.0             # ZEN MODE: bullet-time — the river crawls so you can thread it
 var specials_owned: Array = ["mega", "wild", "laser"]   # MEGA, WILD, LASER are free — the classic silly mix
 var equipped_special := "wild"         # the one that fires when LOFT fills (wild = random whimsy)
 
@@ -1950,6 +1951,7 @@ func reset_game() -> void:
 	mega_t = 0.0
 	laser_t = 0.0
 	dash_t = 0.0
+	slowmo_t = 0.0
 	duck_x = VIEW.x * 0.5
 	target_x = duck_x
 	last_duck_x = duck_x
@@ -2449,33 +2451,26 @@ func _fire_special() -> void:
 		sp = pool[randi() % pool.size()] if pool.size() > 0 else "mega"
 	match sp:
 		"laser": fire_laser()
-		"tidal": fire_tidal()
+		"slowmo": fire_slowmo()
 		"afterburner": fire_afterburner()
 		_: mega_hop()
 
-# TIDAL WAVE: a wall of water sweeps the whole screen, washing away every hazard
-func fire_tidal() -> void:
+# ZEN MODE: bullet-time — the whole river crawls so you can thread the chaos
+func fire_slowmo() -> void:
 	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0 or boss != null:
 		return
 	loft = 0.0
 	loft_ready = false
-	_sfx("splash_big", 0.85)
-	_sfx("fwoosh", 0.9, -2.0)
-	_water_burst(duck_x, BASE_Y, 1.7)
-	for l in logs:
-		ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 95.0, "col": Color(0.6, 0.85, 1.0)})
-	for e in enemies:
-		ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 95.0, "col": Color(0.6, 0.85, 1.0)})
-	logs.clear()
-	enemies.clear()
-	haz_turtle = null
-	# a sweeping curtain of foam rolls up the screen
-	for i in 46:
-		parts.append({"x": randf_range(BANK_W, VIEW.x - BANK_W), "y": BASE_Y - randf_range(0.0, 60.0),
-			"vx": randf_range(-50.0, 50.0), "vy": randf_range(-300.0, -130.0), "t": 0.0,
-			"life": randf_range(0.4, 0.95), "col": Color(0.82, 0.93, 1.0, 0.92)})
-	_flash("TIDAL WAVE!")
-	duck_shake = 0.4
+	slowmo_t = 4.0                                 # the river CRAWLS — thread the chaos
+	_sfx("chime", 0.6)
+	_sfx("fwoosh", 0.45, -3.0)
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 520.0, "col": Color(0.55, 0.8, 1.0)})
+	for i in 12:                                   # a calm blue pulse rings out as time downshifts
+		var a := TAU * i / 12.0
+		parts.append({"x": duck_x + cos(a) * 30.0, "y": BASE_Y + sin(a) * 30.0,
+			"vx": cos(a) * 40.0, "vy": sin(a) * 40.0, "t": 0.0, "life": 0.8,
+			"col": Color(0.6, 0.85, 1.0, 0.8)})
+	_flash("ZEN MODE")
 
 # AFTERBURNER: blast off ablaze — invincible & double-pace for a roaring dash
 func fire_afterburner() -> void:
@@ -2600,6 +2595,14 @@ func _update_play(delta: float) -> void:
 			duck_shake = maxf(duck_shake, 0.15)
 	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) \
 		* duck_pace_mul * (1.0 + 0.03 * speed_step)
+	# ZEN MODE: bullet-time slows the whole river (scroll, hazards, spawns) — not the duck
+	var sm := 1.0
+	if slowmo_t > 0.0:
+		slowmo_t -= delta
+		sm = 0.35
+		speed *= sm
+		if slowmo_t <= 0.0:
+			_flash("time resumes.")
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
 	if boss == null:                                    # distance freezes during a boss duel
 		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
@@ -2627,7 +2630,7 @@ func _update_play(delta: float) -> void:
 	# Sadie: the chocolate lab, in INFREQUENT pursuit of her chuckit
 	_update_sadie(delta)
 	_update_hawk(delta)
-	_update_turtle(delta)
+	_update_turtle(delta * sm)
 
 	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
 	# range get tagged with the pulling duckling and slide toward it until gulped.
@@ -2791,7 +2794,7 @@ func _update_play(delta: float) -> void:
 
 	_update_hop(delta)
 	_update_wake(delta)
-	_update_enemies(delta)
+	_update_enemies(delta * sm)
 	# GERALD descends at each boss mark (once the duck is grounded and the lane's clear-ish)
 	# a boss politely holds back while RUSTY is on screen having his moment
 	if boss == null and hawk == null and next_boss_idx < BOSS_MARKS.size() \
@@ -2799,7 +2802,7 @@ func _update_play(delta: float) -> void:
 		_start_boss()
 	if boss != null:
 		_update_boss(delta)
-	_spawn(delta)
+	_spawn(delta * sm)
 	_move_world(delta)
 	if dash_t > 0.0:
 		dash_t -= delta
@@ -3648,14 +3651,10 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"laser":                                           # QUACK LASER: a horizontal beam
 			draw_line(c + Vector2(-s, 0), c + Vector2(s, 0), col, s * 0.5)
 			draw_circle(c + Vector2(-s * 0.7, 0), s * 0.42, col)
-		"tidal":                                           # TIDAL WAVE: a curling wave
-			var wp := PackedVector2Array()
-			for i in 13:
-				var t: float = float(i) / 12.0
-				wp.append(c + Vector2(lerpf(-s, s, t), -sin(t * TAU) * s * 0.55))
-			for i in range(wp.size() - 1):
-				draw_line(wp[i], wp[i + 1], col, 3.0)
-			draw_circle(c + Vector2(s * 0.7, -s * 0.4), s * 0.3, col)
+		"slowmo":                                          # ZEN MODE: a clock / hourglass
+			draw_arc(c, s * 0.92, 0, TAU, 22, col, 2.5)
+			draw_line(c, c + Vector2(0, -s * 0.6), col, 2.5)   # hand up
+			draw_line(c, c + Vector2(s * 0.42, s * 0.12), col, 2.5)   # hand right
 		"afterburner":                                     # AFTERBURNER: a flame chasing an arrow
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.6), c + Vector2(s * 0.2, 0),
 				c + Vector2(-s, s * 0.6)]), col)
@@ -4750,13 +4749,9 @@ func _draw() -> void:
 
 	_draw_haz_turtle()
 
-	# Sadie: head, shoulders, and optimism above the waterline. The chuckit bobs
-	# forever ahead of her, which is the whole point of being a dog.
+	# Sadie: head, shoulders, and optimism above the waterline — her CHUCK-IT
+	# clamped proudly in her jaws (she already fetched it, the whole point of being a dog)
 	if sadie != null and not tex_sadie.is_empty():
-		if tex_chuckit != null:
-			var bpos := Vector2(sadie.x + sadie.dir * 74.0, sadie.y + 6.0 + sin(anim_t * 4.2) * 3.0)
-			var bsz: Vector2 = tex_chuckit.get_size() * 2.0
-			draw_texture_rect(tex_chuckit, Rect2(bpos - bsz * 0.5, bsz), false)
 		var sfr: Texture2D = tex_sadie[int(anim_t * 5.0) % 2]
 		var spos := Vector2(sadie.x, sadie.y + sin(anim_t * 3.2) * 2.5)
 		draw_set_transform(spos, sin(anim_t * 2.4) * 0.04, Vector2(sadie.dir, 1.0))
@@ -4919,6 +4914,11 @@ func _draw() -> void:
 				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - 40.0, 18, Color(1, 1, 1, 0.75 * ap))
 		return
 
+	# ZEN MODE: a calm blue vignette while bullet-time is active
+	if slowmo_t > 0.0 and alive:
+		var za: float = clampf(slowmo_t, 0.0, 1.0) * (0.12 + 0.04 * sin(anim_t * 3.0))
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.3, 0.55, 0.95, za))
+		_otext(Vector2(0, 84), "ZEN", 18, Color(0.7, 0.9, 1.0, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	if alive:
 		_draw_status_icons()
 		if boss == null and not in_menu and not in_select and not in_shop and not in_shrine and not drafting:
@@ -5335,8 +5335,8 @@ func _draw_menu() -> void:
 	var cx := VIEW.x * 0.5
 	# title
 	var tbob := sin(anim_t * 2.0) * 6.0
-	_fancy_title("DUCKODUCKO", 200.0, 66, Color(1, 0.9, 0.33), Color(1, 0.55, 0.18), 7.0)
-	_otext(Vector2(0, 246 + tbob), "a whimsical duck hopper", 24, Color(0.95, 0.97, 1.0, 0.85))
+	_fancy_title("DUCKODUCKO", 182.0, 60, Color(1, 0.9, 0.33), Color(1, 0.55, 0.18), 6.0)
+	_otext(Vector2(0, 258 + tbob), "a whimsical duck hopper", 24, Color(0.95, 0.97, 1.0, 0.85))
 	var fact: String = FACTS[int(anim_t / 5.0) % FACTS.size()]
 	_mtext(Vector2(30, 284), "duck fact: " + fact, 17, Color(1, 1, 1, 0.6), VIEW.x - 60.0, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
