@@ -178,6 +178,7 @@ const META := [
 # LASER the first unlock, then two heavier hitters. Buy in the shop, swap at duck-select.
 const SPECIALS := [
 	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a colossal stomp-leap — flatten the lane and ride the arc"},
+	{"id": "wild",   "name": "WILD CARD",   "cost": 0,   "desc": "the meter fires a RANDOM special you own — maximum whimsy"},
 	{"id": "laser",  "name": "QUACK LASER", "cost": 150, "desc": "a searing beam vaporizes every log & heron dead ahead"},
 	{"id": "tidal",  "name": "TIDAL WAVE",  "cost": 320, "desc": "a wall of water sweeps the WHOLE screen clear of hazards"},
 	{"id": "afterburner", "name": "AFTERBURNER", "cost": 520, "desc": "BLAST off ablaze — invincible & double-pace for a roaring dash"},
@@ -337,6 +338,10 @@ const BOONS := [
 	{"id": "highstakes", "tier": 1, "name": "HIGH STAKES",   "desc": "feathers earned ×2 — but every Gerald gains +1 HP", "deal": true},
 	{"id": "glasscannon","tier": 2, "name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
 	{"id": "secondwind", "tier": 2, "name": "SECOND WIND",   "desc": "cheat death once — but you pace 10% slower", "deal": true},
+	# TIER 3 — only for ducks who've bested ALL THREE bosses (Gerald, Snapz, the Eternal)
+	{"id": "apex",       "tier": 3, "name": "APEX PREDATOR", "desc": "begin with TWO legendaries — but every boss gains +2 HP", "deal": true},
+	{"id": "phoenix",    "tier": 3, "name": "PHOENIX",       "desc": "cheat death TWICE, reborn ablaze each time", "deal": false},
+	{"id": "warlord",    "tier": 3, "name": "WAR LORD",      "desc": "+35% pace AND triple feathers — but the whole flock hunts you", "deal": true},
 ]
 # per-run boon modifiers (reset each run)
 var boon_pace := 1.0
@@ -345,7 +350,7 @@ var boon_heron_mult := 1.0
 var boon_snack_mult := 1.0
 var boon_loft_mult := 1.0
 var boon_score_mult := 1.0
-var boon_revive := false
+var boon_revives := 0           # SECOND WIND (1) / PHOENIX (2): cheat-death charges left
 var boss_hp_bonus := 0
 
 # GERALD THE IMMENSE: a colossal heron boss at fixed distance marks (feet), each
@@ -401,8 +406,8 @@ var hop_t := 0.0
 var mega_t := 0.0
 var laser_t := 0.0
 var dash_t := 0.0               # AFTERBURNER: invincible double-pace dash remaining
-var specials_owned: Array = ["mega"]   # LOFT specials bought (mega is free/starter)
-var equipped_special := "mega"         # the one that fires when LOFT fills
+var specials_owned: Array = ["mega", "wild"]   # LOFT specials owned (mega + wild are free)
+var equipped_special := "wild"         # the one that fires when LOFT fills (wild = random whimsy)
 
 # per-duck gameplay multipliers, set from ROSTER stats in start_game
 var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
@@ -905,16 +910,20 @@ func _load_save() -> void:
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
 		prev_run_bosses = cfg.get_value("save", "prev_run_bosses", 0)
 		runs_started = cfg.get_value("save", "runs_started", 0)
-		specials_owned = cfg.get_value("save", "specials_owned", ["mega"])
-		equipped_special = cfg.get_value("save", "equipped_special", "mega")
+		specials_owned = cfg.get_value("save", "specials_owned", ["mega", "wild"])
+		equipped_special = cfg.get_value("save", "equipped_special", "wild")
 		lifetime = cfg.get_value("save", "lifetime", {})
 		run_history = cfg.get_value("save", "run_history", [])
 		codex_seen = cfg.get_value("save", "codex_seen", [])
 		codex_viewed = cfg.get_value("save", "codex_viewed", [])
 		if "mega" not in specials_owned:
 			specials_owned.append("mega")
+		if "wild" not in specials_owned:                 # grant WILD CARD + restore the classic whimsy
+			specials_owned.append("wild")
+			if equipped_special == "mega":
+				equipped_special = "wild"
 		if equipped_special not in specials_owned:
-			equipped_special = "mega"
+			equipped_special = "wild"
 		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
 		if not ducks.has(last_species):
 			last_species = "mallard"
@@ -1175,7 +1184,7 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_shop.png")
-	feathers = 0; meta_owned = []; specials_owned = ["mega"]; equipped_special = "mega"
+	feathers = 0; meta_owned = []; specials_owned = ["mega", "wild"]; equipped_special = "wild"
 	# a SECRET duck in select (should read "??? SECRET ???", hidden name)
 	_open_select()
 	sel_index = ROSTER.size() - 2          # disco (locked secret)
@@ -1353,9 +1362,21 @@ func _pick_boon(b: Dictionary) -> void:
 			boon_feather_mult = 2
 			boss_hp_bonus = 1
 		"secondwind":
-			boon_revive = true
+			boon_revives = 1
 			boon_pace = 0.9
+		"apex":                                    # TIER 3: two legendaries, tougher bosses
+			_grant_random_upgrade(3)
+			_grant_random_upgrade(3)
+			boss_hp_bonus = 2
+		"phoenix":                                 # TIER 3: two fiery revives
+			boon_revives = 2
+		"warlord":                                 # TIER 3: glass-cannon greed
+			boon_pace = 1.35
+			boon_feather_mult = 3
+			boon_heron_mult = 1.6                  # the whole flock hunts you
 	# every blessing you take shows in the relic listing as a golden boon
+	if not run_boons.has(b.id):
+		run_boons.append(b.id)
 	if not run_boons.has(b.id):
 		run_boons.append(b.id)
 	in_shrine = false
@@ -1924,7 +1945,7 @@ func reset_game() -> void:
 	boon_snack_mult = 1.0
 	boon_loft_mult = 1.0
 	boon_score_mult = 1.0
-	boon_revive = false
+	boon_revives = 0
 	if music_player != null:
 		music_player.volume_db = 0.0
 	log_timer = 0.8
@@ -2368,7 +2389,14 @@ func _sonic_quack() -> void:
 # the LOFT meter is full — fire whichever special you have equipped this run
 func _fire_special() -> void:
 	_st("specials")
-	match equipped_special:
+	var sp := equipped_special
+	if sp == "wild":                               # WILD CARD: pick a random special you own
+		var pool: Array = []
+		for s in SPECIALS:
+			if s.id != "wild" and _owns_special(s.id):
+				pool.append(s.id)
+		sp = pool[randi() % pool.size()] if pool.size() > 0 else "mega"
+	match sp:
 		"laser": fire_laser()
 		"tidal": fire_tidal()
 		"afterburner": fire_afterburner()
@@ -2414,15 +2442,17 @@ func fire_afterburner() -> void:
 	duck_shake = 0.35
 
 func die(msg: String) -> void:
-	# SECOND WIND: the ancient duck's blessing yanks you back from the brink once
-	if boon_revive:
-		boon_revive = false
+	# SECOND WIND / PHOENIX: an ancient blessing yanks you back from the brink
+	if boon_revives > 0:
+		boon_revives -= 1
 		shield_charges += 2                 # back on your feet, cushioned
 		enemies.clear()                     # clear what just got you
 		boss_globs.clear()
-		_flash("SECOND WIND!")
-		_sfx("unlock", 0.8)
-		_spawn_parts(duck_x, BASE_Y - 30.0, 26, Color(0.6, 1.0, 0.7), 240.0)
+		fire_t = maxf(fire_t, 2.2)          # reborn ABLAZE (PHOENIX flavor; harmless for SECOND WIND)
+		fire_max = maxf(fire_max, 2.2)
+		_flash("SECOND WIND!" if boon_revives == 0 else "PHOENIX RISES!")
+		_sfx("unlock", 0.8); _sfx("mega", 0.5)
+		_spawn_parts(duck_x, BASE_Y - 30.0, 26, Color(1.0, 0.6, 0.3), 260.0)
 		return
 	alive = false
 	dead_msg = msg
@@ -3561,6 +3591,13 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 				c + Vector2(-s, s * 0.6)]), col)
 			draw_colored_polygon(PackedVector2Array([c + Vector2(s * 0.1, -s * 0.7), c + Vector2(s, 0),
 				c + Vector2(s * 0.1, s * 0.7)]), col)
+		"wild":                                            # WILD CARD: a sparkly star
+			var sp := PackedVector2Array()
+			for k in 10:
+				var ang := -PI * 0.5 + k * PI / 5.0
+				var rr: float = s if k % 2 == 0 else s * 0.42
+				sp.append(c + Vector2(cos(ang), sin(ang)) * rr)
+			draw_colored_polygon(sp, col)
 		"_shield", "shield", "jacket":                     # a proper SHIELD crest
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
 				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
@@ -3627,9 +3664,17 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"cannon":                                          # a cannon
 			draw_circle(c + Vector2(-s * 0.3, s * 0.3), s * 0.5, col)
 			draw_line(c + Vector2(-s * 0.2, 0), c + Vector2(s, -s * 0.6), col, 4.0)
-		"hotwheels", "thermal":                            # a flame
+		"hotwheels", "thermal", "phoenix":                 # a flame
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
 				c + Vector2(s * 0.3, s), c + Vector2(-s * 0.3, s), c + Vector2(-s * 0.7, s * 0.3)]), col)
+		"apex":                                            # a crown — apex of the river
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, s * 0.5), c + Vector2(-s, -s * 0.4),
+				c + Vector2(-s * 0.5, s * 0.1), c + Vector2(0, -s * 0.6), c + Vector2(s * 0.5, s * 0.1),
+				c + Vector2(s, -s * 0.4), c + Vector2(s, s * 0.5)]), col)
+		"warlord":                                         # crossed blades
+			draw_line(c + Vector2(-s, -s), c + Vector2(s, s), col, 2.5)
+			draw_line(c + Vector2(s, -s), c + Vector2(-s, s), col, 2.5)
+			draw_circle(c, s * 0.28, col)
 		"tailwind", "flyer":                               # wind: three speed lines
 			for dy in [-s * 0.5, 0.0, s * 0.5]:
 				draw_line(c + Vector2(-s, dy), c + Vector2(s * 0.6, dy), col, 2.0)
@@ -3750,8 +3795,8 @@ func _draw_shrine() -> void:
 	var ot := anim_t - shrine_open_t
 	_otext(Vector2(0, 122), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
 	# boon power tier reflects LAST run's bosses — do better to earn richer blessings
-	var tier_txt := "BLESSINGS · TIER %d/2 — from last run (beat bosses for more)" % prev_run_bosses if prev_run_bosses < 2 \
-		else "BLESSINGS · TIER 2 — last run was glorious"
+	var tier_txt := "BLESSINGS · TIER %d/3 — from last run (beat bosses for more)" % prev_run_bosses if prev_run_bosses < 3 \
+		else "BLESSINGS · TIER 3 — you bested them ALL"
 	_otext(Vector2(0, 154), tier_txt, 15, Color(0.7, 0.95, 1.0, 0.8), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# he cycles through his sage musings; each new line restarts the beak-flap
 	const LINE_DUR := 4.0
@@ -4568,7 +4613,11 @@ func _draw_ducklings() -> void:
 		var frames: Array = tex_duckling["hop"] if h > 0.05 else tex_duckling["idle"]
 		var fr: Texture2D = frames[int(anim_t * (14.0 if h > 0.05 else 4.0) + i) % 2]
 		var sz := fr.get_size() * sc
-		draw_texture_rect(fr, Rect2(pos - sz * 0.5, sz), false)
+		# the wee ones BANK into the turn just like their parent does
+		var roll := clampf(duck_vx / 460.0, -0.5, 0.5)
+		draw_set_transform(pos, roll, Vector2.ONE)
+		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _trail_x(ago: float) -> float:
 	var target := anim_t - ago
@@ -5022,9 +5071,12 @@ func _spin_frame(sp: String, yaw: float, beak_open := false):
 	return spin[int(floor(fposmod(yaw, TAU) / TAU * spin.size())) % spin.size()]
 
 # ---- the feather shop ----------------------------------------------------------
-# the shop catalogue: permanent META perks, then the buyable LOFT SPECIALS (mega is free)
+# the shop catalogue: permanent META perks, then the BUYABLE LOFT SPECIALS (free ones excluded)
+func _buyable_specials() -> Array:
+	return SPECIALS.filter(func(s): return s.cost > 0)
+
 func _shop_count() -> int:
-	return META.size() + SPECIALS.size() - 1
+	return META.size() + _buyable_specials().size()
 
 # 2-column card grid: PERKS up top, then the LOFT SPECIALS band below
 const SHOP_PERK_Y := 214.0
@@ -5071,7 +5123,7 @@ func _shop_press(pos: Vector2) -> void:
 			else:
 				_sfx("bonk", 1.4, -8.0)
 		else:                                      # a LOFT special: buy it, or equip if owned
-			var sp: Dictionary = SPECIALS[i - META.size() + 1]
+			var sp: Dictionary = _buyable_specials()[i - META.size()]
 			if _owns_special(sp.id):
 				equipped_special = sp.id           # tap an owned special to equip it
 				_save()
@@ -5098,7 +5150,7 @@ func _draw_shop() -> void:
 		if screeching and tex_hawk_screech != null:
 			rfr = tex_hawk_screech
 		var bob: float = (sin(anim_t * 22.0) * 3.0) if screeching else (sin(anim_t * 1.4) * 4.0)
-		draw_set_transform(rp + Vector2(0, bob), sin(anim_t * 1.2) * 0.05, Vector2(1.0, 1.0))   # face inward (left)
+		draw_set_transform(rp + Vector2(0, bob), -0.9 + sin(anim_t * 1.2) * 0.05, Vector2(-1.0, 1.0))   # rotated to face LEFT toward his wares
 		var rsz: Vector2 = rfr.get_size() * DUCK_DRAW * 0.9
 		draw_texture_rect(rfr, Rect2(-rsz * 0.5, rsz), false)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -5118,9 +5170,10 @@ func _draw_shop() -> void:
 		_shop_card(_shop_card_rect(i), m.id, m.name, m.desc, m.cost, _meta(m.id), false, false)
 	# LOFT SPECIALS section — buy a new special, or tap an owned one to equip it
 	_otext(Vector2(40, SHOP_SPEC_Y - 30.0), "LOFT SPECIALS  ·  tap to equip", 16, Color(0.5, 0.92, 1.0, 0.85), VIEW.x - 80, HORIZONTAL_ALIGNMENT_LEFT, 3)
-	for si in range(1, SPECIALS.size()):
-		var sp: Dictionary = SPECIALS[si]
-		_shop_card(_shop_card_rect(META.size() + si - 1), sp.id, sp.name, sp.desc, sp.cost,
+	var buyable := _buyable_specials()
+	for si in buyable.size():
+		var sp: Dictionary = buyable[si]
+		_shop_card(_shop_card_rect(META.size() + si), sp.id, sp.name, sp.desc, sp.cost,
 			_owns_special(sp.id), true, equipped_special == sp.id)
 
 # one shop card — icon, name, wrapped blurb, and a price / OWNED / EQUIPPED tag
