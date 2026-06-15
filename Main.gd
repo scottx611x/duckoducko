@@ -431,6 +431,25 @@ var enemy_seq := 0              # stable heron ids (missile targeting)
 # She CAN end YOUR run though: paddle into her and that's the ballgame (hop over!).
 var sadie = null                # null or {x, y, dir, t}
 var sadie_timer := 40.0
+# RUSTY the red-tailed hawk: a friendly, theatrical GUIDE who periodically swoops
+# across the upper sky to drop a whimsical tip or cheer. Pure decoration — he can
+# NEVER touch the duck. null, or {x, y, dir, t, said, line, said_at}
+var hawk = null
+var hawk_timer := 18.0          # first fly-by comes early so he introduces himself
+var tex_hawk := []              # RUSTY's 3 glide-flap frames
+# RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
+const HAWK_LINES := [
+	"psst — hop the GOLDEN logs for a BOUNCE, my dweeb!",
+	"AHEM. A hawk's-eye TIP: longer holds make for LOFTIER hops.",
+	"behold — a duck of DESTINY! ...probably!",
+	"shiny things are SNACKS. snacks are GLORY. waddle forth!",
+	"MAGNIFICENT hop! I shall narrate it for GENERATIONS!",
+	"a heron approaches from on high. be FABULOUS about it.",
+	"ducklings follow you, o luminous one. don't lose the wee ones!",
+	"when in doubt: HOP. when not in doubt: ALSO hop.",
+	"I soar. I observe. I APPROVE. carry on, small floofy legend!",
+	"the river is long, the duck is brave, the hawk is DECORATIVE.",
+]
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
 var turtle_timer := 28.0
@@ -567,6 +586,9 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://art/sadie_0.png"):
 		tex_sadie = [load("res://art/sadie_0.png"), load("res://art/sadie_1.png")]
 		tex_chuckit = load("res://art/chuckit.png")
+	if ResourceLoader.exists("res://art/hawk_0.png"):
+		tex_hawk = [load("res://art/hawk_0.png"), load("res://art/hawk_1.png"),
+			load("res://art/hawk_2.png")]
 	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
 		var fp := "res://art/fire_duck_%d.png" % fi
 		if ResourceLoader.exists(fp):
@@ -923,6 +945,19 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_play.png")
+	# RUSTY the hawk mid-fly-by, hovering at center with his bubble open
+	_spawn_hawk()
+	if hawk != null:
+		hawk.x = VIEW.x * 0.5
+		hawk.dir = 1.0
+		hawk.said = true
+		hawk.t = 0.6
+		hawk.say_t = 0.0
+		hawk.line = "MAGNIFICENT hop, my dweeb! ...psst, hop the GOLDEN logs!"
+	await get_tree().create_timer(0.05).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_hawk.png")
+	hawk = null
 	# ON FIRE plume mid-burn + Sadie mid-crossing, plume leaning into a hard steer
 	picked["hotwheels"] = 1
 	fire_t = 4.0
@@ -1341,6 +1376,82 @@ func _update_sadie(delta: float) -> void:
 		sadie = null
 		sadie_timer = randf_range(45.0, 80.0)      # INFREQUENT: a cameo, not a mechanic
 
+# RUSTY the red-tailed hawk: a friendly know-it-all who SWOOPS across the upper
+# sky, glides to a hover, drops a whimsical tip/cheer in a speech bubble, then
+# wings off. Purely decorative guidance — he never collides with or harms the duck.
+func _spawn_hawk() -> void:
+	if tex_hawk.is_empty():
+		return
+	var dir := -1.0 if randf() < 0.5 else 1.0       # dir = travel direction (1 = ->)
+	var sx := -70.0 if dir > 0.0 else VIEW.x + 70.0
+	# a banner-line if a boss is bearing down, otherwise a random tip/cheer
+	var boss_near: bool = boss == null and next_boss_idx < BOSS_MARKS.size() \
+		and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] - 1200
+	var line: String = "INCOMING BOSS! chin up, beak out, my magnificent dweeb!" if boss_near \
+		else HAWK_LINES[randi() % HAWK_LINES.size()]
+	hawk = {"x": sx, "y": randf_range(120.0, 200.0), "dir": dir, "t": 0.0,
+		"line": line, "said": false, "say_t": -99.0}
+	_sfx("fwoosh", 0.4, -8.0)                        # a distant raptor SKREE-ish whoosh
+
+func _update_hawk(delta: float) -> void:
+	if tex_hawk.is_empty():
+		return
+	if hawk == null:
+		# he visits during normal play (not mid-boss-duel), more eagerly as a boss nears
+		if boss == null:
+			hawk_timer -= delta
+			var boss_imminent: bool = next_boss_idx < BOSS_MARKS.size() \
+				and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] - 1500
+			if hawk_timer <= 0.0 or (boss_imminent and hawk_timer < 30.0):
+				_spawn_hawk()
+		return
+	hawk.t += delta
+	# glide IN, hover to deliver his line near mid-screen, then power OUT the far side
+	var mid := VIEW.x * 0.5
+	var to_mid: float = (mid - hawk.x) * hawk.dir
+	if not hawk.said and to_mid > 0.0:
+		# cruising toward center: ease the speed down as he arrives
+		hawk.x += hawk.dir * lerpf(70.0, 230.0, clampf(to_mid / 260.0, 0.0, 1.0)) * delta
+		if to_mid < 14.0:
+			hawk.said = true
+			hawk.say_t = hawk.t
+			_sfx("quack", 0.5, -10.0)               # a theatrical little announcing chirp
+	elif hawk.said and hawk.t - hawk.say_t < 2.6:
+		# hovering: hold position with a gentle drifting bob while the bubble shows
+		hawk.x += hawk.dir * 16.0 * delta
+	else:
+		# swoop off the far side, accelerating away
+		hawk.x += hawk.dir * 270.0 * delta
+	hawk.y += sin(hawk.t * 2.2) * 9.0 * delta       # buoyant soaring bob
+	var off_far: bool = (hawk.dir > 0.0 and hawk.x > VIEW.x + 90.0) \
+		or (hawk.dir < 0.0 and hawk.x < -90.0)
+	if off_far:
+		hawk = null
+		hawk_timer = randf_range(40.0, 70.0)        # an occasional friendly visit
+	elif boss != null:                              # if a duel begins, he tactfully bows out
+		hawk = null
+		hawk_timer = randf_range(40.0, 70.0)
+
+func _draw_hawk() -> void:
+	if hawk == null or tex_hawk.is_empty():
+		return
+	var fr: Texture2D = tex_hawk[int(hawk.t * 7.0) % tex_hawk.size()]   # wings beating
+	var hpos := Vector2(hawk.x, hawk.y + sin(hawk.t * 2.2) * 4.0)
+	# faint shadow gliding along below him for a touch of depth
+	if tex_shadow != null:
+		var shz := tex_shadow.get_size() * DUCK_DRAW * 0.9
+		draw_set_transform(hpos + Vector2(6, 30), 0.0, Vector2.ONE)
+		draw_texture_rect(tex_shadow, Rect2(-shz * 0.5, shz), false, Color(0, 0, 0, 0.18))
+	# art faces +z drawn head-up; flip on X so he points the way he's flying
+	draw_set_transform(hpos, sin(hawk.t * 1.6) * 0.05, Vector2(hawk.dir, 1.0))
+	var hsz: Vector2 = fr.get_size() * DUCK_DRAW
+	draw_texture_rect(fr, Rect2(-hsz * 0.5, hsz), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# his whimsical bubble, anchored just below him so the tail points up at him
+	if hawk.said and hawk.t - hawk.say_t < 2.6:
+		_speech_bubble(Vector2(hawk.x, hawk.y + 52.0), hawk.line,
+			Color(0.99, 0.93, 0.74, 0.97), Color(0.78, 0.42, 0.16, 0.95), 17, -1.0)
+
 # a periodic snapping-turtle ambush during normal play: it lurks in the murk, locks
 # onto your lane, then ERUPTS in a snap — hop over it (be airborne) or be elsewhere.
 func _update_turtle(delta: float) -> void:
@@ -1673,6 +1784,8 @@ func reset_game() -> void:
 	prop_timer = 5.0
 	sadie = null
 	sadie_timer = 40.0
+	hawk = null
+	hawk_timer = 18.0
 	haz_turtle = null
 	turtle_timer = randf_range(22.0, 38.0)
 	if music_player != null:
@@ -2079,6 +2192,7 @@ func _update_play(delta: float) -> void:
 
 	# Sadie: the chocolate lab, in INFREQUENT pursuit of her chuckit
 	_update_sadie(delta)
+	_update_hawk(delta)
 	_update_turtle(delta)
 
 	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
@@ -3930,6 +4044,9 @@ func _draw_duck() -> void:
 	# the front licks of the volume wrap over the sprite: properly engulfed
 	if fire_i > 0.0:
 		_draw_fire_licks(duck_pos, fire_scale, fire_i)
+
+	# RUSTY the hawk soars over the whole scene; his bubble reads above everything
+	_draw_hawk()
 
 func _duck_frame(h: float) -> Texture2D:
 	var cur = ducks[species]

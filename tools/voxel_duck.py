@@ -876,6 +876,94 @@ def build_sadie(frame=0):
     return V
 
 
+def build_hawk(frame=0):
+    """RUSTY the red-tailed hawk: the game's friendly know-it-all GUIDE, caught
+    mid glide-flap as he swoops across the sky to drop a tip. Built to read as a
+    red-tail at a glance from a 3/4 side angle: dark-brown back & head, a pale
+    belly with a smudged dark belly-band, the SIGNATURE rusty-red fanned tail, a
+    bright yellow hooked beak + yellow talons, and one fierce dark eye under a
+    heavy brow. Faces +z (he travels head-first across the top of the screen).
+    3 frames: 0 = level glide, 1 = wings up (upstroke), 2 = wings down."""
+    BROWN = (108, 74, 46); BROWND = (78, 52, 32); BROWNL = (140, 100, 64)
+    PALE = (238, 228, 206); PALED = (208, 196, 170); BAND = (120, 86, 58)
+    RUST = (176, 80, 44); RUSTH = (206, 108, 60); RUSTD = (138, 58, 32)
+    PRIM = (46, 36, 30); SEC = (84, 60, 42)
+    BEAK = (244, 198, 70); BEAKD = (40, 34, 30); CERE = (240, 198, 70)
+    TALON = (240, 204, 80); CLAW = (34, 30, 28)
+    EYE = (40, 30, 24); EYEW = (228, 196, 80); BROW = (54, 38, 26)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    # ---- body: brown back over a pale streaked belly ----
+    ellip(0, 0, 0, 2.8, 2.4, 5.2, BROWN)
+    ellip(0, 1.4, -0.4, 2.2, 1.5, 4.4, BROWND, only_empty=True)        # dark mantle
+    ellip(0, -1.6, 0.6, 2.4, 1.4, 4.2, PALE, only_empty=True)          # pale underside
+    # the red-tail's smudgy dark BELLY-BAND across the lower breast
+    for x in range(-3, 4):
+        if (x * 7) % 3 != 0:
+            put(x, -2, 1, BAND); put(x, -1, 0, BAND, only_empty=True)
+    # fine dark streaks down the pale breast
+    for x in range(-2, 3):
+        if x % 2 == 0:
+            put(x, -1, 3, BROWND); put(x, -2, 2, BROWND)
+    # ---- broad rounded buteo wings, fingered primaries, 3 flap poses ----
+    for s in (1, -1):
+        for w in range(11):
+            x = (2 + w) * s
+            if frame == 1:
+                lift = 2 + (w // 2)         # raised high on the upstroke
+            elif frame == 2:
+                lift = -1 - (w // 3)        # bowed beneath on the downstroke
+            else:
+                lift = 1 + (w // 6)         # near-level glide, wings held flat & wide
+            z0 = -4 + (w // 2)              # trailing edge sweeps forward
+            z1 = 3 - (w // 3)              # broad leading edge, swept back at the tips
+            if w >= 8:
+                col = PRIM                  # dark fingered primaries
+            elif w >= 5:
+                col = SEC
+            else:
+                col = BROWN if w % 2 else BROWNL
+            box(x, x, lift, lift + 1, z0, z1, col)
+            if 3 <= w <= 7:                 # pale covert bar along the forewing
+                put(x, lift + 1, z1, PALED)
+            if w >= 8:                      # splayed "fingers" at the wingtip
+                put(x, lift, z0 - 1, PRIM)
+                if w == 10:
+                    put(round(x * 1.12), lift, z0 - 2, PRIM)
+    # ---- the SIGNATURE rusty-red fanned tail (short & broad, behind the body) ----
+    for i, z in enumerate(range(-6, -12, -1)):
+        spread = 1 + i                      # fans out wider toward the tip
+        for x in range(-spread, spread + 1):
+            c = RUSTH if x == 0 else (RUST if abs(x) < spread else RUSTD)
+            put(x, 0, z, c)
+            put(x, -1, z, RUSTD, only_empty=True)
+    for x in range(-5, 6):                  # dark terminal band on the tail tip
+        if abs(x) <= 5:
+            put(x, 0, -11, BROWND, only_empty=True)
+    # ---- short neck + compact rounded raptor head, mostly dark brown ----
+    ellip(0, 1.4, 5.8, 2.0, 1.9, 2.2, BROWN)
+    ellip(0, 2.6, 6.2, 1.6, 1.4, 1.7, BROWND, only_empty=True)         # dark crown cap
+    # heavy brow ridge giving the fierce raptor scowl
+    for s in (1, -1):
+        put(2 * s, 2, 6, BROW); put(2 * s, 2, 7, BROW)
+    # fierce forward-set eye: bright gold rim hugging a dark pupil, peeking out
+    # high on the head so the glint reads from the 3/4 top-down camera
+    for s in (1, -1):
+        put(2 * s, 2, 7, EYEW); put(2 * s, 2, 8, EYE)
+        put(2 * s, 1, 8, EYE)
+    # ---- small yellow cere + a short forward beak that curls to a dark HOOK ----
+    put(0, 1, 8, CERE); put(1, 1, 8, CERE, only_empty=True); put(-1, 1, 8, CERE, only_empty=True)
+    put(0, 1, 9, BEAK)                                                 # beak juts forward
+    put(0, 0, 10, BEAKD)                                              # tip curls down to a dark hook
+    # ---- yellow legs + grabby TALONS tucked under in flight ----
+    for s in (1, -1):
+        put(s, -2, 0, BROWNL)                                          # feathered thigh
+        put(s, -3, 1, TALON); put(s, -3, 2, TALON)
+        put(s, -4, 2, CLAW); put(s * 2, -3, 3, CLAW)                  # curled claws
+        put(s, -4, 0, CLAW)
+    return V
+
+
 def build_snapz(frame=0):
     """SNAPZ: a BOLD, stylized snapping-turtle boss — big blocky head, a strong hooked
     beak, huge angry eyes, a jagged keeled shell with a serrated rim, and a thick
@@ -1013,6 +1101,20 @@ def generate_critters(art_dir):
     bb = (max(0, bb[0] - 4), max(0, bb[1] - 4), min(260, bb[2] + 4), min(260, bb[3] + 4))
     for f, im in enumerate(snapz_imgs):
         save(im.crop(bb), "snapz_%d.png" % f)
+    # RUSTY the red-tailed hawk GUIDE: soaring 3/4 top-down so his spread wings,
+    # brown back, dark fingered tips and that signature rusty-red fanned tail all
+    # read. 3 flap frames (glide / upstroke / downstroke); cropped to a shared
+    # bbox so he holds position while the wings beat.
+    hawk_imgs = [render(shade(build_hawk(f)), math.radians(20), math.radians(22), out=160, scale=3.4)
+                 for f in (0, 1, 2)]
+    hbb = None
+    for im in hawk_imgs:
+        b = im.getbbox()
+        if b:
+            hbb = b if hbb is None else (min(hbb[0], b[0]), min(hbb[1], b[1]), max(hbb[2], b[2]), max(hbb[3], b[3]))
+    hbb = (max(0, hbb[0] - 3), max(0, hbb[1] - 3), min(160, hbb[2] + 3), min(160, hbb[3] + 3))
+    for f, im in enumerate(hawk_imgs):
+        save(im.crop(hbb), "hawk_%d.png" % f)
     # duckling: back view to match gameplay camera
     gy = math.radians(GAME_YAW)
     SHd = shade(build_duckling("folded"))
