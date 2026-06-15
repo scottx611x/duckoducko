@@ -174,6 +174,15 @@ const META := [
 	{"id": "flyer", "name": "FREQUENT FLYER", "desc": "upgrade drafts arrive sooner", "cost": 440},
 	{"id": "thermal", "name": "THERMAL VENT", "desc": "a permanent +5% pace, every run", "cost": 600},
 ]
+# LOFT specials: fire when your meter fills. MEGA is the starter (always owned),
+# LASER the first unlock, then two heavier hitters. Buy in the shop, swap at duck-select.
+const SPECIALS := [
+	{"id": "mega",   "name": "MEGA HOP",    "cost": 0,   "desc": "a colossal stomp-leap — flatten the lane and ride the arc"},
+	{"id": "laser",  "name": "QUACK LASER", "cost": 150, "desc": "a searing beam vaporizes every log & heron dead ahead"},
+	{"id": "tidal",  "name": "TIDAL WAVE",  "cost": 320, "desc": "a wall of water sweeps the WHOLE screen clear of hazards"},
+	{"id": "afterburner", "name": "AFTERBURNER", "cost": 520, "desc": "BLAST off ablaze — invincible & double-pace for a roaring dash"},
+]
+const SEL_SPECIAL_BTN := Rect2(70.0, 706.0, 350.0, 30.0)   # swap chip on the select screen
 const SHOP_ROW_H := 96.0
 const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mobile has no Esc)
 const GAME_PAUSE_BTN := Rect2(VIEW.x - 124.0, 14.0, 50.0, 50.0) # ‖ pause, left of the ✕
@@ -386,6 +395,9 @@ var state := St.GROUNDED
 var hop_t := 0.0
 var mega_t := 0.0
 var laser_t := 0.0
+var dash_t := 0.0               # AFTERBURNER: invincible double-pace dash remaining
+var specials_owned: Array = ["mega"]   # LOFT specials bought (mega is free/starter)
+var equipped_special := "mega"         # the one that fires when LOFT fills
 
 # per-duck gameplay multipliers, set from ROSTER stats in start_game
 var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
@@ -837,6 +849,12 @@ func _load_save() -> void:
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
 		prev_run_bosses = cfg.get_value("save", "prev_run_bosses", 0)
 		runs_started = cfg.get_value("save", "runs_started", 0)
+		specials_owned = cfg.get_value("save", "specials_owned", ["mega"])
+		equipped_special = cfg.get_value("save", "equipped_special", "mega")
+		if "mega" not in specials_owned:
+			specials_owned.append("mega")
+		if equipped_special not in specials_owned:
+			equipped_special = "mega"
 		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
 		if not ducks.has(last_species):
 			last_species = "mallard"
@@ -852,7 +870,13 @@ func _save() -> void:
 	cfg.set_value("save", "bosses_cleared", bosses_cleared)
 	cfg.set_value("save", "prev_run_bosses", prev_run_bosses)
 	cfg.set_value("save", "runs_started", runs_started)
+	cfg.set_value("save", "specials_owned", specials_owned)
+	cfg.set_value("save", "equipped_special", equipped_special)
 	cfg.save("user://save.cfg")
+
+# does the player own this LOFT special? (scootybooty owns them all)
+func _owns_special(id: String) -> bool:
+	return cheat_unlock or id in specials_owned
 
 func _meta(id: String) -> bool:
 	return cheat_unlock or id in meta_owned         # scootybooty owns every shop item
@@ -1481,9 +1505,9 @@ func _draw_hawk() -> void:
 	var hsz: Vector2 = fr.get_size() * DUCK_DRAW
 	draw_texture_rect(fr, Rect2(-hsz * 0.5, hsz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# his whimsical bubble, anchored just below him so the tail points up at him
+	# his whimsical bubble, anchored well below him so even a 2-line tip clears his face
 	if hawk.said and hawk.t - hawk.say_t < 3.4:
-		_speech_bubble(Vector2(hawk.x, hawk.y + 52.0), hawk.line,
+		_speech_bubble(Vector2(hawk.x, hawk.y + 90.0), hawk.line,
 			Color(0.99, 0.93, 0.74, 0.97), Color(0.78, 0.42, 0.16, 0.95), 17, -1.0)
 
 # a periodic snapping-turtle ambush during normal play: it lurks in the murk, locks
@@ -1752,6 +1776,7 @@ func reset_game() -> void:
 	hop_t = 0.0
 	mega_t = 0.0
 	laser_t = 0.0
+	dash_t = 0.0
 	duck_x = VIEW.x * 0.5
 	target_x = duck_x
 	last_duck_x = duck_x
@@ -2021,6 +2046,22 @@ func _select_press(pos: Vector2) -> void:
 		_sfx("click")
 		_enter_menu()
 		return
+	if SEL_SPECIAL_BTN.has_point(pos):             # swap the equipped LOFT special (owned only)
+		var owned := SPECIALS.filter(func(s): return _owns_special(s.id))
+		if owned.size() > 1:
+			var ci := 0
+			for k in owned.size():
+				if owned[k].id == equipped_special:
+					ci = k
+			equipped_special = owned[(ci + 1) % owned.size()].id
+			_save()
+			_sfx("unlock", 1.1)
+			for sp in SPECIALS:
+				if sp.id == equipped_special:
+					_flash("%s EQUIPPED" % sp.name)
+		else:
+			_sfx("click", 0.8)                     # only MEGA so far — buy more in the shop
+		return
 	if SEL_PLAY_BTN.has_point(pos):
 		if _is_unlocked(sel_index):
 			_sfx("click")
@@ -2175,6 +2216,53 @@ func _sonic_quack() -> void:
 	enemies.clear()
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 640.0})
 	_hit_boss(2)                               # a screen-clearing QUACK staggers Gerald hard
+
+# the LOFT meter is full — fire whichever special you have equipped this run
+func _fire_special() -> void:
+	match equipped_special:
+		"laser": fire_laser()
+		"tidal": fire_tidal()
+		"afterburner": fire_afterburner()
+		_: mega_hop()
+
+# TIDAL WAVE: a wall of water sweeps the whole screen, washing away every hazard
+func fire_tidal() -> void:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0 or boss != null:
+		return
+	loft = 0.0
+	loft_ready = false
+	_sfx("splash_big", 0.85)
+	_sfx("fwoosh", 0.9, -2.0)
+	_water_burst(duck_x, BASE_Y, 1.7)
+	for l in logs:
+		ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 95.0, "col": Color(0.6, 0.85, 1.0)})
+	for e in enemies:
+		ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 95.0, "col": Color(0.6, 0.85, 1.0)})
+	logs.clear()
+	enemies.clear()
+	haz_turtle = null
+	# a sweeping curtain of foam rolls up the screen
+	for i in 46:
+		parts.append({"x": randf_range(BANK_W, VIEW.x - BANK_W), "y": BASE_Y - randf_range(0.0, 60.0),
+			"vx": randf_range(-50.0, 50.0), "vy": randf_range(-300.0, -130.0), "t": 0.0,
+			"life": randf_range(0.4, 0.95), "col": Color(0.82, 0.93, 1.0, 0.92)})
+	_flash("TIDAL WAVE!")
+	duck_shake = 0.4
+
+# AFTERBURNER: blast off ablaze — invincible & double-pace for a roaring dash
+func fire_afterburner() -> void:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0 or boss != null:
+		return
+	loft = 0.0
+	loft_ready = false
+	dash_t = 2.3
+	fire_t = maxf(fire_t, 2.5)                  # visibly lit (the burn loop handles trail + chip)
+	fire_max = maxf(fire_max, 2.5)
+	_sfx("mega", 0.7)
+	_sfx("fwoosh", 1.1)
+	_spawn_parts(duck_x, BASE_Y, 24, Color(1.0, 0.55, 0.12), 280.0)
+	_flash("AFTERBURNER!")
+	duck_shake = 0.35
 
 func die(msg: String) -> void:
 	# SECOND WIND: the ancient duck's blessing yanks you back from the brink once
@@ -2406,10 +2494,7 @@ func _update_play(delta: float) -> void:
 	if loft_ready and laser_t <= 0.0 and state != St.MEGA and boss == null:
 		var el := anim_t - loft_ready_t
 		if (el > 1.2 and state == St.GROUNDED) or el > 2.6:
-			if randf() < 0.5:
-				mega_hop()
-			else:
-				fire_laser()
+			_fire_special()
 
 	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck;
 	# never mid-boss — Gerald does not pause for shopping)
@@ -2456,6 +2541,10 @@ func _update_play(delta: float) -> void:
 		_update_boss(delta)
 	_spawn(delta)
 	_move_world(delta)
+	if dash_t > 0.0:
+		dash_t -= delta
+		distance += speed * delta                  # AFTERBURNER: a second helping of pace
+		duck_shake = maxf(duck_shake, 0.12)
 	if laser_t > 0.0:
 		laser_t -= delta
 		_laser_burn()
@@ -2499,7 +2588,7 @@ func is_airborne() -> bool:
 	return state == St.MEGA or (state == St.HOPPING and hop_height() > AIR_THRESHOLD)
 
 func is_invincible() -> bool:
-	return state == St.MEGA or laser_t > 0.0
+	return state == St.MEGA or laser_t > 0.0 or dash_t > 0.0
 
 func _land(mega: bool) -> void:
 	air_hops = 0
@@ -3158,6 +3247,10 @@ func _pause_relic_rects() -> Array:
 func _power_info(r: Dictionary) -> Dictionary:
 	if r.id == "_shield":
 		return {"name": "SHIELD", "desc": "shrug off one bonk per charge"}
+	if r.get("special", false):
+		for sp in SPECIALS:
+			if sp.id == r.id:
+				return {"name": sp.name + " (special)", "desc": sp.desc}
 	if r.get("boon", false):
 		for b in BOONS:
 			if b.id == r.id:
@@ -3170,6 +3263,7 @@ func _power_info(r: Dictionary) -> Dictionary:
 # the active powers this run: shield charges, drafted upgrades, and ancient-duck boons
 func _active_relics() -> Array:
 	var relics: Array = []
+	relics.append({"id": equipped_special, "rarity": 3, "n": 1, "glow": false, "special": true})
 	if shield_charges > 0:
 		relics.append({"id": "_shield", "rarity": 1, "n": shield_charges, "glow": false})
 	for u in UPGRADES:
@@ -3186,7 +3280,12 @@ func _draw_relic(rect: Rect2, r: Dictionary) -> void:
 	sb.bg_color = Color(0.07, 0.11, 0.16, 0.92)
 	sb.set_corner_radius_all(8)
 	sb.set_border_width_all(2)
-	if r.get("boon", false):                               # ancient-duck boon: gold, faintly haloed
+	if r.get("special", false):                            # equipped LOFT special: cyan, haloed
+		col = Color(0.5, 0.92, 1.0)
+		sb.bg_color = Color(0.05, 0.13, 0.18, 0.94)
+		sb.border_color = Color(col.r, col.g, col.b, 0.95)
+		draw_circle(rect.get_center(), rect.size.x * 0.62, Color(0.5, 0.9, 1.0, 0.10))
+	elif r.get("boon", false):                             # ancient-duck boon: gold, faintly haloed
 		col = Color(1.0, 0.86, 0.42)
 		sb.bg_color = Color(0.14, 0.12, 0.06, 0.92)
 		sb.border_color = Color(col.r, col.g, col.b, 0.9)
@@ -3239,6 +3338,26 @@ func _draw_haz_turtle() -> void:
 # a small distinct emblem per power — relic-style, drawn procedurally
 func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 	match id:
+		"mega":                                            # MEGA HOP: a bold upward leap arc
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.85, s * 0.4),
+				c + Vector2(s * 0.3, s * 0.4), c + Vector2(s * 0.3, s), c + Vector2(-s * 0.3, s),
+				c + Vector2(-s * 0.3, s * 0.4), c + Vector2(-s * 0.85, s * 0.4)]), col)
+		"laser":                                           # QUACK LASER: a horizontal beam
+			draw_line(c + Vector2(-s, 0), c + Vector2(s, 0), col, s * 0.5)
+			draw_circle(c + Vector2(-s * 0.7, 0), s * 0.42, col)
+		"tidal":                                           # TIDAL WAVE: a curling wave
+			var wp := PackedVector2Array()
+			for i in 13:
+				var t: float = float(i) / 12.0
+				wp.append(c + Vector2(lerpf(-s, s, t), -sin(t * TAU) * s * 0.55))
+			for i in range(wp.size() - 1):
+				draw_line(wp[i], wp[i + 1], col, 3.0)
+			draw_circle(c + Vector2(s * 0.7, -s * 0.4), s * 0.3, col)
+		"afterburner":                                     # AFTERBURNER: a flame chasing an arrow
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.6), c + Vector2(s * 0.2, 0),
+				c + Vector2(-s, s * 0.6)]), col)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(s * 0.1, -s * 0.7), c + Vector2(s, 0),
+				c + Vector2(s * 0.1, s * 0.7)]), col)
 		"_shield", "shield":                               # a proper SHIELD crest
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
 				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
@@ -4368,19 +4487,25 @@ func _spin_frame(sp: String, yaw: float, beak_open := false):
 	return spin[int(floor(fposmod(yaw, TAU) / TAU * spin.size())) % spin.size()]
 
 # ---- the feather shop ----------------------------------------------------------
+# the shop catalogue: permanent META perks, then the buyable LOFT SPECIALS (mega is free)
+func _shop_count() -> int:
+	return META.size() + SPECIALS.size() - 1
+
 func _shop_row(i: int) -> Rect2:
 	# pitch shrinks as the catalogue grows so the rows always fit on screen
-	var top := 196.0
-	var pitch: float = minf(SHOP_ROW_H + 14.0, (936.0 - top) / float(META.size()))
-	return Rect2(50.0, top + i * pitch, VIEW.x - 100.0, pitch - 14.0)
+	var top := 176.0
+	var pitch: float = minf(SHOP_ROW_H + 14.0, (952.0 - top) / float(_shop_count()))
+	return Rect2(50.0, top + i * pitch, VIEW.x - 100.0, pitch - 12.0)
 
 func _shop_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.has_point(pos):
 		_sfx("click")
 		_enter_menu()
 		return
-	for i in META.size():
-		if _shop_row(i).has_point(pos):
+	for i in _shop_count():
+		if not _shop_row(i).has_point(pos):
+			continue
+		if i < META.size():                        # a permanent META perk
 			var m: Dictionary = META[i]
 			if _meta(m.id):
 				_sfx("click", 0.8)                 # already yours
@@ -4392,7 +4517,24 @@ func _shop_press(pos: Vector2) -> void:
 				_spawn_parts(VIEW.x * 0.5, _shop_row(i).get_center().y, 14, Color(1, 0.86, 0.35), 200.0)
 			else:
 				_sfx("bonk", 1.4, -8.0)
-			return
+		else:                                      # a LOFT special: buy it, or equip if owned
+			var sp: Dictionary = SPECIALS[i - META.size() + 1]
+			if _owns_special(sp.id):
+				equipped_special = sp.id           # tap an owned special to equip it
+				_save()
+				_sfx("unlock", 1.1)
+				_flash("%s EQUIPPED" % sp.name)
+			elif feathers >= sp.cost:
+				feathers -= sp.cost
+				specials_owned.append(sp.id)
+				equipped_special = sp.id
+				_save()
+				_sfx("unlock"); _sfx("chime", 1.6)
+				_spawn_parts(VIEW.x * 0.5, _shop_row(i).get_center().y, 16, Color(0.5, 0.9, 1.0), 220.0)
+				_flash("%s UNLOCKED!" % sp.name)
+			else:
+				_sfx("bonk", 1.4, -8.0)
+		return
 
 func _draw_shop() -> void:
 	_otext(Vector2(0, 104), "FEATHER SHOP", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
@@ -4428,6 +4570,36 @@ func _draw_shop() -> void:
 			draw_string(font, Vector2(rc.position.x, rc.position.y + 56), "%d feathers" % m.cost,
 				HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 20, 22,
 				Color(1, 0.86, 0.35) if affordable else Color(1, 1, 1, 0.45))
+	# the LOFT SPECIALS section — buy a new special, or tap an owned one to equip it
+	for si in range(1, SPECIALS.size()):
+		var sp: Dictionary = SPECIALS[si]
+		var rc := _shop_row(META.size() + si - 1)
+		var owned := _owns_special(sp.id)
+		var equipped: bool = equipped_special == sp.id
+		var affordable: bool = feathers >= sp.cost
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.05, 0.13, 0.18, 0.94)
+		sb.set_corner_radius_all(16)
+		sb.set_border_width_all(2)
+		if equipped:
+			sb.border_color = Color(0.5, 0.92, 1.0, 0.95)
+		elif owned:
+			sb.border_color = Color(0.4, 0.7, 0.8, 0.7)
+		elif affordable:
+			sb.border_color = Color(0.5, 0.85, 1.0, 0.6 + 0.4 * sin(anim_t * 4.0 + si))
+		else:
+			sb.border_color = Color(1, 1, 1, 0.18)
+		draw_style_box(sb, rc)
+		_relic_glyph(sp.id, rc.position + Vector2(30, rc.size.y * 0.5), 12.0, Color(0.6, 0.92, 1.0))
+		var tcol := Color.WHITE if (owned or affordable) else Color(1, 1, 1, 0.55)
+		draw_string(font, Vector2(rc.position.x + 56, rc.position.y + 36), "%s  ✦special" % sp.name,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 150, 23, tcol)
+		draw_string(font, Vector2(rc.position.x + 56, rc.position.y + 62), sp.desc,
+			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 60, 15, Color(1, 1, 1, 0.62))
+		var tag := "EQUIPPED" if equipped else ("tap to equip" if owned else "%d feathers" % sp.cost)
+		var tagcol := Color(0.5, 0.92, 1.0) if equipped else (Color(0.6, 0.8, 0.9) if owned else (Color(0.5, 0.85, 1.0) if affordable else Color(1, 1, 1, 0.45)))
+		draw_string(font, Vector2(rc.position.x, rc.position.y + 34), tag,
+			HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 18, 18, tagcol)
 
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
@@ -4499,6 +4671,22 @@ func _draw_select() -> void:
 	else:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d feathers to unlock — you have %d" % [duck.cost, feathers],
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+
+	# the equipped LOFT SPECIAL — tap to swap among the ones you own (buy more in the shop)
+	var sname := equipped_special
+	for spc in SPECIALS:
+		if spc.id == equipped_special:
+			sname = spc.name
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0.05, 0.13, 0.18, 0.92)
+	ssb.set_corner_radius_all(15)
+	ssb.set_border_width_all(2)
+	ssb.border_color = Color(0.5, 0.92, 1.0, 0.85)
+	draw_style_box(ssb, SEL_SPECIAL_BTN)
+	_relic_glyph(equipped_special, SEL_SPECIAL_BTN.position + Vector2(22, 15), 10.0, Color(0.6, 0.92, 1.0))
+	var swaphint := "  ▸ tap to swap" if specials_owned.size() > 1 else ""
+	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(42, 21), "SPECIAL: %s%s" % [sname, swaphint],
+		HORIZONTAL_ALIGNMENT_LEFT, SEL_SPECIAL_BTN.size.x - 50, 17, Color(0.85, 0.96, 1.0))
 
 	# roster thumbnails (locked ones ghosted to a silhouette)
 	for i in ROSTER.size():
