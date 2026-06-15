@@ -3755,26 +3755,88 @@ func _draw_run_timeline() -> void:
 		draw_circle(Vector2(dx, y), mr - 4.0, Color(0.97, 0.84, 0.27))
 
 # a playful CENTERED title: each letter bobs on its own, two-tone shimmer, chunky outline
+# a hand-authored 5x7 PIXEL font — blocky & retro, matching the voxel art (no TTF)
+const PIXFONT := {
+	"A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+	"B": ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
+	"C": [".####", "#....", "#....", "#....", "#....", "#....", ".####"],
+	"D": ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
+	"E": ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+	"F": ["#####", "#....", "#....", "####.", "#....", "#....", "#...."],
+	"G": [".####", "#....", "#....", "#.###", "#...#", "#...#", ".####"],
+	"H": ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+	"I": ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "#####"],
+	"J": ["..###", "...#.", "...#.", "...#.", "#..#.", "#..#.", ".##.."],
+	"K": ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+	"L": ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+	"M": ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+	"N": ["#...#", "##..#", "#.#.#", "#.#.#", "#..##", "#...#", "#...#"],
+	"O": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+	"P": ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+	"Q": [".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"],
+	"R": ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+	"S": [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+	"T": ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+	"U": ["#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+	"V": ["#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."],
+	"W": ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"],
+	"X": ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
+	"Y": ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
+	"Z": ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
+	"0": [".###.", "#..##", "#.#.#", "#.#.#", "##..#", "#...#", ".###."],
+	"1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+	"2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+	"3": ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
+	"4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+	"5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+	"6": [".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."],
+	"7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+	"8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+	"9": [".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."],
+	"!": ["..#..", "..#..", "..#..", "..#..", "..#..", ".....", "..#.."],
+	"?": [".###.", "#...#", "....#", "..##.", "..#..", ".....", "..#.."],
+	".": [".....", ".....", ".....", ".....", ".....", ".##..", ".##.."],
+	"-": [".....", ".....", ".....", "#####", ".....", ".....", "....."],
+	"'": ["..#..", "..#..", ".....", ".....", ".....", ".....", "....."],
+	"·": [".....", ".....", ".....", ".##..", ".##..", ".....", "....."],
+	"/": ["....#", "...#.", "...#.", "..#..", ".#...", ".#...", "#...."],
+}
+func _pix_glyph(ch: String, ox: float, oy: float, px: float, col: Color) -> void:
+	var g = PIXFONT.get(ch.to_upper(), null)
+	if g == null:
+		return
+	for row in 7:
+		var line: String = g[row]
+		for cc in 5:
+			if line[cc] == "#":
+				draw_rect(Rect2(ox + cc * px, oy + row * px, px + 0.5, px + 0.5), col)
+
+# a playful CENTERED pixel-font title: each glyph bobs, two-tone shimmer, blocky outline
 func _fancy_title(text: String, cy: float, size: int, c1: Color, c2: Color, amp := 5.0) -> void:
+	var px := maxf(2.0, round(float(size) / 8.5))
+	var adv := 6.0 * px
 	var total := 0.0
-	for i in text.length():
-		total += font.get_char_size(text.unicode_at(i), size).x
+	for ch in text:
+		total += (4.0 * px if ch == " " else adv)
+	# shrink to fit if a long title would overrun the screen
+	if total > VIEW.x - 24.0:
+		px = maxf(2.0, floor(px * (VIEW.x - 24.0) / total))
+		adv = 6.0 * px
+		total = 0.0
+		for ch in text:
+			total += (4.0 * px if ch == " " else adv)
 	var x := VIEW.x * 0.5 - total * 0.5
-	var outl := [Vector2(-3, 0), Vector2(3, 0), Vector2(0, -3), Vector2(0, 3),
-		Vector2(-2, -2), Vector2(2, -2), Vector2(-2, 2), Vector2(2, 2)]
-	for i in text.length():
-		var code := text.unicode_at(i)
-		var cw: float = font.get_char_size(code, size).x
+	var i := 0
+	for ch in text:
+		if ch == " ":
+			x += 4.0 * px; i += 1; continue
 		var bob: float = sin(anim_t * 3.0 + i * 0.55) * amp
-		var p := Vector2(x, cy + bob)
+		var oy: float = cy - 3.5 * px + bob
 		var col: Color = c1.lerp(c2, 0.5 + 0.5 * sin(float(i) * 0.6))
-		if text[i] != " ":
-			for o in outl:
-				draw_char(font, p + o, text[i], size, Color(0.06, 0.08, 0.12, 0.92))
-			# a little top highlight for a candy look
-			draw_char(font, p + Vector2(0, -1.5), text[i], size, col.lightened(0.35))
-			draw_char(font, p, text[i], size, col)
-		x += cw
+		for o in [Vector2(-px, 0), Vector2(px, 0), Vector2(0, -px), Vector2(0, px)]:
+			_pix_glyph(ch, x + o.x, oy + o.y, px, Color(0.06, 0.08, 0.12, 0.95))
+		_pix_glyph(ch, x, oy, px, col)
+		x += adv; i += 1
 
 func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 		align := HORIZONTAL_ALIGNMENT_CENTER, osize := 6) -> void:
@@ -5150,7 +5212,7 @@ func _draw_shop() -> void:
 		if screeching and tex_hawk_screech != null:
 			rfr = tex_hawk_screech
 		var bob: float = (sin(anim_t * 22.0) * 3.0) if screeching else (sin(anim_t * 1.4) * 4.0)
-		draw_set_transform(rp + Vector2(0, bob), -0.9 + sin(anim_t * 1.2) * 0.05, Vector2(-1.0, 1.0))   # rotated to face LEFT toward his wares
+		draw_set_transform(rp + Vector2(0, bob), sin(anim_t * 1.2) * 0.06, Vector2(-1.0, 1.0))   # mirrored to face LEFT toward his wares
 		var rsz: Vector2 = rfr.get_size() * DUCK_DRAW * 0.9
 		draw_texture_rect(rfr, Rect2(-rsz * 0.5, rsz), false)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
