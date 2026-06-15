@@ -62,8 +62,8 @@ const UPGRADES := [
 	{"id": "aftershock", "name": "AFTERSHOCK", "desc": "each log your blast smashes: +12% LOFT", "rarity": 1},
 	{"id": "bounce", "name": "BOUNCE CHARGE", "desc": "spring-log bounces refill +35% LOFT", "rarity": 1},
 	{"id": "buffet", "name": "LOG BUFFET", "desc": "lasered logs each drop a snack", "rarity": 1},
-	{"id": "school", "name": "DUCKLING SCHOOL", "desc": "your ducklings fetch snacks they pass", "rarity": 2},
-	{"id": "thunder", "name": "THUNDER FEET", "desc": "EVERY landing detonates", "rarity": 2},
+	{"id": "school", "name": "DUCKLING MAGNET", "desc": "ducklings tractor-beam in snacks they pass", "rarity": 2},
+	{"id": "thunder", "name": "THUNDER FEET", "desc": "every landing detonates adjacent logs and enemies", "rarity": 2},
 	# the 1942 tier: legendaries that change what the game IS
 	{"id": "cannon", "name": "CRUMB CANNON", "desc": "auto-fire crumbs: smash herons, chip logs", "rarity": 3},
 	{"id": "wingducks", "name": "WINGDUCKS", "desc": "escorts kamikaze herons — and fly back", "rarity": 3},
@@ -313,7 +313,7 @@ func _duck_quip(sp: String) -> String:
 # the elder always appears, but only offers richer blessings once you've earned them.
 const BOONS := [
 	{"id": "clutch",     "tier": 0, "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
-	{"id": "preheat",    "tier": 0, "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
+	{"id": "trailblazer","tier": 0, "name": "TRAILBLAZER",   "desc": "+22% pace all run — but the herons hunt you +40% harder", "deal": true},
 	{"id": "tailwind",   "tier": 0, "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
 	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "snacks you grab give +60% MORE feet","deal": false},
 	{"id": "nestegg",    "tier": 0, "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
@@ -405,7 +405,7 @@ var duck_vx := 0.0
 var duck_shake := 0.0
 
 var speed := BASE_SPEED
-var speed_step := 0             # stepped speed gear — kicks up every ~1300 ft (felt accel)
+var speed_step := 0             # stepped speed gear — kicks up every ~2600 ft (felt accel)
 var distance := 0.0
 var alive := true
 var dead_msg := ""
@@ -536,6 +536,7 @@ var hud: CanvasLayer
 var fade_rect: ColorRect        # scene-transition fade-in overlay
 var fade := 1.0                 # 0 = just switched scenes (black), 1 = fully faded in
 var score_label: Label
+var pace_label: Label
 var center_label: Label
 var loft_bar
 var font: Font
@@ -649,6 +650,12 @@ func _ready() -> void:
 	score_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
 	score_label.add_theme_constant_override("outline_size", 10)
 	hud.add_child(score_label)
+	pace_label = Label.new()                         # the ×pace multiplier, smaller, baseline-aligned
+	pace_label.add_theme_font_size_override("font_size", 20)
+	pace_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
+	pace_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
+	pace_label.add_theme_constant_override("outline_size", 8)
+	hud.add_child(pace_label)
 
 	center_label = Label.new()
 	center_label.size = Vector2(VIEW.x, 320)
@@ -1115,6 +1122,7 @@ func _enter_menu() -> void:
 	fade = 0.0
 	menu_enter_t = anim_t
 	score_label.visible = false
+	if pace_label != null: pace_label.visible = false
 	loft_bar.visible = false
 	center_label.visible = false
 	if name_edit != null:
@@ -1154,7 +1162,7 @@ func start_game() -> void:
 	duck_pace_mul = 0.85 + 0.3 * r.get("pace", 0.5)
 	duck_size_mul = r.get("size", 1.0)
 	runs_started += 1
-	hawk_visits = runs_started % 2 == 1            # RUSTY guides every OTHER run
+	hawk_visits = runs_started % 3 == 1            # RUSTY guides every THIRD run
 	reset_game()
 	# permanent unlocks kick in at the waterline
 	if _meta("jacket"):
@@ -1179,6 +1187,7 @@ func _open_shrine() -> void:
 	shrine_line = randi() % ELDER_LINES.size()
 	shrine_line_t = anim_t
 	score_label.visible = false
+	if pace_label != null: pace_label.visible = false
 	loft_bar.visible = false
 	_sfx("chime", 0.8)
 
@@ -1188,9 +1197,9 @@ func _shrine_rect(i: int) -> Rect2:
 func _pick_boon(b: Dictionary) -> void:
 	match b.id:
 		"clutch": _add_ducklings(4)
-		"preheat":
-			loft = 1.0
-			loft_ready = true
+		"trailblazer":
+			boon_pace = 1.22                           # blaze ahead...
+			boon_heron_mult = 1.4                      # ...but you draw the flock's eye
 		"goosedown": shield_charges += 3
 		"tailwind": boon_pace = 1.18
 		"lucky": _grant_random_upgrade(1)
@@ -1210,8 +1219,8 @@ func _pick_boon(b: Dictionary) -> void:
 		"secondwind":
 			boon_revive = true
 			boon_pace = 0.9
-	# remember the boons with ongoing effects so they show as relics
-	if b.id in ["tailwind", "breadwinner", "famine", "highstakes", "secondwind", "glasscannon"]:
+	# every blessing you take shows in the relic listing as a golden boon
+	if not run_boons.has(b.id):
 		run_boons.append(b.id)
 	in_shrine = false
 	fade = 0.0
@@ -1411,6 +1420,14 @@ func _spawn_hawk() -> void:
 	hawk = {"x": sx, "y": randf_range(120.0, 200.0), "dir": dir, "t": 0.0,
 		"line": HAWK_LINES[randi() % HAWK_LINES.size()], "said": false, "say_t": -99.0}
 	_sfx("fwoosh", 0.4, -8.0)                        # a distant raptor SKREE-ish whoosh
+	# RUSTY's arrival parts the waters: clear the approaching runway so his tip is hazard-free
+	for l in logs:
+		if l.y < BASE_Y - 10.0:
+			ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 70.0})
+	logs = logs.filter(func(l): return l.y >= BASE_Y - 10.0)
+	for e in enemies:
+		ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 80.0})
+	enemies.clear()
 
 func _update_hawk(delta: float) -> void:
 	if tex_hawk.is_empty():
@@ -1433,7 +1450,7 @@ func _update_hawk(delta: float) -> void:
 			hawk.said = true
 			hawk.say_t = hawk.t
 			_sfx("quack", 0.5, -10.0)               # a theatrical little announcing chirp
-	elif hawk.said and hawk.t - hawk.say_t < 2.6:
+	elif hawk.said and hawk.t - hawk.say_t < 3.4:
 		# hovering: hold position with a gentle drifting bob while the bubble shows
 		hawk.x += hawk.dir * 16.0 * delta
 	else:
@@ -1465,7 +1482,7 @@ func _draw_hawk() -> void:
 	draw_texture_rect(fr, Rect2(-hsz * 0.5, hsz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# his whimsical bubble, anchored just below him so the tail points up at him
-	if hawk.said and hawk.t - hawk.say_t < 2.6:
+	if hawk.said and hawk.t - hawk.say_t < 3.4:
 		_speech_bubble(Vector2(hawk.x, hawk.y + 52.0), hawk.line,
 			Color(0.99, 0.93, 0.74, 0.97), Color(0.78, 0.42, 0.16, 0.95), 17, -1.0)
 
@@ -1485,6 +1502,12 @@ func _update_turtle(delta: float) -> void:
 		return
 	var tt = haz_turtle
 	tt.t += delta
+	# a well-timed HOP onto the surfaced turtle STOMPS it dead (like Snapz's stuck jaws)
+	if tt.stage in ["warn", "snap"] and is_airborne() and absf(duck_x - tt.x) < 52.0:
+		_stomp_critter(tt.x, BASE_Y, "turtle")
+		haz_turtle = null
+		turtle_timer = randf_range(30.0, 55.0)
+		return
 	match tt.stage:
 		"lurk":                                    # drift toward the duck under the murk
 			tt.sub = move_toward(tt.sub, 1.0, delta * 3.0)
@@ -2224,7 +2247,7 @@ func _update_play(delta: float) -> void:
 	# the river quickens in NOTICEABLE steps: every ~1300 ft you kick into a higher
 	# gear (with a whoosh), on top of the gentle underlying ramp — so progress feels
 	# like accelerating, not just slowly creeping faster.
-	var tier: int = mini(14, int(distance / 10.0 / 1300.0))
+	var tier: int = mini(8, int(distance / 10.0 / 2600.0))
 	if tier > speed_step:
 		speed_step = tier
 		if alive and boss == null:
@@ -2232,7 +2255,7 @@ func _update_play(delta: float) -> void:
 			_sfx("fwoosh", 1.15, -3.0)
 			duck_shake = maxf(duck_shake, 0.15)
 	speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) \
-		* duck_pace_mul * (1.0 + 0.05 * speed_step)
+		* duck_pace_mul * (1.0 + 0.03 * speed_step)
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
 	if boss == null:                                    # distance freezes during a boss duel
 		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal   # the conga (+ TAILWIND) pays
@@ -2287,6 +2310,20 @@ func _update_play(delta: float) -> void:
 						it["pull_i"] = i             # locked on
 						break
 
+	# CRUMB MAGNET: snacks in range visibly TRACTOR-BEAM toward the duck before the gulp
+	if _up("magnet") > 0:
+		var mpull := 130.0 + 60.0 * _up("magnet")
+		for it in items:
+			if it.got or it.has("pull_i"):
+				continue
+			var mv := Vector2(duck_x - it.x, BASE_Y - it.y)
+			if mv.length() < mpull:
+				var md := mv.normalized() * (150.0 + 120.0 * _up("magnet")) * delta
+				it.x += md.x
+				it.y += md.y
+				if randf() < 0.2:                    # sparkle riding the beam
+					_spawn_parts(it.x, it.y, 1, Color(0.7, 0.85, 1.0, 0.8), 28.0)
+
 	# CRUMB CANNON: pew pew (but bread) — only while paddling; no mid-air spitting
 	if _up("cannon") > 0:
 		crumb_timer -= delta
@@ -2306,36 +2343,35 @@ func _update_play(delta: float) -> void:
 
 	# ON FIRE (NHL-Hitz style): snack streaks + near-misses build heat; full heat IGNITES.
 	# while burning you melt everything you touch, trailing flames. then you cool off.
-	if _up("hotwheels") > 0:
-		if fire_t > 0.0:
-			fire_t -= delta
-			if boss != null and boss.phase == "fight":   # ON FIRE sears the boss over time
-				_chip_boss(0.55 * delta * (1.0 + 0.4 * (_up("hotwheels") - 1)), Vector2(boss.x, boss.y + 30.0))
-			# embers pop off the plume and sail up; smoke curls after them
-			for i in 3:
-				parts.append({"x": duck_x + randf_range(-20, 20), "y": BASE_Y + randf_range(-26, 8),
-					"vx": -duck_vx * 0.2 + randf_range(-18, 18), "vy": randf_range(-170, -70), "t": 0.0,
-					"life": randf_range(0.25, 0.5),
-					"col": Color(1.0, randf_range(0.55, 0.95), 0.12)})
-			if randf() < 0.3:
-				parts.append({"x": duck_x + randf_range(-12, 12), "y": BASE_Y - 34.0,
-					"vx": randf_range(-12, 12), "vy": randf_range(-55, -30), "t": 0.0,
-					"life": randf_range(0.6, 1.0), "col": Color(0.45, 0.42, 0.40, 0.5)})
-			# firelight rings ride the wake — the river itself looks lit
-			if fmod(fire_t, 0.45) < delta:
-				ripples.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y + 12.0,
-					"t": 0.0, "max": 56.0, "col": Color(1.0, 0.5, 0.1)})
-			if fire_t <= 0.0:
-				_flash("cooled off.")
-		else:
-			heat = maxf(0.0, heat - delta * 0.035)   # streaks fade slowly, not punishingly
-			if heat >= 0.7 and randf() < 0.22:       # smoldering: wisps before the WHOOSH
-				parts.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y - 20.0,
-					"vx": randf_range(-10, 10), "vy": randf_range(-45, -25), "t": 0.0,
-					"life": randf_range(0.5, 0.8), "col": Color(0.5, 0.47, 0.45, 0.45)})
+	# a burn ticks down for ANYONE who's lit (ON FIRE streaks OR a PREHEATED start)
+	if fire_t > 0.0:
+		fire_t -= delta
+		if boss != null and boss.phase == "fight":   # ON FIRE sears the boss over time
+			_chip_boss(0.55 * delta * (1.0 + 0.4 * maxi(0, _up("hotwheels") - 1)), Vector2(boss.x, boss.y + 30.0))
+		# embers pop off the plume and sail up; smoke curls after them
+		for i in 3:
+			parts.append({"x": duck_x + randf_range(-20, 20), "y": BASE_Y + randf_range(-26, 8),
+				"vx": -duck_vx * 0.2 + randf_range(-18, 18), "vy": randf_range(-170, -70), "t": 0.0,
+				"life": randf_range(0.25, 0.5),
+				"col": Color(1.0, randf_range(0.55, 0.95), 0.12)})
+		if randf() < 0.3:
+			parts.append({"x": duck_x + randf_range(-12, 12), "y": BASE_Y - 34.0,
+				"vx": randf_range(-12, 12), "vy": randf_range(-55, -30), "t": 0.0,
+				"life": randf_range(0.6, 1.0), "col": Color(0.45, 0.42, 0.40, 0.5)})
+		# firelight rings ride the wake — the river itself looks lit
+		if fmod(fire_t, 0.45) < delta:
+			ripples.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y + 12.0,
+				"t": 0.0, "max": 56.0, "col": Color(1.0, 0.5, 0.1)})
+		if fire_t <= 0.0:
+			_flash("cooled off.")
+	elif _up("hotwheels") > 0:
+		heat = maxf(0.0, heat - delta * 0.035)   # streaks fade slowly, not punishingly
+		if heat >= 0.7 and randf() < 0.22:       # smoldering: wisps before the WHOOSH
+			parts.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y - 20.0,
+				"vx": randf_range(-10, 10), "vy": randf_range(-45, -25), "t": 0.0,
+				"life": randf_range(0.5, 0.8), "col": Color(0.5, 0.47, 0.45, 0.45)})
 	else:
 		heat = 0.0
-		fire_t = 0.0
 
 	# music leans forward with the river
 	if music_player != null:
@@ -2502,6 +2538,18 @@ func _update_enemies(delta: float) -> void:
 	for e in enemies:
 		e.y += e.vy * delta
 	enemies = enemies.filter(func(e): return e.y < VIEW.y + 100.0)
+
+# a well-timed HOP stomps a regular heron/turtle dead — same as bopping its boss form.
+# rewards a little loft, a few feathers, and a satisfying pop.
+func _stomp_critter(x: float, y: float, who: String) -> void:
+	run_feathers += 3
+	_add_loft(0.18)
+	duck_shake = maxf(duck_shake, 0.22)
+	_sfx("crunch", 1.0)
+	_sfx("quack", randf_range(0.6, 0.8), 3.0)
+	_spawn_parts(x, y, 18, Color(0.85, 0.9, 1.0), 240.0)
+	ripples.append({"x": x, "y": y, "t": 0.0, "max": 120.0})
+	_float_text(x, y - 36.0, "STOMP!  +3", Color(1.0, 0.85, 0.4))
 
 # ---- GERALD THE IMMENSE ------------------------------------------------------
 func _start_boss() -> void:
@@ -2833,8 +2881,8 @@ func _boss_hits_player() -> void:
 		die("GERALD got you.")
 
 func _spawn(delta: float) -> void:
-	# during the boss the river is cleared for the duel — only snacks fall (to feed LOFT)
-	if boss != null:
+	# during the boss — or while RUSTY delivers his tip — the river clears; only snacks fall
+	if boss != null or hawk != null:
 		item_timer -= delta
 		if item_timer <= 0.0:
 			items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
@@ -2966,10 +3014,14 @@ func _collide() -> void:
 		ripples.append({"x": smashed.x, "y": smashed.y, "t": 0.0, "max": 110.0})
 		logs.erase(smashed)
 
-	# the heron dive ignores hopping (it's aerial) — you must STEER clear, or be invincible
+	# a HOP now STOMPS the regular heron dead (same as bopping the boss Gerald)
 	if not is_invincible():
 		for e in enemies:
 			if absf(e.x - duck_x) < 44.0 and absf(e.y - BASE_Y) < 42.0:
+				if is_airborne():                    # STOMP from above — splat
+					_stomp_critter(e.x, e.y, "heron")
+					enemies.erase(e)
+					return
 				if fire_t > 0.0:                     # ON FIRE: the heron simply evaporates
 					ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 120.0})
 					_spawn_parts(e.x, e.y, 16, Color(1.0, 0.5, 0.12), 240.0)
@@ -3215,9 +3267,10 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 			var nn := 1 if id == "duckling" else (4 if id == "clutch" else 3)
 			for i in nn:
 				draw_circle(c + Vector2((i - (nn - 1) * 0.5) * s * 0.62, 0), s * 0.32, col)
-		"preheat":                                         # a charged-up spark (flame + up)
-			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
-				c + Vector2(0, s * 0.1), c + Vector2(-s * 0.7, s * 0.3)]), col)
+		"trailblazer":                                     # a forward chevron — blazing ahead
+			for o in [-s * 0.5, s * 0.2]:
+				draw_colored_polygon(PackedVector2Array([c + Vector2(o - s * 0.2, -s * 0.8),
+					c + Vector2(o + s * 0.5, 0), c + Vector2(o - s * 0.2, s * 0.8)]), col)
 		"goosedown":                                       # a shield (like the shield relic)
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
 				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
@@ -3476,31 +3529,23 @@ func _draw_death() -> void:
 	else:
 		_otext(Vector2(0, ny + 16.0), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
 	_feather_text(Vector2(VIEW.x * 0.5, ny + 50.0), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
-	# the build, as rarity-colored chips (flow layout)
-	var chips: Array = []
-	for u in UPGRADES:
-		var n: int = picked.get(u.id, 0)
-		if n > 0:
-			chips.append({"txt": u.name + ("" if n == 1 else " ×%d" % n), "col": RARITY_COL[u.rarity]})
-	if chips.is_empty():
-		_otext(Vector2(0, 512), "no upgrades. raw talent only.", 16, Color(1, 1, 1, 0.5))
+	# the build, as relic ICONS (upgrades + golden boons), each with its ×stack count
+	var drelics := _active_relics()
+	if drelics.is_empty():
+		_otext(Vector2(0, 512), "no powers. raw talent only.", 16, Color(1, 1, 1, 0.5))
 	else:
-		var cy := 488.0
-		var x := panel.position.x + 22.0
-		for c in chips:
-			var w: float = font.get_string_size(c.txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 20.0
-			if x + w > panel.position.x + panel.size.x - 22.0:
-				x = panel.position.x + 22.0
-				cy += 34.0
-			var crect := Rect2(x, cy, w, 26.0)
-			var csb := StyleBoxFlat.new()
-			csb.bg_color = Color(0.10, 0.17, 0.24, 0.95)
-			csb.set_corner_radius_all(13)
-			csb.set_border_width_all(1)
-			csb.border_color = c.col
-			draw_style_box(csb, crect)
-			draw_string(font, Vector2(x + 10.0, cy + 19.0), c.txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, c.col)
-			x += w + 8.0
+		_otext(Vector2(0, 470), "YOUR RUN", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		var dbs := 36.0
+		var dgap := 8.0
+		var per_row: int = int((panel.size.x - 44.0) / (dbs + dgap))
+		var cy := 492.0
+		for ri in drelics.size():
+			var col_i: int = ri % per_row
+			var row_i: int = ri / per_row
+			var row_n: int = mini(per_row, drelics.size() - row_i * per_row)
+			var row_w: float = row_n * dbs + (row_n - 1) * dgap
+			var sx: float = VIEW.x * 0.5 - row_w * 0.5
+			_draw_relic(Rect2(sx + col_i * (dbs + dgap), cy + row_i * (dbs + dgap), dbs, dbs), drelics[ri])
 	_otext(Vector2(0, 622), "tap to retry", 30, Color(1, 1, 1, 0.55 + 0.45 * sin(anim_t * 4.0)))
 	var mb := StyleBoxFlat.new()
 	mb.bg_color = Color(0.10, 0.17, 0.24, 0.9)
@@ -3527,7 +3572,13 @@ func _refresh_hud() -> void:
 	var thermal := 1.05 if _meta("thermal") else 1.0
 	var mult: float = (speed / BASE_SPEED) * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal
 	if mult > 1.04:
-		score_label.text += "  ×%.2f" % mult
+		pace_label.text = "×%.2f" % mult
+		# sit it just right of the ft value, dropped to share the big text's baseline
+		var ftw: float = font.get_string_size(score_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+		pace_label.position = Vector2(20.0 + ftw + 14.0, 18.0 + 12.0)
+		pace_label.visible = true
+	else:
+		pace_label.visible = false
 	# (shield + fire are drawn as sprites in _draw_status_icons — emoji die on Android)
 	loft_bar.value = loft
 	loft_bar.is_ready = loft_ready
@@ -4524,9 +4575,13 @@ func _blit_rot(tex, pos: Vector2, scale: float, rot: float) -> void:
 # tail drops below the anchor (speaker is under the bubble), -1 it points up.
 func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz := 19, tail_dir := 1.0, creepy := false,
 		creep_lo := Color(0.62, 0.0, 0.02), creep_hi := Color(1.0, 0.16, 0.10)) -> void:
-	var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
-	var w: float = clampf(tw + 36.0, 110.0, VIEW.x - 36.0)
-	var h: float = fsz + 24.0
+	# long lines WRAP instead of clipping off the edge
+	var maxw: float = VIEW.x - 56.0
+	var oneline: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
+	var contentw: float = minf(oneline, maxw - 24.0)
+	var ms: Vector2 = font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, contentw, fsz)
+	var w: float = clampf(ms.x + 36.0, 110.0, VIEW.x - 36.0)
+	var h: float = ms.y + 22.0
 	# keep the bubble fully on-screen horizontally
 	var cx: float = clampf(anchor.x, w * 0.5 + 12.0, VIEW.x - w * 0.5 - 12.0)
 	var rc := Rect2(cx - w * 0.5, anchor.y - h * 0.5, w, h)
@@ -4544,8 +4599,8 @@ func _speech_bubble(anchor: Vector2, text: String, bg: Color, border: Color, fsz
 		_creepy_text(cx, anchor.y + fsz * 0.34, text, fsz, creep_lo, creep_hi)
 	else:
 		var fg := Color(0.15, 0.12, 0.10) if bg.r > 0.5 else Color(1, 1, 1)
-		draw_string(font, Vector2(rc.position.x, anchor.y + fsz * 0.34), text,
-			HORIZONTAL_ALIGNMENT_CENTER, w, fsz, fg)
+		draw_multiline_string(font, Vector2(rc.position.x + 12.0, rc.position.y + font.get_ascent(fsz) + 8.0),
+			text, HORIZONTAL_ALIGNMENT_CENTER, w - 24.0, fsz, -1, fg)
 
 func _elder_bubble(anchor: Vector2, text: String) -> void:
 	_speech_bubble(anchor, text, Color(0.98, 0.97, 0.92, 0.96), Color(1.0, 0.86, 0.4, 0.9))
