@@ -421,6 +421,7 @@ var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
 var drafting := false
 var draft_choices: Array = []
 var draft_open_t := 0.0         # taps are ignored briefly after a draft opens
+var last_pick_name := ""        # name of the most recently granted power (for boss spoils banner)
 var next_draft := DRAFT_EVERY
 var draft_count := 0            # intervals grow: each checkpoint is more earned
 
@@ -1323,7 +1324,10 @@ func _pick_upgrade(u: Dictionary) -> void:
 		wingducks = 2                          # (re-)deploy the escorts
 		wd_respawn.clear()
 	drafting = false
+	last_pick_name = u.name
 	_sfx("unlock")
+	if boss != null:
+		return                                     # boss spoils get their own banner
 	if combo:
 		_sfx("chime", 1.8)
 		_flash("SYNERGY!\n%s" % u.name)
@@ -2559,21 +2563,24 @@ func _gerald_say(line: String) -> void:
 func _boss_leave() -> void:
 	boss.phase = "leave"
 	boss.t = 0.0
-	if boss.kind == "snapz":
-		_flash(["SNAPZ SINKS AWAY", "SNAPZ RETREATS\nTO THE DEEP"][randi() % 2], 1.6)
-	else:
-		_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3], 1.6)
+	var who: String = "SNAPZ" if boss.kind == "snapz" else "GERALD"
 	_sfx("quack", 0.5, 2.0)
 	# the spoils: a feather shower scaling with which Gerald you bested
 	var reward: int = 15 + 10 * int(boss.idx)
 	run_feathers += reward
-	_float_text(duck_x, BASE_Y - 110.0, "+%d feathers!" % reward, Color(1, 0.9, 0.4))
 	for i in 26:
 		_spawn_parts(randf_range(60, VIEW.x - 60), randf_range(120, 360), 1, Color(1, 0.9, 0.4), 130.0)
-	# the SPOILS OF WAR: best a Gerald, take home a high-tier power (rare, or legendary later)
+	# the SPOILS OF WAR: best a boss, take home a high-tier power (rare, or legendary later)
 	var rarity: int = 3 if int(boss.idx) >= 1 else 2
-	_float_text(duck_x, BASE_Y - 150.0, "SPOILS OF WAR!", Color(1.0, 0.6, 0.95))
+	last_pick_name = ""
 	_grant_random_upgrade(rarity)
+	# ONE consolidated awards banner so the spoils actually register (held long)
+	var banner := "%s DEFEATED!\n+%d feathers" % [who, reward]
+	if last_pick_name != "":
+		banner += "  •  %s" % last_pick_name
+	if next_boss_idx <= 2:
+		banner += "\nnext run's shrine grows richer"
+	_flash(banner, 3.0)
 
 # your damaging LEGENDARIES chip the boss slowly (wingducks, ON FIRE, cannon...).
 # fractional damage accumulates into whole HP. Bypasses SNAPZ's armor — these are
@@ -2607,8 +2614,6 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		if next_boss_idx > bosses_cleared:
 			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
 			_save()
-		if next_boss_idx <= 2:                       # this run's progress -> next shrine's tier
-			_flash("BLESSING EARNED!\nnext run's shrine grows richer", 1.8)
 		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
