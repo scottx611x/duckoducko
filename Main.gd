@@ -317,6 +317,8 @@ var death_power_sel := -1        # tapped relic index on the DEATH screen (-1 = 
 var death_relic_y := 524.0       # y of the relic row (flows with the eulogy; shared w/ input)
 var in_stats := false            # the LOGBOOK / stats screen is open
 var stats_from_death := false    # opened from death screen (back returns there, not menu)
+var stats_run_sel := -1          # run_history index whose breakdown is open (-1 = overview)
+var stats_bar_rects: Array = []  # graph bar hit-rects -> run index (built in _stats_graph)
 var flash_seq := 0               # guards overlapping center-label flashes
 var _was_paused := false
 var select_line := ""           # the duck's current quip on the select screen
@@ -1161,15 +1163,23 @@ func _dbg() -> void:
 	lifetime = {"runs": 37, "total_ft": 482910, "best_ft": 28450, "total_feathers": 9120,
 		"total_secs": 5400, "toppace": 312, "hops": 4821, "quacks": 933, "snacks": 2740,
 		"upgrades": 158, "herons": 612, "turtles": 88, "ducklings": 410, "lost": 121,
-		"specials": 240, "fires": 96, "bosses": 14, "boons": 33}
+		"specials": 240, "fires": 96, "bosses": 14, "boons": 33, "nearmiss": 488, "frogs": 73}
 	run_history = []
 	for k in [3200, 8800, 5400, 12010, 6700, 28450, 9100, 15300, 4200, 19800, 11200, 7600]:
-		run_history.append({"ft": k, "sp": "wood", "feathers": 20, "bosses": 1, "secs": 90})
+		run_history.append({"ft": k, "sp": "wood", "feathers": 20, "bosses": 1, "secs": 90,
+			"cause": "the heron got the better of you.", "special": "wild",
+			"picked": {"spring": 2, "gold": 1, "hotwheels": 1, "wingducks": 1}, "boons": ["trailblazer"],
+			"stats": {"hops": 84, "snacks": 41, "herons": 12, "nearmiss": 23, "frogs": 3, "turtles": 2,
+				"ducklings": 5, "specials": 6, "fires": 2, "quacks": 11, "toppace": 214, "boons": 1}})
 	_open_stats(false)
 	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_stats.png")
-	in_stats = false; lifetime = {}; run_history = []
+	stats_run_sel = 5                                # GERALD-grade best run breakdown
+	await get_tree().create_timer(0.08).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_run.png")
+	in_stats = false; stats_run_sel = -1; lifetime = {}; run_history = []
 	# the CODEX: a spread across every category (one boss still a mystery)
 	codex_seen = ["gerald", "snapz", "heron", "turtle", "frog", "rusty", "sadie", "elder", "wingducks",
 		"spring", "gold", "thunder", "magnet", "hotwheels", "cannon", "double",
@@ -2520,7 +2530,9 @@ func die(msg: String) -> void:
 func _record_run() -> void:
 	var secs := int((Time.get_ticks_msec() - run_start_ms) / 1000.0)
 	run_history.push_front({"ft": dead_m, "sp": species, "feathers": run_feathers,
-		"bosses": int(run_stats.get("bosses", 0)), "secs": secs})
+		"bosses": int(run_stats.get("bosses", 0)), "secs": secs, "cause": dead_msg,
+		"stats": run_stats.duplicate(true),        # the run's full silly tally
+		"picked": picked.duplicate(), "boons": run_boons.duplicate(), "special": equipped_special})
 	if run_history.size() > 40:
 		run_history.resize(40)
 	for k in run_stats:
@@ -3342,6 +3354,7 @@ func _collide() -> void:
 					if l.frog and not l.frog_gone:
 						l.frog_gone = true
 						_codex_see("frog")
+						_st("frogs")
 						_sfx("ribbit", randf_range(0.9, 1.15))
 						_float_text(l.x - l.w * 0.3, l.y - 18.0, "ribbit.", Color(0.65, 0.9, 0.55))
 						ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
@@ -3379,6 +3392,11 @@ func _collide() -> void:
 	# a HOP now STOMPS the regular heron dead (same as bopping the boss Gerald)
 	if not is_invincible():
 		for e in enemies:
+			# a NEAR MISS: a heron sweeps through your row but you squeak past / hop over
+			if absf(e.y - BASE_Y) < 38.0 and absf(e.x - duck_x) < 82.0 and not e.get("nm", false):
+				if absf(e.x - duck_x) >= 46.0 or is_airborne():
+					e["nm"] = true
+					_st("nearmiss")
 			if absf(e.x - duck_x) < 44.0 and absf(e.y - BASE_Y) < 42.0:
 				if is_airborne():                    # STOMP from above — splat
 					_stomp_critter(e.x, e.y, "heron")
@@ -4103,6 +4121,7 @@ func _death_relic_rects() -> Array:
 func _open_stats(from_death: bool) -> void:
 	in_stats = true
 	stats_from_death = from_death
+	stats_run_sel = -1
 	in_menu = false
 	fade = 0.0
 	name_edit.visible = false
@@ -4114,9 +4133,22 @@ func _open_stats(from_death: bool) -> void:
 func _stats_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.has_point(pos):
 		_sfx("click")
+		if stats_run_sel >= 0:                      # back out of a run breakdown first
+			stats_run_sel = -1
+			return
 		in_stats = false
 		if not stats_from_death:
 			_enter_menu()                          # back to menu; from death we just reveal it again
+		return
+	if stats_run_sel >= 0:                          # tap anywhere on a breakdown closes it
+		stats_run_sel = -1
+		_sfx("click", 0.8)
+		return
+	for b in stats_bar_rects:                       # tap a graph bar -> that run's breakdown
+		if b.rect.grow(3.0).has_point(pos):
+			stats_run_sel = b.idx
+			_sfx("click", 1.2)
+			return
 
 func _commas(n: int) -> String:
 	var s := str(absi(n))
@@ -4159,29 +4191,97 @@ func _draw_stats() -> void:
 	var rows := [
 		["hops", "hops"], ["quacks", "quacks"],
 		["snacks eaten", "snacks"], ["powers drafted", "upgrades"],
-		["herons stomped", "herons"], ["turtles stomped", "turtles"],
+		["herons stomped", "herons"], ["near misses", "nearmiss"],
+		["turtles stomped", "turtles"], ["frogs bopped", "frogs"],
 		["ducklings raised", "ducklings"], ["ducklings lost", "lost"],
 		["specials fired", "specials"], ["times ablaze", "fires"],
 		["bosses bested", "bosses"], ["blessings taken", "boons"],
 	]
 	var gx := 36.0
 	var gw := (VIEW.x - 72.0 - 16.0) / 2.0
-	var gy := 404.0
+	var gy := 398.0
 	for i in rows.size():
 		var col := i % 2
 		var row := i / 2
-		var rc := Rect2(gx + col * (gw + 16.0), gy + row * 50.0, gw, 44.0)
+		var rc := Rect2(gx + col * (gw + 16.0), gy + row * 47.0, gw, 42.0)
 		var cb := StyleBoxFlat.new()
 		cb.bg_color = Color(0.07, 0.12, 0.18, 0.9); cb.set_corner_radius_all(10)
 		cb.set_border_width_all(1); cb.border_color = Color(1, 1, 1, 0.12)
 		draw_style_box(cb, rc)
-		draw_string(font, rc.position + Vector2(12, 19), rows[i][0], HORIZONTAL_ALIGNMENT_LEFT, gw - 24, 13, Color(1, 1, 1, 0.6))
-		draw_string(font, rc.position + Vector2(0, 34), _commas(int(L.get(rows[i][1], 0))), HORIZONTAL_ALIGNMENT_RIGHT, gw - 14, 19, Color(0.85, 0.95, 1.0))
-	# two wide footer stats: feathers banked + time paddled + top pace
-	var fy := gy + 6 * 50.0 + 6.0
+		draw_string(font, rc.position + Vector2(12, 18), rows[i][0], HORIZONTAL_ALIGNMENT_LEFT, gw - 24, 13, Color(1, 1, 1, 0.6))
+		draw_string(font, rc.position + Vector2(0, 33), _commas(int(L.get(rows[i][1], 0))), HORIZONTAL_ALIGNMENT_RIGHT, gw - 14, 18, Color(0.85, 0.95, 1.0))
+	# wide footer: feathers banked + time paddled + top pace
+	var fy := gy + 7 * 47.0 + 4.0
 	_otext(Vector2(0, fy + 8.0), "%s feathers banked · %s paddling · top pace ×%.2f" %
 		[_commas(int(L.get("total_feathers", 0))), _fmt_time(int(L.get("total_secs", 0))), int(L.get("toppace", 100)) / 100.0],
-		14, Color(1, 0.92, 0.55, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		13, Color(1, 0.92, 0.55, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	if stats_run_sel >= 0 and stats_run_sel < run_history.size():
+		_draw_run_detail(run_history[stats_run_sel])
+
+# a tapped graph bar opens this: one run's full breakdown — powers + the tally
+func _draw_run_detail(rec: Dictionary) -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.04, 0.08, 0.6))
+	var panel := Rect2(30.0, 150.0, VIEW.x - 60.0, 690.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.10, 0.16, 0.99); sb.set_corner_radius_all(18)
+	sb.set_border_width_all(2); sb.border_color = Color(0.5, 0.8, 1.0, 0.7)
+	draw_style_box(sb, panel)
+	var sp: String = rec.get("sp", "mallard")
+	var dname := sp
+	for d in ROSTER:
+		if d.species == sp:
+			dname = d.name
+	_otext(Vector2(0, 192), "%s  ·  %s ft" % [dname, _commas(int(rec.get("ft", 0)))], 26, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+	var bn: int = int(rec.get("bosses", 0))
+	_otext(Vector2(0, 220), "%s paddling  ·  %d boss%s bested  ·  +%d feathers" %
+		[_fmt_time(int(rec.get("secs", 0))), bn, "" if bn == 1 else "es", int(rec.get("feathers", 0))],
+		14, Color(0.8, 0.9, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	if rec.get("cause", "") != "":
+		_mtext(Vector2(52, 248 + font.get_ascent(14)), str(rec.cause), 14, Color(1, 1, 1, 0.5), panel.size.x - 44.0)
+	# POWERS this run — special + drafted upgrades + boons, as relic icons
+	var relics: Array = [{"id": rec.get("special", "mega"), "rarity": 3, "n": 1, "glow": false, "special": true}]
+	for uid in rec.get("picked", {}):
+		var rar := 1
+		for u in UPGRADES:
+			if u.id == uid:
+				rar = u.rarity
+		relics.append({"id": uid, "rarity": rar, "n": int(rec.picked[uid]), "glow": false})
+	for bid in rec.get("boons", []):
+		relics.append({"id": bid, "rarity": 2, "n": 1, "glow": false, "boon": true})
+	_otext(Vector2(0, 296), "POWERS", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	var dbs := 36.0
+	var per := int((panel.size.x - 24.0) / (dbs + 8.0))
+	for i in relics.size():
+		var rr := i % per
+		var rw := i / per
+		var rown: int = mini(per, relics.size() - rw * per)
+		var sx: float = VIEW.x * 0.5 - (rown * dbs + (rown - 1) * 8.0) * 0.5
+		_draw_relic(Rect2(sx + rr * (dbs + 8.0), 312.0 + rw * 44.0, dbs, dbs), relics[i])
+	# THE TALLY — this run's silly deeds
+	var st: Dictionary = rec.get("stats", {})
+	var ty := 312.0 + (ceili(float(relics.size()) / float(per))) * 44.0 + 18.0
+	_otext(Vector2(0, ty), "THE TALLY", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	ty += 18.0
+	var trows := [["hops", "hops"], ["snacks eaten", "snacks"], ["herons stomped", "herons"],
+		["near misses", "nearmiss"], ["frogs bopped", "frogs"], ["turtles stomped", "turtles"],
+		["ducklings raised", "ducklings"], ["specials fired", "specials"], ["times ablaze", "fires"],
+		["quacks", "quacks"], ["top pace", "toppace"], ["blessings", "boons"]]
+	var gw := (panel.size.x - 24.0) / 2.0
+	for i in trows.size():
+		var col := i % 2
+		var row := i / 2
+		var rc := Rect2(42.0 + col * (gw + 8.0), ty + row * 38.0, gw, 34.0)
+		var cb := StyleBoxFlat.new()
+		cb.bg_color = Color(0.08, 0.13, 0.19, 0.9); cb.set_corner_radius_all(8)
+		draw_style_box(cb, rc)
+		draw_string(font, rc.position + Vector2(10, 22), trows[i][0], HORIZONTAL_ALIGNMENT_LEFT, gw - 70, 13, Color(1, 1, 1, 0.6))
+		var val := ""
+		if trows[i][1] == "toppace":
+			val = "×%.2f" % (int(st.get("toppace", 100)) / 100.0)
+		else:
+			val = _commas(int(st.get(trows[i][1], 0)))
+		draw_string(font, rc.position + Vector2(0, 22), val, HORIZONTAL_ALIGNMENT_RIGHT, gw - 12, 15, Color(0.85, 0.95, 1.0))
+	_otext(Vector2(0, 826), "tap to close", 16, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _fav_duck() -> String:
 	var counts := {}
@@ -4216,6 +4316,7 @@ func _stats_graph(area: Rect2) -> void:
 	for v in recent:
 		mx = maxi(mx, v)
 	var bw := (area.size.x - 16.0) / float(n)
+	stats_bar_rects = []
 	for i in n:
 		var h: float = (area.size.y - 26.0) * clampf(float(recent[i]) / float(mx), 0.04, 1.0)
 		var bx := area.position.x + 8.0 + i * bw
@@ -4223,7 +4324,9 @@ func _stats_graph(area: Rect2) -> void:
 		var best: bool = recent[i] == mx
 		var col := Color(1.0, 0.84, 0.35) if best else Color(0.45, 0.72, 0.95)
 		draw_rect(Rect2(bx, by, bw - 4.0, h), col)
-	draw_string(font, area.position + Vector2(10, 16), "recent runs", HORIZONTAL_ALIGNMENT_LEFT, area.size.x, 12, Color(1, 1, 1, 0.4))
+		# whole-column hit target -> the matching run_history index (oldest-left)
+		stats_bar_rects.append({"rect": Rect2(bx, area.position.y, bw, area.size.y), "idx": n - 1 - i})
+	draw_string(font, area.position + Vector2(10, 16), "recent runs · tap a bar", HORIZONTAL_ALIGNMENT_LEFT, area.size.x, 12, Color(1, 1, 1, 0.4))
 
 # ---- the COMPENDIUM: characters you've met, with lore ------------------------
 func _open_codex() -> void:
