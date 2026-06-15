@@ -2022,6 +2022,12 @@ func reset_game() -> void:
 
 # ---- input -------------------------------------------------------------------
 func _input(event: InputEvent) -> void:
+	# mouse-wheel scrolls the codex list (desktop / web testers)
+	if in_codex and codex_sel < 0 and event is InputEventMouseButton and event.pressed \
+			and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		var wdir := -1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0
+		codex_scroll = clampf(codex_scroll + wdir * 70.0, 0.0, _codex_max_scroll())
+		return
 	# on touch screens one tap arrives twice (real touch + emulated mouse);
 	# ignore the emulated twin or every tap fires double across screen changes
 	if event is InputEventScreenTouch or event is InputEventMouseButton:
@@ -4391,12 +4397,21 @@ func _draw_codex() -> void:
 			_otext(Vector2(rc.position.x + rc.size.x - 26.0, rc.position.y + rc.size.y * 0.5 + 8.0), "›", 26, Color(1, 1, 1, 0.35), 22, HORIZONTAL_ALIGNMENT_CENTER, 2)
 		else:
 			draw_string(font, Vector2(tx, rc.position.y + 36.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 18, Color(1, 1, 1, 0.35))
+	# a scrollbar so it's obvious the list scrolls (drag anywhere, or mouse-wheel)
+	var maxs := _codex_max_scroll()
+	if maxs > 0.0:
+		var trackh := VIEW.y - CODEX_VY0 - 16.0
+		var vis: float = trackh / (trackh + maxs)
+		var th: float = maxf(40.0, trackh * vis)
+		var ty: float = CODEX_VY0 + 4.0 + (trackh - th) * (codex_scroll / maxs)
+		draw_rect(Rect2(VIEW.x - 8.0, CODEX_VY0 + 4.0, 4.0, trackh), Color(1, 1, 1, 0.06), true)
+		draw_rect(Rect2(VIEW.x - 8.0, ty, 4.0, th), Color(1, 0.86, 0.45, 0.5), true)
 	# mask the header zone so scrolled rows vanish cleanly behind the title
 	draw_rect(Rect2(0, 0, VIEW.x, CODEX_VY0 - 6.0), Color(0.04, 0.05, 0.09, 1.0))
 	_fancy_title("CODEX", 92.0, 36, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
-	_otext(Vector2(0, 124), "%d of %d catalogued  ·  drag to scroll · tap to study" % [seen_n, items.size()],
+	_otext(Vector2(0, 124), "%d of %d catalogued  ·  swipe/scroll · tap to study" % [seen_n, items.size()],
 		13, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 # the detail page: a big portrait (turntable where it exists) + full lore
