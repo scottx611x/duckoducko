@@ -336,7 +336,8 @@ var boss_hp_bonus := 0
 const BOSS_MARKS := [5000, 15000, 30000]   # feet
 var next_boss_idx := 0
 var bosses_cleared := 0     # lifetime: highest boss tier ever beaten (gates the shrine)
-var dev_unlocked := false   # scootybooty: enables the boss-shortcut playtest buttons
+var cheat_unlock := false   # scootybooty ACTIVE: name-gated full unlock + dev boss buttons
+                            # (transient — changing your name away revokes it)
 const DEV_BOSS_BTNS := [
 	{"name": "GERALD", "idx": 0}, {"name": "SNAPZ", "idx": 1}, {"name": "G-III", "idx": 2},
 ]
@@ -788,7 +789,7 @@ func _load_save() -> void:
 		meta_owned = cfg.get_value("save", "meta", [])
 		last_species = cfg.get_value("save", "last_species", "mallard")
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
-		dev_unlocked = cfg.get_value("save", "dev_unlocked", false)
+		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
 		if not ducks.has(last_species):
 			last_species = "mallard"
 
@@ -801,13 +802,14 @@ func _save() -> void:
 	cfg.set_value("save", "meta", meta_owned)
 	cfg.set_value("save", "last_species", last_species)
 	cfg.set_value("save", "bosses_cleared", bosses_cleared)
-	cfg.set_value("save", "dev_unlocked", dev_unlocked)
 	cfg.save("user://save.cfg")
 
 func _meta(id: String) -> bool:
-	return id in meta_owned
+	return cheat_unlock or id in meta_owned         # scootybooty owns every shop item
 
 func _is_unlocked(i: int) -> bool:
+	if cheat_unlock:                                 # scootybooty: all unlocked (while named so)
+		return true
 	if ROSTER[i].get("secret", false):
 		return ROSTER[i].species in unlocked_extra   # secrets must be EARNED, never free
 	return ROSTER[i].cost == 0 or ROSTER[i].species in unlocked_extra
@@ -825,21 +827,19 @@ func _unlock_secret(species: String, label: String) -> bool:
 
 # Naming your duck certain things does... things. (WHIMSY — secret backdoors)
 func _check_name_secrets() -> void:
-	match duck_name.to_lower().strip_edges():
-		"scootybooty":
-			# the master key: unlock every duck AND every shop item, on the house
-			var any := false
-			for r in ROSTER:
-				if not (r.species in unlocked_extra):
-					unlocked_extra.append(r.species); any = true
-			for m in META:
-				if not (m.id in meta_owned):
-					meta_owned.append(m.id); any = true
-			if any or not dev_unlocked:
-				dev_unlocked = true                # unlocks the in-run boss-test buttons
-				_save()
-				_flash("SCOOTYBOOTY.\nEVERYTHING UNLOCKED.\n(boss test buttons ON)")
-				_sfx("unlock", 1.2); _sfx("chime", 2.0)
+	var nm := duck_name.to_lower().strip_edges()
+	# SCOOTYBOOTY is a name-gated master key: everything unlocked + dev boss buttons,
+	# but ONLY while you're named scootybooty. Rename away and the magic fades.
+	var was := cheat_unlock
+	cheat_unlock = nm == "scootybooty"
+	if cheat_unlock and not was:
+		_flash("SCOOTYBOOTY.\nEVERYTHING UNLOCKED.\n(boss test buttons ON)")
+		_sfx("unlock", 1.2); _sfx("chime", 2.0)
+	elif was and not cheat_unlock:
+		_flash("...the scootybooty magic fades.")
+		_sfx("bonk", 0.8, -6.0)
+	# the disco/shadow name backdoors are PERMANENT real unlocks (not the cheat)
+	match nm:
 		"disco":
 			_unlock_secret("disco", "Disco Duck")
 		"shadow", "goth":
@@ -1635,7 +1635,7 @@ func _input(event: InputEvent) -> void:
 			mega_hop()
 		elif event.keycode == KEY_L:
 			fire_laser()
-		elif dev_unlocked and event.keycode in [KEY_1, KEY_2, KEY_3] and alive and not in_menu:
+		elif cheat_unlock and event.keycode in [KEY_1, KEY_2, KEY_3] and alive and not in_menu:
 			_force_boss(event.keycode - KEY_1)     # DEV: 1/2/3 spawn a boss
 			_sfx("click")
 		elif event.keycode == KEY_P and not in_menu and not in_select and not in_shop and not in_shrine and alive and not drafting:
@@ -1725,7 +1725,7 @@ func _on_press(pos: Vector2) -> void:
 		_enter_menu()                              # abandon ship (mobile's Esc)
 		return
 	# DEV (scootybooty): boss-test buttons jump straight into a fight
-	if dev_unlocked and boss == null and not drafting:
+	if cheat_unlock and boss == null and not drafting:
 		for i in DEV_BOSS_BTNS.size():
 			if _dev_boss_rect(i).has_point(pos):
 				_force_boss(DEV_BOSS_BTNS[i].idx)
@@ -3448,7 +3448,7 @@ func _draw() -> void:
 		if boss == null and not in_menu and not in_select and not in_shop and not in_shrine and not drafting:
 			_draw_run_timeline()
 	# DEV (scootybooty): boss-test shortcut buttons along the bottom
-	if dev_unlocked and alive and boss == null and not drafting and not paused and not in_menu \
+	if cheat_unlock and alive and boss == null and not drafting and not paused and not in_menu \
 			and not in_select and not in_shop and not in_shrine:
 		for i in DEV_BOSS_BTNS.size():
 			var rc := _dev_boss_rect(i)
