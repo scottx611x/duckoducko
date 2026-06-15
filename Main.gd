@@ -301,6 +301,7 @@ var pause_line := ""
 var pause_yaw := 0.0             # the pause-screen duck is a spinnable turntable
 var pause_line_t := 0.0
 var pause_power_sel := -1        # tapped relic index on the pause screen (-1 = none)
+var flash_seq := 0               # guards overlapping center-label flashes
 var _was_paused := false
 var select_line := ""           # the duck's current quip on the select screen
 var select_line_t := 0.0
@@ -314,7 +315,7 @@ const BOONS := [
 	{"id": "clutch",     "tier": 0, "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
 	{"id": "preheat",    "tier": 0, "name": "PREHEATED",     "desc": "begin with your LOFT special FULLY charged", "deal": false},
 	{"id": "tailwind",   "tier": 0, "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
-	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "every snack is worth +60% distance","deal": false},
+	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "snacks you grab give +60% MORE feet","deal": false},
 	{"id": "nestegg",    "tier": 0, "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
 	{"id": "goosedown",  "tier": 1, "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
 	{"id": "lucky",      "tier": 1, "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
@@ -442,18 +443,23 @@ var sadie_timer := 40.0
 var hawk = null
 var hawk_timer := 18.0          # first fly-by comes early so he introduces himself
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
+var hawk_visits := true         # RUSTY only guides on every OTHER run
+var runs_started := 0           # total runs (persisted) — RUSTY visits on odd ones
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
 const HAWK_LINES := [
-	"psst — hop the GOLDEN logs for a BOUNCE, my dweeb!",
-	"AHEM. A hawk's-eye TIP: longer holds make for LOFTIER hops.",
-	"behold — a duck of DESTINY! ...probably!",
-	"shiny things are SNACKS. snacks are GLORY. waddle forth!",
-	"MAGNIFICENT hop! I shall narrate it for GENERATIONS!",
-	"a heron approaches from on high. be FABULOUS about it.",
-	"ducklings follow you, o luminous one. don't lose the wee ones!",
-	"when in doubt: HOP. when not in doubt: ALSO hop.",
-	"I soar. I observe. I APPROVE. carry on, small floofy legend!",
-	"the river is long, the duck is brave, the hawk is DECORATIVE.",
+	"From up here I see it all — those GOLDEN logs? Springboards. Hop one and FLY.",
+	"A wise duck holds the tap to soar, and taps quick to scurry. Balance, friend.",
+	"Those ducklings aren't just adorable — each one eats a hit for you. Cherish them.",
+	"Snacks aren't snacks, they're FUEL. Fill that LOFT meter and your special erupts.",
+	"Bosses telegraph. Dodge the big swing, THEN stomp the fool while it's seeing stars.",
+	"SNAPZ is armored like a tank — wait for his jaws to jam, then bonk the noggin.",
+	"Catch fire and you become a furnace: logs melt, BOSSES bleed. Burn bright, duck.",
+	"Want speed? The Canvasback and that smug Golden Mallard absolutely RIP.",
+	"Pintail carves corners like nobody's business. Twitchy lanes? That's your bird.",
+	"Hoard your feathers, then splurge in the SHOP. Perks last forever, you know.",
+	"Beat a boss and the Ancient Duck blesses your NEXT run richer. Greed pays here.",
+	"Double Hop, friend — flap AGAIN at the peak for a second, glorious ascent.",
+	"Psst. Name your duck something... daring. The river rewards the bold. *winks*",
 ]
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
@@ -817,11 +823,12 @@ func _load_save() -> void:
 		feathers = cfg.get_value("save", "feathers", 0)
 		best_m = cfg.get_value("save", "best_m", 0)
 		unlocked_extra = cfg.get_value("save", "unlocked", [])
-		duck_name = cfg.get_value("save", "duck_name", "duckoducko")   # the base name
+		duck_name = cfg.get_value("save", "duck_name", "ducko")   # the base name
 		meta_owned = cfg.get_value("save", "meta", [])
 		last_species = cfg.get_value("save", "last_species", "mallard")
 		bosses_cleared = cfg.get_value("save", "bosses_cleared", 0)
 		prev_run_bosses = cfg.get_value("save", "prev_run_bosses", 0)
+		runs_started = cfg.get_value("save", "runs_started", 0)
 		cheat_unlock = duck_name.to_lower().strip_edges() == "scootybooty"   # name-gated
 		if not ducks.has(last_species):
 			last_species = "mallard"
@@ -836,6 +843,7 @@ func _save() -> void:
 	cfg.set_value("save", "last_species", last_species)
 	cfg.set_value("save", "bosses_cleared", bosses_cleared)
 	cfg.set_value("save", "prev_run_bosses", prev_run_bosses)
+	cfg.set_value("save", "runs_started", runs_started)
 	cfg.save("user://save.cfg")
 
 func _meta(id: String) -> bool:
@@ -1144,6 +1152,8 @@ func start_game() -> void:
 	duck_steer_mul = 0.85 + 0.3 * r.steer
 	duck_pace_mul = 0.85 + 0.3 * r.get("pace", 0.5)
 	duck_size_mul = r.get("size", 1.0)
+	runs_started += 1
+	hawk_visits = runs_started % 2 == 1            # RUSTY guides every OTHER run
 	reset_game()
 	# permanent unlocks kick in at the waterline
 	if _meta("jacket"):
@@ -1402,8 +1412,8 @@ func _update_hawk(delta: float) -> void:
 	if tex_hawk.is_empty():
 		return
 	if hawk == null:
-		# RUSTY only guides you through the EARLY game, then leaves you to it
-		if boss == null and int(distance / 10.0) < 4500:
+		# RUSTY only guides you through the EARLY game (and only every other run)
+		if hawk_visits and boss == null and int(distance / 10.0) < 4500:
 			hawk_timer -= delta
 			if hawk_timer <= 0.0:
 				_spawn_hawk()
@@ -2061,19 +2071,23 @@ func hop() -> void:
 # Pick a flourish for this hop. Most are plain; flair is a treat, spins are rarer.
 func _pick_hop_style() -> void:
 	var r := randf()
-	if r < 0.60:
+	if r < 0.56:
 		hop_style = ""                              # a normal, honest hop
-	elif r < 0.74:
+	elif r < 0.69:
 		hop_style = "wobble"                        # a silly side-to-side waggle
-	elif r < 0.85:
+	elif r < 0.78:
 		hop_style = "boing"                         # extra cartoon stretch + squeak
-	elif r < 0.93:
+	elif r < 0.85:
 		hop_style = "twirl"                         # a flattening pirouette
-	elif r < 0.975:
+	elif r < 0.90:
 		hop_style = "barrel"                        # full barrel roll into the steer
+	elif r < 0.935:
+		hop_style = "backflip"                      # a showy backflip
+	elif r < 0.97:
+		hop_style = "frontflip"                     # ...and a frontflip
 	else:
-		hop_style = "flip"                          # a showy backflip
-	fancy = hop_style in ["twirl", "barrel", "flip"]
+		hop_style = "kickflip"                      # sk8 or die, duck
+	fancy = hop_style in ["twirl", "barrel", "backflip", "frontflip", "kickflip"]
 	match hop_style:
 		"":
 			_sfx("hop", randf_range(0.95, 1.1))
@@ -2085,7 +2099,7 @@ func _pick_hop_style() -> void:
 		"twirl":
 			_sfx("hop", 1.25)
 			_sfx("chime", 1.4, -8.0)
-		"barrel", "flip":
+		_:                                          # barrel / backflip / frontflip / kickflip
 			_sfx("hop", 1.3)                        # the fancy ones sound fancier
 			_spawn_parts(duck_x, BASE_Y - 60.0, 6, Color(1, 1, 0.7, 0.9), 120.0)
 
@@ -2394,7 +2408,8 @@ func _update_play(delta: float) -> void:
 	_update_wake(delta)
 	_update_enemies(delta)
 	# GERALD descends at each boss mark (once the duck is grounded and the lane's clear-ish)
-	if boss == null and next_boss_idx < BOSS_MARKS.size() \
+	# a boss politely holds back while RUSTY is on screen having his moment
+	if boss == null and hawk == null and next_boss_idx < BOSS_MARKS.size() \
 			and int(distance / 10.0) >= BOSS_MARKS[next_boss_idx] and state == St.GROUNDED:
 		_start_boss()
 	if boss != null:
@@ -2545,9 +2560,9 @@ func _boss_leave() -> void:
 	boss.phase = "leave"
 	boss.t = 0.0
 	if boss.kind == "snapz":
-		_flash(["SNAPZ SINKS AWAY", "SNAPZ RETREATS\nTO THE DEEP"][randi() % 2])
+		_flash(["SNAPZ SINKS AWAY", "SNAPZ RETREATS\nTO THE DEEP"][randi() % 2], 1.6)
 	else:
-		_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3])
+		_flash(["GERALD RETREATS", "GERALD FLAPS OFF\nIN A HUFF", "you... you WIN?!\n— GERALD"][int(boss.idx) % 3], 1.6)
 	_sfx("quack", 0.5, 2.0)
 	# the spoils: a feather shower scaling with which Gerald you bested
 	var reward: int = 15 + 10 * int(boss.idx)
@@ -2593,7 +2608,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
 			_save()
 		if next_boss_idx <= 2:                       # this run's progress -> next shrine's tier
-			_flash("BLESSING EARNED!\nnext run's shrine grows richer")
+			_flash("BLESSING EARNED!\nnext run's shrine grows richer", 1.8)
 		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
 		_boss_leave()
 		return
@@ -2602,11 +2617,11 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		boss.phase2 = true
 		boss.dive_gap *= 0.62
 		if boss.kind == "snapz":
-			_flash("SNAPZ IS ENRAGED")
+			_flash("SNAPZ IS ENRAGED", 1.6)
 			_gerald_say("RRRAAGH. SNAP SNAP.")
 			_sfx("laugh", 0.85)
 		else:
-			_flash("GERALD IS FURIOUS")
+			_flash("GERALD IS FURIOUS", 1.6)
 			_gerald_say("NOW you've done it.")
 			_sfx("quack", 0.6, 1.0)
 	else:
@@ -3448,7 +3463,7 @@ func _draw_death() -> void:
 	var ty := 298.0
 	_mtext(Vector2(px, ty + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
 	var ny := ty + font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y + 16.0
-	var who := duck_name if duck_name != "" else "duckoducko"
+	var who := duck_name if duck_name != "" else "ducko"
 	_mtext(Vector2(px, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, msg_w)
 	ny += font.get_multiline_string_size("%s paddled %d ft" % [who, dead_m], HORIZONTAL_ALIGNMENT_CENTER, msg_w, 24).y + 10.0
 	if dead_record:
@@ -3490,18 +3505,24 @@ func _draw_death() -> void:
 	draw_style_box(mb, DEATH_MENU_BTN)
 	_btn_label(DEATH_MENU_BTN, "menu", 18, Color(1, 1, 1, 0.8))
 
-func _flash(msg: String) -> void:
+func _flash(msg: String, dur := 1.0) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
 	center_label.text = msg
 	center_label.visible = true
-	await get_tree().create_timer(0.7).timeout
-	if alive and not in_menu:
+	flash_seq += 1
+	var my := flash_seq                            # only the LATEST flash may hide the label
+	await get_tree().create_timer(dur).timeout
+	if my == flash_seq and alive and not in_menu:
 		center_label.visible = false
 
 func _refresh_hud() -> void:
 	score_label.text = "%d ft" % int(distance / 10.0)
-	if ducklings_n > 0:
-		score_label.text += "  ×%.2f" % (1.0 + 0.08 * ducklings_n)
+	# the ×multiplier now reflects your FULL distance rate vs base: the river's
+	# stepped ramp + your duck's pace + the duckling conga + boons all roll in
+	var thermal := 1.05 if _meta("thermal") else 1.0
+	var mult: float = (speed / BASE_SPEED) * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal
+	if mult > 1.04:
+		score_label.text += "  ×%.2f" % mult
 	# (shield + fire are drawn as sprites in _draw_status_icons — emoji die on Android)
 	loft_bar.value = loft
 	loft_bar.is_ready = loft_ready
@@ -4139,8 +4160,15 @@ func _draw_duck() -> void:
 				match hop_style:
 					"barrel":
 						rot = p * TAU * dir                          # one full roll
-					"flip":
-						rot = -p * TAU                               # a showy backflip
+					"backflip":
+						rot = -p * TAU                               # spin backward...
+						sc = Vector2.ONE * (1.0 - 0.18 * sin(p * PI))
+					"frontflip":
+						rot = p * TAU                                # ...and forward
+						sc = Vector2.ONE * (1.0 - 0.18 * sin(p * PI))
+					"kickflip":
+						sc.x = cos(p * TAU)                          # sideways, like a deck
+						rot = sin(p * TAU) * 0.5 * dir
 					"twirl":
 						sc.x = cos(p * TAU)                          # flatten -> pirouette
 					"wobble":
