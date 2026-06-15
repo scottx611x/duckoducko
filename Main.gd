@@ -298,6 +298,8 @@ const DUCK_LINES := {
 		"earned, not bought.", "...let's."],
 }
 var pause_line := ""
+var pause_yaw := 0.0             # the pause-screen duck is a spinnable turntable
+var pause_line_t := 0.0
 var _was_paused := false
 var select_line := ""           # the duck's current quip on the select screen
 var select_line_t := 0.0
@@ -1048,6 +1050,7 @@ func _dbg() -> void:
 	# pause screen with the duck's quip
 	boss = null
 	in_shrine = false; paused = true; pause_line = _duck_quip(species)
+	shield_charges = 1; picked = {"spring": 1, "gold": 1, "thunder": 1}; run_boons = ["tailwind", "secondwind"]
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_pause.png")
@@ -1782,7 +1785,8 @@ func _on_press(pos: Vector2) -> void:
 			if _meta("warmup"): loft = 0.4
 			_open_shrine()
 		return
-	if paused:                                     # paused: only the overlay buttons live
+	if paused:                                     # paused: buttons + the interactive duck
+		spin_prev_x = pos.x
 		if PAUSE_RESUME_BTN.has_point(pos):
 			_sfx("click")
 			paused = false
@@ -1790,6 +1794,13 @@ func _on_press(pos: Vector2) -> void:
 			_sfx("click")
 			paused = false
 			_enter_menu()
+		elif pos.y < 300.0:                        # tap the duck -> it quacks & speaks
+			menu_quack_t = anim_t
+			pause_line = _duck_quip(species); pause_line_t = anim_t
+			if species == "rubberduck":
+				_sfx("squeak", randf_range(0.95, 1.05))
+			else:
+				_sfx("quack", randf_range(0.95, 1.1))
 		return
 	if GAME_PAUSE_BTN.has_point(pos) and not drafting and alive:
 		_sfx("click")
@@ -1823,6 +1834,10 @@ func _on_press(pos: Vector2) -> void:
 func _on_drag(pos: Vector2) -> void:
 	if in_select:
 		select_yaw += (pos.x - spin_prev_x) * 0.012
+		spin_prev_x = pos.x
+		return
+	if paused:                                     # spin the pause-screen duck
+		pause_yaw += (pos.x - spin_prev_x) * 0.012
 		spin_prev_x = pos.x
 		return
 	if in_menu or not alive:
@@ -2029,6 +2044,10 @@ func _process(delta: float) -> void:
 	if in_menu:
 		menu_spin += menu_spin_vel * delta
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
+	if paused:
+		pause_yaw += delta * 0.5                    # the pause duck idles on its turntable
+		if pause_line == "" or anim_t - pause_line_t > 4.5:
+			pause_line = _duck_quip(species); pause_line_t = anim_t
 	if in_select:
 		select_yaw += delta * 0.7
 		# the duck chatters on its own — a fresh quip every few seconds (no tap needed)
@@ -2902,20 +2921,24 @@ func _draw_status_icons() -> void:
 	var bs := 30.0
 	var gap := 5.0
 	var y := 50.0
-	var relics: Array = []
-	if shield_charges > 0:                                  # a state "relic": shields left
-		relics.append({"id": "_shield", "rarity": 1, "n": shield_charges, "glow": false})
-	for u in UPGRADES:                                     # one per upgrade you've drafted
-		var n: int = picked.get(u.id, 0)
-		if n > 0:
-			relics.append({"id": u.id, "rarity": u.rarity, "n": n, "glow": u.id == "hotwheels" and fire_t > 0.0})
-	for bid in run_boons:                                  # ancient-duck boons (gold relics)
-		relics.append({"id": bid, "rarity": 2, "n": 1, "glow": false, "boon": true})
-	for r in relics:
+	for r in _active_relics():
 		if x + bs > VIEW.x - 30.0:                          # wrap (rarely needed)
 			x = 22.0; y += bs + gap
 		_draw_relic(Rect2(x, y, bs, bs), r)
 		x += bs + gap
+
+# the active powers this run: shield charges, drafted upgrades, and ancient-duck boons
+func _active_relics() -> Array:
+	var relics: Array = []
+	if shield_charges > 0:
+		relics.append({"id": "_shield", "rarity": 1, "n": shield_charges, "glow": false})
+	for u in UPGRADES:
+		var n: int = picked.get(u.id, 0)
+		if n > 0:
+			relics.append({"id": u.id, "rarity": u.rarity, "n": n, "glow": u.id == "hotwheels" and fire_t > 0.0})
+	for bid in run_boons:
+		relics.append({"id": bid, "rarity": 2, "n": 1, "glow": false, "boon": true})
+	return relics
 
 func _draw_relic(rect: Rect2, r: Dictionary) -> void:
 	var col: Color = RARITY_COL[r.rarity]
@@ -3184,21 +3207,36 @@ func _draw_shrine() -> void:
 
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
-	_otext(Vector2(0, 360), "PAUSED", 64, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
-	_otext(Vector2(0, 416), "%d ft · %s" % [int(distance / 10.0), THEMES[theme_idx].name],
-		20, Color(1, 1, 1, 0.7))
+	var cx := VIEW.x * 0.5
+	_otext(Vector2(0, 332), "PAUSED", 60, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	_otext(Vector2(0, 372), "%d ft · %s" % [int(distance / 10.0), THEMES[theme_idx].name],
+		18, Color(1, 1, 1, 0.7))
+	# the duck on a turntable — drag to spin, tap to quack, just like duck-select
+	if has_art:
+		var bob := sin(anim_t * 2.0) * 8.0
+		var fr = _spin_frame(species, pause_yaw, anim_t - menu_quack_t < 0.45)
+		_blit_centered(fr, Vector2(cx, 196.0 + bob), 3.6 * ducks[species].get("size", 1.0) if ducks.has(species) else 3.6)
+		_otext(Vector2(0, 286), "< drag to spin · tap to chat >", 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		if pause_line != "":
+			_speech_bubble(Vector2(cx, 104.0), pause_line,
+				Color(0.98, 0.97, 0.92, 0.96), Color(0.5, 0.85, 1.0, 0.9), 18, 1.0)
+	# the powers you're carrying — boons + upgrades + shields, as relics
+	var relics := _active_relics()
+	if not relics.is_empty():
+		_otext(Vector2(0, 408), "YOUR POWERS", 13, Color(1, 0.85, 0.4, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		var bsz := 28.0
+		var gp := 5.0
+		var total: float = relics.size() * (bsz + gp) - gp
+		var rx: float = cx - total * 0.5
+		for r in relics:
+			if rx + bsz > VIEW.x - 16.0:
+				rx = cx - total * 0.5     # (single row; clamps visually if huge)
+			_draw_relic(Rect2(rx, 418.0, bsz, bsz), r)
+			rx += bsz + gp
 	draw_style_box(_btn_sb(), PAUSE_RESUME_BTN)
 	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), PAUSE_MENU_BTN)
 	_btn_label(PAUSE_MENU_BTN, "quit to menu", 22, Color(1, 1, 1, 0.8))
-	# the duck waits, bobbing, looking back at you — and says its piece
-	if has_art:
-		var hero = ducks[species].get("hero")
-		if hero != null:
-			_blit_centered(hero, Vector2(VIEW.x * 0.5, 200.0 + sin(anim_t * 2.0) * 8.0), 3.4)
-		if pause_line != "":
-			_speech_bubble(Vector2(VIEW.x * 0.5, 116.0), pause_line,
-				Color(0.98, 0.97, 0.92, 0.96), Color(0.5, 0.85, 1.0, 0.9), 18, 1.0)
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
