@@ -4242,8 +4242,10 @@ func _codex_tex(id: String):
 			return tex_elder
 		"frog":
 			return tex_frog
-		"wingducks":
-			return tex_duckling.get("idle", [null])[0] if not tex_duckling.is_empty() else null
+		"wingducks":                               # a wingduck is a little flying duck (wings-out hop frame)
+			var md: Dictionary = ducks.get("mallard", {})
+			var hops: Array = md.get("hop", [])
+			return hops[0] if hops.size() > 0 else null
 		"gnome":
 			return tex_props[4] if tex_props.size() > 4 else null
 	return null
