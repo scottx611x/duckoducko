@@ -517,7 +517,7 @@ const CODEX := [
 	{"id": "rusty", "cat": "friend", "name": "RUSTY", "tag": "guide · red-tailed hawk",
 		"lore": "A red-tailed hawk who appointed himself your mentor. Swoops in early to drop a tip (and a theatrical SKREE), then minds the feather shop from his perch. Insists he is NOT just decorative."},
 	{"id": "sadie", "cat": "friend", "name": "SADIE", "tag": "the good girl",
-		"lore": "Seventy pounds of wet, joyful chocolate lab in single-minded pursuit of a tennis ball. Means no harm whatsoever; will absolutely flatten you anyway. Never, ever harm-able — just hop clear."},
+		"lore": "Eighty pounds of chocolate-lab FUN who loves fetch so much she'll body-check you to reach her beloved CHUCK-IT. She means nothing by it — totally harmless, never harm-able. Just hop clear of the good girl."},
 	{"id": "elder", "cat": "friend", "name": "THE ANCIENT DUCK", "tag": "the shrine keeper",
 		"lore": "A bearded mallard older than the pond itself. Appears at the waterline to offer a blessing — richer for ducks who've bested the herons. Speaks mostly in riddles and quacks."},
 	{"id": "wingducks", "cat": "friend", "name": "WINGDUCKS", "tag": "your escort · legendary",
@@ -3419,7 +3419,7 @@ func _collide() -> void:
 func _collect(it: Dictionary) -> void:
 	it.got = true
 	_st("snacks")
-	_codex_see("snack_" + str(it.kind))
+	_codex_see("snack_" + ITEM_DEFS[it.kind].name)   # it.kind is an INDEX into ITEM_DEFS
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL: score & feathers, NOT loft
 	var loft_mult := boon_loft_mult                # FAMINE FEAST: fewer snacks, double loft

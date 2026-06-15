@@ -867,6 +867,11 @@ def build_sadie(frame=0):
         y = round(3 + bob + 2.3 * math.sin(math.radians(a)))
         if (x, y, 4) in V or (x, y, 3) in V:
             put(x, y, 4, COLLAR)
+    # her beloved CHUCK-IT ball, clamped PROUDLY in her jaws (orange w/ blue band)
+    BALL = (240, 118, 36); BALLH = (252, 152, 70); BAND = (66, 118, 200)
+    ellip(0, 3 + bob, 11.5, 1.7, 1.7, 1.7, BALL)
+    put(-1, 4 + bob, 12, BALLH); put(0, 4 + bob, 12, BALLH)      # glossy highlight
+    put(1, 3 + bob, 13, BAND); put(0, 2 + bob, 13, BAND); put(-1, 3 + bob, 13, BAND)   # blue band
     # kind eyes
     put(2, 5 + bob, 8, EYE); put(-2, 5 + bob, 8, EYE)
     # tail up like a rudder, wagging frame-to-frame
