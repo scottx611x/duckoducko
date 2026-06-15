@@ -645,7 +645,7 @@ func _ready() -> void:
 		hud.add_child(vig)
 
 	score_label = Label.new()
-	score_label.position = Vector2(20, 18)
+	score_label.position = Vector2(20, 10)
 	score_label.add_theme_font_size_override("font_size", 34)
 	score_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
 	score_label.add_theme_constant_override("outline_size", 10)
@@ -3132,9 +3132,9 @@ func _draw_status_icons() -> void:
 	var x := 22.0
 	# RELIC ROW (StS-style): a badge per active power, rarity-coloured, with a glyph
 	# + stack count. The shield finally gets its OWN icon (no more feather confusion).
-	var bs := 30.0
+	var bs := 28.0
 	var gap := 5.0
-	var y := 50.0
+	var y := 54.0                                       # below the ft/pace readout, above the timeline
 	for r in _active_relics():
 		if x + bs > VIEW.x - 30.0:                          # wrap (rarely needed)
 			x = 22.0; y += bs + gap
@@ -3263,8 +3263,19 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"double":                                          # two up-chevrons
 			draw_polyline(PackedVector2Array([c + Vector2(-s, 0), c + Vector2(0, -s), c + Vector2(s, 0)]), col, 2.5)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.7), c + Vector2(0, -s * 0.3), c + Vector2(s, s * 0.7)]), col, 2.5)
-		"duckling", "trio", "school", "clutch":            # duckling brood of dots
-			var nn := 1 if id == "duckling" else (4 if id == "clutch" else 3)
+		"clutch":                                          # EGG CLUTCH: a single smooth egg
+			var pts := PackedVector2Array()
+			for i in 20:
+				var a: float = TAU * i / 20.0
+				var ex: float = cos(a) * s * 0.62
+				var ey: float = sin(a) * s * 0.86
+				if ey < 0.0:                               # taper the top into an egg point
+					ex *= 1.0 + ey / (s * 1.7)
+				pts.append(c + Vector2(ex, ey))
+			draw_colored_polygon(pts, col)
+			draw_circle(c + Vector2(-s * 0.18, s * 0.12), s * 0.15, col.lightened(0.45))
+		"duckling", "trio", "school":                      # duckling brood of dots
+			var nn := 1 if id == "duckling" else 3
 			for i in nn:
 				draw_circle(c + Vector2((i - (nn - 1) * 0.5) * s * 0.62, 0), s * 0.32, col)
 		"trailblazer":                                     # a forward chevron — blazing ahead
@@ -3575,7 +3586,7 @@ func _refresh_hud() -> void:
 		pace_label.text = "×%.2f" % mult
 		# sit it just right of the ft value, dropped to share the big text's baseline
 		var ftw: float = font.get_string_size(score_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
-		pace_label.position = Vector2(20.0 + ftw + 14.0, 18.0 + 12.0)
+		pace_label.position = Vector2(20.0 + ftw + 14.0, 10.0 + 12.0)
 		pace_label.visible = true
 	else:
 		pace_label.visible = false
