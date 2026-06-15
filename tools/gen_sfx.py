@@ -309,7 +309,29 @@ def click():
     return out
 
 
+def screech():
+    """RUSTY's cry: a red-tailed hawk's harsh, raspy, DESCENDING scream (kee-eeee-arr).
+    A quick rise into a long raspy fall, bright odd harmonics + a fast amplitude
+    rattle + a breath of noise so it rasps rather than whistles cleanly."""
+    dur = 0.8
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        if p < 0.12:
+            f = 1500.0 + 1200.0 * (p / 0.12)          # snap UP to the peak
+        else:
+            f = 2700.0 - 1600.0 * ((p - 0.12) / 0.88)  # long descending rasp
+        rasp = 1.0 + 0.55 * math.sin(TAU * 75.0 * t)   # ~75Hz throaty rattle
+        s = (sine(f, t) + 0.6 * sine(2.0 * f, t) + 0.28 * sine(3.0 * f, t))
+        noise = random.uniform(-1.0, 1.0) * 0.22 * (0.5 + 0.5 * p)   # rises into a screech
+        e = env(t, dur, attack=0.02, curve=2.0)
+        out.append((s * rasp * 0.46 + noise) * e * 0.95)
+    return out
+
+
 if __name__ == "__main__":
+    save("screech.wav", screech())
     save("hop.wav", hop())
     save("splash.wav", splash(False))
     save("splash_big.wav", splash(True))

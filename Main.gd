@@ -188,7 +188,9 @@ const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mo
 const GAME_PAUSE_BTN := Rect2(VIEW.x - 124.0, 14.0, 50.0, 50.0) # ‖ pause, left of the ✕
 const PAUSE_RESUME_BTN := Rect2(120.0, 470.0, 300.0, 64.0)
 const PAUSE_MENU_BTN := Rect2(160.0, 552.0, 220.0, 52.0)
-const DEATH_MENU_BTN := Rect2(170.0, 636.0, 200.0, 44.0)
+const DEATH_MENU_BTN := Rect2(60.0, 636.0, 200.0, 44.0)
+const DEATH_STATS_BTN := Rect2(280.0, 636.0, 200.0, 44.0)   # death-screen LOGBOOK button
+const MENU_STATS_BTN := Rect2(50.0, 700.0, 440.0, 42.0)     # menu LOGBOOK button
 
 # duck-select screen (menu buttons get breathing room on phone screens)
 const MENU_DUCKS_BTN := Rect2(50.0, 752.0, 185.0, 58.0)
@@ -310,6 +312,9 @@ var pause_line := ""
 var pause_yaw := 0.0             # the pause-screen duck is a spinnable turntable
 var pause_line_t := 0.0
 var pause_power_sel := -1        # tapped relic index on the pause screen (-1 = none)
+var death_power_sel := -1        # tapped relic index on the DEATH screen (-1 = none)
+var in_stats := false            # the LOGBOOK / stats screen is open
+var stats_from_death := false    # opened from death screen (back returns there, not menu)
 var flash_seq := 0               # guards overlapping center-label flashes
 var _was_paused := false
 var select_line := ""           # the duck's current quip on the select screen
@@ -324,7 +329,7 @@ const BOONS := [
 	{"id": "clutch",     "tier": 0, "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
 	{"id": "trailblazer","tier": 0, "name": "TRAILBLAZER",   "desc": "+22% pace all run — but the herons hunt you +40% harder", "deal": true},
 	{"id": "tailwind",   "tier": 0, "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
-	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "snacks you grab give +60% MORE feet","deal": false},
+	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "every snack eaten also banks ft — BREADWINNER makes each worth +60% more","deal": false},
 	{"id": "nestegg",    "tier": 0, "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
 	{"id": "goosedown",  "tier": 1, "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
 	{"id": "lucky",      "tier": 1, "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
@@ -459,7 +464,7 @@ var tex_hawk := []              # RUSTY's 3 glide-flap frames
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
 var shop_screech_t := -9.0      # anim_t of the last tap on the shopkeeper
 var shop_line := ""             # the line he screeched (tap-triggered, not auto)
-const SHOP_RUSTY_RECT := Rect2(28.0, 86.0, 140.0, 110.0)   # tap-zone for the shopkeeper
+const SHOP_RUSTY_RECT := Rect2(VIEW.x - 156.0, 96.0, 150.0, 120.0)   # tap-zone for the shopkeeper (top-right)
 var hawk_visits := true         # RUSTY only guides on every OTHER run
 var runs_started := 0           # total runs (persisted) — RUSTY visits on odd ones
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
@@ -536,6 +541,14 @@ var feathers := 0
 var best_m := 0
 var unlocked_extra := []        # species strings bought with feathers
 var run_feathers := 0           # feathers collected this run
+# ---- statistics & run history ------------------------------------------------
+var run_stats: Dictionary = {}  # this run's tally of deeds (hops, stomps, snacks...)
+var run_start_ms := 0           # Time.get_ticks_msec() at run start (for duration)
+var lifetime: Dictionary = {}   # persisted cumulative totals across ALL runs
+var run_history: Array = []     # persisted compact records, newest first (cap 40)
+
+func _st(key: String, n := 1) -> void:
+	run_stats[key] = int(run_stats.get(key, 0)) + n
 
 var logs: Array = []           # {x, y, w, h, missed, phase, frog, frog_gone}
 var items: Array = []          # {x, y, got, kind}
@@ -702,7 +715,7 @@ func _ready() -> void:
 	# (deliberately not add_child'd: the slim bar is replaced by the run timeline)
 
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh", "screech"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -867,6 +880,8 @@ func _load_save() -> void:
 		runs_started = cfg.get_value("save", "runs_started", 0)
 		specials_owned = cfg.get_value("save", "specials_owned", ["mega"])
 		equipped_special = cfg.get_value("save", "equipped_special", "mega")
+		lifetime = cfg.get_value("save", "lifetime", {})
+		run_history = cfg.get_value("save", "run_history", [])
 		if "mega" not in specials_owned:
 			specials_owned.append("mega")
 		if equipped_special not in specials_owned:
@@ -888,6 +903,8 @@ func _save() -> void:
 	cfg.set_value("save", "runs_started", runs_started)
 	cfg.set_value("save", "specials_owned", specials_owned)
 	cfg.set_value("save", "equipped_special", equipped_special)
+	cfg.set_value("save", "lifetime", lifetime)
+	cfg.set_value("save", "run_history", run_history)
 	cfg.save("user://save.cfg")
 
 # does the player own this LOFT special? (scootybooty owns them all)
@@ -1065,11 +1082,24 @@ func _dbg() -> void:
 	cam.zoom = Vector2.ONE
 	picked = {"spring": 2, "duckling": 1, "gold": 1}
 	run_feathers = 7
-	duck_name = "Sir Quackington the Magnificent"   # long name to test wrap
+	duck_name = "ducko"                             # don't poison the save with a test name
 	die("the heron remembers your face and is deeply unimpressed.")
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_dead.png")
+	# the LOGBOOK: seed some lifetime stats + history so the graph & grid have data
+	lifetime = {"runs": 37, "total_ft": 482910, "best_ft": 28450, "total_feathers": 9120,
+		"total_secs": 5400, "toppace": 312, "hops": 4821, "quacks": 933, "snacks": 2740,
+		"upgrades": 158, "herons": 612, "turtles": 88, "ducklings": 410, "lost": 121,
+		"specials": 240, "fires": 96, "bosses": 14, "boons": 33}
+	run_history = []
+	for k in [3200, 8800, 5400, 12010, 6700, 28450, 9100, 15300, 4200, 19800, 11200, 7600]:
+		run_history.append({"ft": k, "sp": "wood", "feathers": 20, "bosses": 1, "secs": 90})
+	_open_stats(false)
+	await get_tree().create_timer(0.2).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_stats.png")
+	in_stats = false; lifetime = {}; run_history = []
 	reset_game()
 	# select screen: a locked duck (pintail) with cost text
 	_enter_menu()
@@ -1241,6 +1271,7 @@ func _shrine_rect(i: int) -> Rect2:
 	return Rect2(60.0, 356.0 + i * 130.0, VIEW.x - 120.0, 116.0)
 
 func _pick_boon(b: Dictionary) -> void:
+	_st("boons")
 	match b.id:
 		"clutch": _add_ducklings(4)
 		"trailblazer":
@@ -1367,6 +1398,7 @@ func _has_synergy(id: String) -> bool:
 	return false
 
 func _pick_upgrade(u: Dictionary) -> void:
+	_st("upgrades")
 	var combo := _has_synergy(u.id)
 	picked[u.id] = picked.get(u.id, 0) + 1
 	if u.id == "shield":
@@ -1391,6 +1423,7 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_flash(u.name + "!")
 
 func _add_ducklings(n: int) -> void:
+	_st("ducklings", n)
 	ducklings_n = mini(ducklings_n + n, MAX_DUCKLINGS)
 	for i in n:
 		_sfx("peep", randf_range(0.9, 1.2))
@@ -1398,6 +1431,7 @@ func _add_ducklings(n: int) -> void:
 	_spawn_parts(duck_x, BASE_Y + 40.0, 10, Color(0.97, 0.87, 0.45), 120.0)
 
 func _lose_duckling() -> void:
+	_st("lost")
 	ducklings_n -= 1
 	duck_shake = 0.25
 	heat = 0.0                                     # a bonk breaks the ON FIRE streak
@@ -1495,7 +1529,7 @@ func _update_hawk(delta: float) -> void:
 		if to_mid < 14.0:
 			hawk.said = true
 			hawk.say_t = hawk.t
-			_sfx("quack", 0.5, -10.0)               # a theatrical little announcing chirp
+			_sfx("screech", 0.85, -6.0)             # his keening red-tail announcing cry
 	elif hawk.said and hawk.t - hawk.say_t < 3.4:
 		# hovering: hold position with a gentle drifting bob while the bubble shows
 		hawk.x += hawk.dir * 16.0 * delta
@@ -1793,6 +1827,8 @@ func _update_parts(delta: float) -> void:
 	parts = parts.filter(func(p): return p.t < p.life)
 
 func reset_game() -> void:
+	run_stats = {}                                 # fresh tally of this run's silly deeds
+	run_start_ms = Time.get_ticks_msec()
 	paused = false
 	state = St.GROUNDED
 	hop_t = 0.0
@@ -1962,6 +1998,8 @@ func _on_press(pos: Vector2) -> void:
 			_open_select()
 		elif MENU_SHOP_BTN.has_point(pos):
 			_open_shop()
+		elif MENU_STATS_BTN.has_point(pos):
+			_open_stats(false)
 		elif anim_t - menu_enter_t > 0.35:
 			start_game()                       # grace: a stray tap can't insta-start
 		return
@@ -1971,17 +2009,34 @@ func _on_press(pos: Vector2) -> void:
 	if in_shop:
 		_shop_press(pos)
 		return
+	if in_stats:
+		_stats_press(pos)
+		return
 	if not alive:
-		_sfx("click")
+		# tap a relic to inspect it (no retry); buttons for menu/logbook; else retry
+		var drr := _death_relic_rects()
+		for i in drr.size():
+			if drr[i].rect.grow(4.0).has_point(pos):
+				death_power_sel = -1 if death_power_sel == i else i
+				_sfx("click", 1.2)
+				return
 		if DEATH_MENU_BTN.has_point(pos):
-			_enter_menu()
-		else:
-			reset_game()                           # retry: re-apply metas, re-roll the shrine
-			if _meta("jacket"): shield_charges = 1
-			if _meta("egghead"): ducklings_n = 1
-			if _meta("earlybird"): next_draft = 2000.0
-			if _meta("warmup"): loft = 0.4
-			_open_shrine()
+			_sfx("click"); _enter_menu()
+			return
+		if DEATH_STATS_BTN.has_point(pos):
+			_sfx("click"); _open_stats(true)
+			return
+		if death_power_sel >= 0:                    # a popup is open: first tap just dismisses it
+			death_power_sel = -1
+			_sfx("click", 0.8)
+			return
+		_sfx("click")
+		reset_game()                               # retry: re-apply metas, re-roll the shrine
+		if _meta("jacket"): shield_charges = 1
+		if _meta("egghead"): ducklings_n = 1
+		if _meta("earlybird"): next_draft = 2000.0
+		if _meta("warmup"): loft = 0.4
+		_open_shrine()
 		return
 	if paused:                                     # paused: buttons + the interactive duck
 		spin_prev_x = pos.x
@@ -2133,6 +2188,7 @@ func hop() -> void:
 		hop_t = 0.0
 		hop_lift_bonus = 1.0
 		hop_count += 1
+		_st("hops")
 		hop_events.append(anim_t)                  # the ducklings are watching
 		_pick_hop_style()
 		# little milestones so the counter always has a next treat in sight
@@ -2241,6 +2297,7 @@ func _sonic_quack() -> void:
 
 # the LOFT meter is full — fire whichever special you have equipped this run
 func _fire_special() -> void:
+	_st("specials")
 	match equipped_special:
 		"laser": fire_laser()
 		"tidal": fire_tidal()
@@ -2312,9 +2369,31 @@ func die(msg: String) -> void:
 		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 36, Color(1.0, 0.86, 0.35), 300.0)
 		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 22, Color(0.55, 0.85, 1.0), 260.0)
 	best_m = maxi(best_m, dead_m)
+	_record_run()
 	_save()
 	center_label.visible = false            # the death screen draws itself
 	loft_bar.visible = false                # no MEGA/LASER pills over the eulogy
+	score_label.visible = false             # hide the live ft/pace HUD over the eulogy
+	if pace_label != null: pace_label.visible = false
+	death_power_sel = -1
+
+# fold the finished run into the history log + lifetime totals (for the LOGBOOK)
+func _record_run() -> void:
+	var secs := int((Time.get_ticks_msec() - run_start_ms) / 1000.0)
+	run_history.push_front({"ft": dead_m, "sp": species, "feathers": run_feathers,
+		"bosses": int(run_stats.get("bosses", 0)), "secs": secs})
+	if run_history.size() > 40:
+		run_history.resize(40)
+	for k in run_stats:
+		if k == "toppace":
+			lifetime["toppace"] = maxi(int(lifetime.get("toppace", 100)), int(run_stats[k]))
+		else:
+			lifetime[k] = int(lifetime.get(k, 0)) + int(run_stats[k])
+	lifetime["runs"] = int(lifetime.get("runs", 0)) + 1
+	lifetime["total_ft"] = int(lifetime.get("total_ft", 0)) + dead_m
+	lifetime["total_feathers"] = int(lifetime.get("total_feathers", 0)) + run_feathers
+	lifetime["total_secs"] = int(lifetime.get("total_secs", 0)) + secs
+	lifetime["best_ft"] = maxi(int(lifetime.get("best_ft", 0)), dead_m)
 
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
@@ -2336,7 +2415,7 @@ func _process(delta: float) -> void:
 		if select_line == "" or anim_t - select_line_t > 3.8:
 			select_line = _duck_quip(ROSTER[sel_index].species)
 			select_line_t = anim_t
-	if not in_menu and not in_select and not in_shop and not in_shrine and alive and not drafting and not paused:
+	if not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and alive and not drafting and not paused:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -2541,6 +2620,7 @@ func _update_play(delta: float) -> void:
 		else:
 			_sfx("quack", 1.0)
 		quacked = true
+		_st("quacks")
 	elif idle_timer < 8.0:
 		quacked = false
 
@@ -2653,6 +2733,7 @@ func _update_enemies(delta: float) -> void:
 # a well-timed HOP stomps a regular heron/turtle dead — same as bopping its boss form.
 # rewards a little loft, a few feathers, and a satisfying pop.
 func _stomp_critter(x: float, y: float, who: String) -> void:
+	_st("herons" if who == "heron" else "turtles")
 	run_feathers += 3
 	_add_loft(0.18)
 	duck_shake = maxf(duck_shake, 0.22)
@@ -2769,6 +2850,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 	_sfx("crunch", 0.7)
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
 	if boss.hp <= 0:
+		_st("bosses")
 		next_boss_idx += 1
 		if next_boss_idx > bosses_cleared:
 			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
@@ -3167,6 +3249,7 @@ func _collide() -> void:
 
 func _collect(it: Dictionary) -> void:
 	it.got = true
+	_st("snacks")
 	var def: Dictionary = ITEM_DEFS[it.kind]
 	var mult := 2.0 if _up("gold") > 0 else 1.0    # GOLDEN BILL: score & feathers, NOT loft
 	var loft_mult := boon_loft_mult                # FAMINE FEAST: fewer snacks, double loft
@@ -3194,6 +3277,7 @@ func _add_heat(amount: float) -> void:
 	heat = clampf(heat + amount, 0.0, 1.0)
 	if heat >= 1.0:
 		fire_t = 5.0 + 1.5 * (_up("hotwheels") - 1)
+		_st("fires")
 		fire_max = fire_t
 		heat = 0.0
 		heat_warned = false
@@ -3690,7 +3774,7 @@ func _draw_death() -> void:
 	var msg_w := panel.size.x - 28.0
 	var px := panel.position.x + 14.0
 	var msg_sz := 46
-	while msg_sz > 26 and font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y > 108.0:
+	while msg_sz > 24 and font.get_multiline_string_size(dead_msg, HORIZONTAL_ALIGNMENT_CENTER, msg_w, msg_sz).y > 86.0:
 		msg_sz -= 4
 	var ty := 298.0
 	_mtext(Vector2(px, ty + font.get_ascent(msg_sz)), dead_msg, msg_sz, Color(1, 0.92, 0.45), msg_w, HORIZONTAL_ALIGNMENT_CENTER, 10)
@@ -3703,24 +3787,31 @@ func _draw_death() -> void:
 	else:
 		_otext(Vector2(0, ny + 16.0), "best: %d ft" % best_m, 19, Color(1, 1, 1, 0.6))
 	_feather_text(Vector2(VIEW.x * 0.5, ny + 50.0), "+%d · wallet %d" % [run_feathers, feathers], 19, Color(1, 0.92, 0.45, 0.9), "center")
-	# the build, as relic ICONS (upgrades + golden boons), each with its ×stack count
-	var drelics := _active_relics()
-	if drelics.is_empty():
-		_otext(Vector2(0, 512), "no powers. raw talent only.", 16, Color(1, 1, 1, 0.5))
+	# the build, as relic ICONS (tap any to inspect — they don't trigger a retry)
+	var rrects := _death_relic_rects()
+	if rrects.is_empty():
+		_otext(Vector2(0, 528), "no powers. raw talent only.", 16, Color(1, 1, 1, 0.5))
 	else:
-		_otext(Vector2(0, 470), "YOUR RUN", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-		var dbs := 36.0
-		var dgap := 8.0
-		var per_row: int = int((panel.size.x - 44.0) / (dbs + dgap))
-		var cy := 492.0
-		for ri in drelics.size():
-			var col_i: int = ri % per_row
-			var row_i: int = ri / per_row
-			var row_n: int = mini(per_row, drelics.size() - row_i * per_row)
-			var row_w: float = row_n * dbs + (row_n - 1) * dgap
-			var sx: float = VIEW.x * 0.5 - row_w * 0.5
-			_draw_relic(Rect2(sx + col_i * (dbs + dgap), cy + row_i * (dbs + dgap), dbs, dbs), drelics[ri])
-	_otext(Vector2(0, 622), "tap to retry", 30, Color(1, 1, 1, 0.55 + 0.45 * sin(anim_t * 4.0)))
+		_otext(Vector2(0, 504), "YOUR RUN  (tap a power)", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		for i in rrects.size():
+			var rr: Dictionary = rrects[i]
+			_draw_relic(rr.rect, rr.relic)
+			if i == death_power_sel:
+				draw_arc(rr.rect.get_center(), rr.rect.size.x * 0.66, 0, TAU, 20, Color(1, 1, 1, 0.85), 2.0)
+	# inspected power's explanation, floated above the buttons
+	if death_power_sel >= 0 and death_power_sel < rrects.size():
+		var info := _power_info(rrects[death_power_sel].relic)
+		var pr := Rect2(40.0, 566.0, VIEW.x - 80.0, 0.0)
+		var dh: float = font.get_multiline_string_size(info.desc, HORIZONTAL_ALIGNMENT_CENTER, pr.size.x - 24.0, 15).y
+		pr.size.y = 30.0 + dh + 10.0
+		var psb := StyleBoxFlat.new()
+		psb.bg_color = Color(0.08, 0.13, 0.18, 0.98); psb.set_corner_radius_all(12)
+		psb.set_border_width_all(2); psb.border_color = Color(1, 0.86, 0.4, 0.8)
+		draw_style_box(psb, pr)
+		_otext(Vector2(pr.position.x, pr.position.y + 22.0), info.name, 17, Color(1, 0.92, 0.45), pr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		_mtext(Vector2(pr.position.x + 12.0, pr.position.y + 30.0 + font.get_ascent(15)), info.desc, 15, Color(1, 1, 1, 0.85), pr.size.x - 24.0)
+	else:
+		_otext(Vector2(0, 618), "tap empty space to retry", 24, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)))
 	var mb := StyleBoxFlat.new()
 	mb.bg_color = Color(0.10, 0.17, 0.24, 0.9)
 	mb.set_corner_radius_all(12)
@@ -3728,6 +3819,151 @@ func _draw_death() -> void:
 	mb.border_color = Color(1, 1, 1, 0.35)
 	draw_style_box(mb, DEATH_MENU_BTN)
 	_btn_label(DEATH_MENU_BTN, "menu", 18, Color(1, 1, 1, 0.8))
+	draw_style_box(mb, DEATH_STATS_BTN)
+	_btn_label(DEATH_STATS_BTN, "logbook", 18, Color(0.7, 0.9, 1.0))
+
+# death-screen relic hit rects (shared by draw + tap) — centred rows
+func _death_relic_rects() -> Array:
+	var drelics := _active_relics()
+	var out: Array = []
+	var dbs := 36.0
+	var dgap := 8.0
+	var per_row: int = int((VIEW.x - 112.0 - 44.0) / (dbs + dgap))
+	var cy := 524.0
+	for ri in drelics.size():
+		var col_i: int = ri % per_row
+		var row_i: int = ri / per_row
+		var row_n: int = mini(per_row, drelics.size() - row_i * per_row)
+		var row_w: float = row_n * dbs + (row_n - 1) * dgap
+		var sx: float = VIEW.x * 0.5 - row_w * 0.5
+		out.append({"rect": Rect2(sx + col_i * (dbs + dgap), cy + row_i * (dbs + dgap), dbs, dbs), "relic": drelics[ri]})
+	return out
+
+# ---- the LOGBOOK: lifetime stats + recent-run history graph ------------------
+func _open_stats(from_death: bool) -> void:
+	in_stats = true
+	stats_from_death = from_death
+	in_menu = false
+	fade = 0.0
+	name_edit.visible = false
+	score_label.visible = false                    # hide the gameplay HUD behind the logbook
+	if pace_label != null: pace_label.visible = false
+	loft_bar.visible = false
+	_sfx("click")
+
+func _stats_press(pos: Vector2) -> void:
+	if SEL_BACK_BTN.has_point(pos):
+		_sfx("click")
+		in_stats = false
+		if not stats_from_death:
+			_enter_menu()                          # back to menu; from death we just reveal it again
+
+func _commas(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	for i in s.length():
+		if i > 0 and (s.length() - i) % 3 == 0:
+			out += ","
+		out += s[i]
+	return ("-" if n < 0 else "") + out
+
+func _fmt_time(secs: int) -> String:
+	if secs >= 3600:
+		return "%dh %dm" % [secs / 3600, (secs % 3600) / 60]
+	if secs >= 60:
+		return "%dm %ds" % [secs / 60, secs % 60]
+	return "%ds" % secs
+
+func _draw_stats() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.06, 0.10, 1.0))
+	_fancy_title("LOGBOOK", 92.0, 36, Color(0.7, 0.92, 1.0), Color(0.4, 0.7, 1.0), 4.0)
+	draw_style_box(_btn_sb(), SEL_BACK_BTN)
+	_btn_label(SEL_BACK_BTN, "< back", 22)
+	var L := lifetime
+	var runs := int(L.get("runs", 0))
+	var tot := int(L.get("total_ft", 0))
+	if runs == 0:
+		_otext(Vector2(0, 420), "no runs yet.\npaddle off and make history!", 22, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		return
+	# hero summary line + a silly derived stat
+	_otext(Vector2(0, 150), "%d runs · best %s ft" % [runs, _commas(int(L.get("best_ft", 0)))],
+		20, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	var marathons := float(tot) / 138336.0          # 26.2 mi in feet
+	_otext(Vector2(0, 178), "%s ft paddled — about %.1f marathons!" % [_commas(tot), marathons],
+		15, Color(0.8, 0.9, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	# recent-runs distance graph (oldest left -> newest right)
+	_stats_graph(Rect2(28.0, 208.0, VIEW.x - 56.0, 138.0))
+	# the silly/deep counter grid
+	var fav := _fav_duck()
+	_otext(Vector2(0, 372), "favourite duck: %s" % fav, 15, Color(1, 1, 1, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	var rows := [
+		["hops", "hops"], ["quacks", "quacks"],
+		["snacks eaten", "snacks"], ["powers drafted", "upgrades"],
+		["herons stomped", "herons"], ["turtles stomped", "turtles"],
+		["ducklings raised", "ducklings"], ["ducklings lost", "lost"],
+		["specials fired", "specials"], ["times ablaze", "fires"],
+		["bosses bested", "bosses"], ["blessings taken", "boons"],
+	]
+	var gx := 36.0
+	var gw := (VIEW.x - 72.0 - 16.0) / 2.0
+	var gy := 404.0
+	for i in rows.size():
+		var col := i % 2
+		var row := i / 2
+		var rc := Rect2(gx + col * (gw + 16.0), gy + row * 50.0, gw, 44.0)
+		var cb := StyleBoxFlat.new()
+		cb.bg_color = Color(0.07, 0.12, 0.18, 0.9); cb.set_corner_radius_all(10)
+		cb.set_border_width_all(1); cb.border_color = Color(1, 1, 1, 0.12)
+		draw_style_box(cb, rc)
+		draw_string(font, rc.position + Vector2(12, 19), rows[i][0], HORIZONTAL_ALIGNMENT_LEFT, gw - 24, 13, Color(1, 1, 1, 0.6))
+		draw_string(font, rc.position + Vector2(0, 34), _commas(int(L.get(rows[i][1], 0))), HORIZONTAL_ALIGNMENT_RIGHT, gw - 14, 19, Color(0.85, 0.95, 1.0))
+	# two wide footer stats: feathers banked + time paddled + top pace
+	var fy := gy + 6 * 50.0 + 6.0
+	_otext(Vector2(0, fy + 8.0), "%s feathers banked · %s paddling · top pace ×%.2f" %
+		[_commas(int(L.get("total_feathers", 0))), _fmt_time(int(L.get("total_secs", 0))), int(L.get("toppace", 100)) / 100.0],
+		14, Color(1, 0.92, 0.55, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
+func _fav_duck() -> String:
+	var counts := {}
+	for r in run_history:
+		var sp: String = r.get("sp", "mallard")
+		counts[sp] = int(counts.get(sp, 0)) + 1
+	var best := ""
+	var bn := 0
+	for sp in counts:
+		if int(counts[sp]) > bn:
+			bn = int(counts[sp]); best = sp
+	if best == "":
+		return "—"
+	for d in ROSTER:
+		if d.species == best:
+			return d.name
+	return best
+
+# a little bar chart of recent run distances — oldest on the left, newest on the right
+func _stats_graph(area: Rect2) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.09, 0.14, 0.9); sb.set_corner_radius_all(10)
+	draw_style_box(sb, area)
+	var n: int = mini(18, run_history.size())
+	if n == 0:
+		return
+	var recent: Array = []
+	for i in range(n):
+		recent.append(int(run_history[i].get("ft", 0)))   # newest-first
+	recent.reverse()                                       # -> oldest-first for L->R reading
+	var mx := 1
+	for v in recent:
+		mx = maxi(mx, v)
+	var bw := (area.size.x - 16.0) / float(n)
+	for i in n:
+		var h: float = (area.size.y - 26.0) * clampf(float(recent[i]) / float(mx), 0.04, 1.0)
+		var bx := area.position.x + 8.0 + i * bw
+		var by := area.position.y + area.size.y - 8.0 - h
+		var best: bool = recent[i] == mx
+		var col := Color(1.0, 0.84, 0.35) if best else Color(0.45, 0.72, 0.95)
+		draw_rect(Rect2(bx, by, bw - 4.0, h), col)
+	draw_string(font, area.position + Vector2(10, 16), "recent runs", HORIZONTAL_ALIGNMENT_LEFT, area.size.x, 12, Color(1, 1, 1, 0.4))
 
 func _flash(msg: String, dur := 1.0) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
@@ -3745,6 +3981,8 @@ func _refresh_hud() -> void:
 	# stepped ramp + your duck's pace + the duckling conga + boons all roll in
 	var thermal := 1.05 if _meta("thermal") else 1.0
 	var mult: float = (speed / BASE_SPEED) * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal
+	if alive and int(mult * 100.0) > int(run_stats.get("toppace", 100)):
+		run_stats["toppace"] = int(mult * 100.0)   # best pace multiplier this run (×100)
 	if mult > 1.04:
 		pace_label.text = "×%.2f" % mult
 		# sit it just right of the ft value, dropped to share the big text's baseline
@@ -3815,6 +4053,10 @@ func _draw() -> void:
 
 	if in_shop:
 		_draw_shop()
+		return
+
+	if in_stats:
+		_draw_stats()
 		return
 
 	if in_shrine:
@@ -4485,6 +4727,11 @@ func _draw_menu() -> void:
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
 	_otext(Vector2(0, 692), "-  tap to play  -", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	# DUCKS + SHOP buttons (plain text: emoji glyph widths wreck centering on Android)
+	var lsb := StyleBoxFlat.new()
+	lsb.bg_color = Color(0.07, 0.12, 0.18, 0.92); lsb.set_corner_radius_all(12)
+	lsb.set_border_width_all(2); lsb.border_color = Color(0.5, 0.8, 1.0, 0.6)
+	draw_style_box(lsb, MENU_STATS_BTN)
+	_btn_label(MENU_STATS_BTN, "LOGBOOK", 20, Color(0.75, 0.9, 1.0))
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
 	_btn_label(MENU_DUCKS_BTN, "DUCKS", 24, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
@@ -4562,8 +4809,7 @@ func _shop_press(pos: Vector2) -> void:
 	if SHOP_RUSTY_RECT.has_point(pos):             # tap the shopkeeper -> he SCREECHES a quip
 		shop_screech_t = anim_t
 		shop_line = SHOP_GREETS[randi() % SHOP_GREETS.size()]
-		_sfx("fwoosh", 1.5, -2.0)                  # a sharp raptor SKREE
-		_sfx("quack", 1.7, 2.0)
+		_sfx("screech", randf_range(0.95, 1.08), 1.0)   # a proper red-tailed hawk scream
 		return
 	for i in _shop_count():
 		if not _shop_card_rect(i).has_point(pos):
@@ -4600,23 +4846,23 @@ func _shop_press(pos: Vector2) -> void:
 		return
 
 func _draw_shop() -> void:
-	# RUSTY the red-tailed hawk tends the shop — TAP him and he screeches a quip (like a duck)
+	# RUSTY the red-tailed hawk tends the shop from his top-right perch — TAP him to screech
 	if not tex_hawk.is_empty():
-		var rp := Vector2(86.0, 138.0)
+		var rp := Vector2(VIEW.x - 86.0, 150.0)
 		var screeching: bool = anim_t - shop_screech_t < 0.45
 		var rfr: Texture2D = tex_hawk[int(anim_t * 4.0) % tex_hawk.size()]
 		if screeching and tex_hawk_screech != null:
 			rfr = tex_hawk_screech
 		var bob: float = (sin(anim_t * 22.0) * 3.0) if screeching else (sin(anim_t * 1.4) * 4.0)
-		draw_set_transform(rp + Vector2(0, bob), sin(anim_t * 1.2) * 0.05, Vector2(-1.0, 1.0))   # face inward
+		draw_set_transform(rp + Vector2(0, bob), sin(anim_t * 1.2) * 0.05, Vector2(1.0, 1.0))   # face inward (left)
 		var rsz: Vector2 = rfr.get_size() * DUCK_DRAW * 0.9
 		draw_texture_rect(rfr, Rect2(-rsz * 0.5, rsz), false)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if anim_t - shop_screech_t < 2.6 and shop_line != "":     # the quip he just screeched
-			_speech_bubble(Vector2(196.0, 168.0), shop_line,
+			_speech_bubble(Vector2(VIEW.x - 196.0, 182.0), shop_line,
 				Color(0.99, 0.93, 0.74, 0.97), Color(0.78, 0.42, 0.16, 0.95), 14, -1.0)
 		else:
-			_otext(Vector2(36, 196), "tap me!", 12, Color(0.85, 0.7, 0.5, 0.55), 120, HORIZONTAL_ALIGNMENT_CENTER, 2)
+			_otext(Vector2(VIEW.x - 146.0, 208.0), "tap me!", 12, Color(0.85, 0.7, 0.5, 0.55), 120, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	_fancy_title("FEATHER SHOP", 96.0, 38, Color(1, 0.9, 0.35), Color(1, 0.58, 0.2), 4.0)
 	_feather_text(Vector2(VIEW.x - 20, 60), "%d" % feathers, 26, Color(1, 0.92, 0.45), "right")
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
