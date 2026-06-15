@@ -5718,8 +5718,8 @@ func _draw_special_picker() -> void:
 		sb.set_border_width_all(2)
 		sb.border_color = Color(0.5, 0.92, 1.0, 0.95) if eq else Color(1, 1, 1, 0.16)
 		draw_style_box(sb, rc)
-		# the live DEMO box on the left
-		var demo := Rect2(rc.position + Vector2(10, 10), Vector2(80, rc.size.y - 20))
+		# the live gameplay DEMO box on the left
+		var demo := Rect2(rc.position + Vector2(10, 10), Vector2(120, rc.size.y - 20))
 		var db := StyleBoxFlat.new()
 		db.bg_color = Color(0.03, 0.06, 0.10, 1.0); db.set_corner_radius_all(10)
 		draw_style_box(db, demo)
@@ -5733,45 +5733,64 @@ func _draw_special_picker() -> void:
 			_otext(Vector2(rc.position.x + rc.size.x - 70.0, rc.position.y + rc.size.y - 10.0), "◆ EQUIPPED", 11, Color(0.5, 0.92, 1.0), 70, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	_otext(Vector2(0, 232.0 + owned.size() * 112.0), "tap outside to close", 13, Color(1, 1, 1, 0.4), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 
-# a small looping animation per special — the "show me what it does" demo
+# a tiny LIVE gameplay vignette per special, drawn with the real sprites
 func _draw_special_demo(id: String, box: Rect2) -> void:
-	var c := box.get_center()
+	# WILD: cycle through the others' real vignettes (it fires a random one)
+	if id == "wild":
+		var ids := ["mega", "laser", "slowmo", "afterburner"]
+		_draw_special_demo(ids[int(anim_t / 1.3) % 4], box)
+		draw_circle(box.position + Vector2(box.size.x - 12, 12), 8.0, Color(0.5, 0.85, 1.0, 0.85))
+		_otext(box.position + Vector2(box.size.x - 20, 16), "?", 12, Color(0.05, 0.1, 0.16), 16, HORIZONTAL_ALIGNMENT_CENTER, 0)
+		return
+	# water tint floor so it reads like the river
+	draw_rect(Rect2(box.position + Vector2(0, box.size.y * 0.5), Vector2(box.size.x, box.size.y * 0.5)), Color(0.08, 0.22, 0.34, 0.5))
+	var gy: float = box.position.y + box.size.y - 16.0      # the waterline the duck rides
+	var cx: float = box.position.x + box.size.x * 0.5
 	var t: float = fmod(anim_t, 1.6) / 1.6                  # 0..1 loop
+	var dk: Dictionary = ducks.get("mallard", {})
+	var hop: Array = dk.get("hop", [])
+	var dtex = hop[int(anim_t * 12.0) % 2] if hop.size() >= 2 else null
+	var dsc := 0.42
 	match id:
-		"mega":                                            # a duck LEAPS up in an arc and slams
-			var ph := sin(t * PI)                           # 0 ground -> 1 apex -> 0 ground
-			var dp := c + Vector2(0, box.size.y * 0.32 - ph * box.size.y * 0.5)
-			if t > 0.92:                                    # landing shock
-				draw_arc(c + Vector2(0, box.size.y * 0.32), 26.0 * (t - 0.92) / 0.08, 0, TAU, 16, Color(1, 0.9, 0.5, 1.0 - (t - 0.92) / 0.08), 2.0)
-			draw_circle(dp, 9.0, Color(1.0, 0.86, 0.4))
-			draw_circle(dp + Vector2(4, -3), 2.0, Color(0.1, 0.1, 0.1))
-		"laser":                                           # a beam sweeps and pops dots
-			draw_circle(c + Vector2(-box.size.x * 0.34, 0), 8.0, Color(1.0, 0.86, 0.4))
-			var bx := lerpf(-box.size.x * 0.28, box.size.x * 0.42, t)
-			draw_rect(Rect2(c.x - box.size.x * 0.3, c.y - 2.5, bx + box.size.x * 0.3, 5.0), Color(0.5, 0.95, 1.0))
-			for k in 3:
-				var px := c.x + (k - 1) * 18.0
-				if px > c.x - box.size.x * 0.3 + bx:
-					draw_circle(Vector2(px, c.y), 4.0, Color(0.7, 0.2, 0.2))
-		"afterburner":                                     # a duck dashes right with a fire trail
-			var ax := lerpf(-box.size.x * 0.32, box.size.x * 0.34, t)
-			for k in 5:
-				draw_circle(c + Vector2(ax - k * 7.0, 0), 6.0 - k, Color(1.0, 0.55 - k * 0.06, 0.12, 0.8 - k * 0.14))
-			draw_circle(c + Vector2(ax, 0), 8.0, Color(1.0, 0.86, 0.4))
-		"slowmo":                                          # dots crawl down; a clock ticks
-			for k in 3:
-				var dy := fmod(t * 22.0 + k * 22.0, 66.0) - 33.0
-				draw_circle(Vector2(c.x + (k - 1) * 16.0, c.y + dy), 4.0, Color(0.7, 0.85, 1.0, 0.8))
-			draw_arc(c, 20.0, 0, TAU, 18, Color(0.6, 0.9, 1.0, 0.5), 2.0)
+		"mega":                                            # leap HIGH over a log, then SLAM down
+			if tex_log != null:
+				_blit_centered(tex_log, Vector2(cx, gy + 2.0), 0.34)
+			var ph := sin(t * PI)
+			var dp := Vector2(cx, gy - 12.0 - ph * (box.size.y * 0.52))
+			if t > 0.9:
+				draw_arc(Vector2(cx, gy), 30.0 * (t - 0.9) / 0.1, 0, TAU, 16, Color(1, 0.9, 0.5, (1.0 - (t - 0.9) / 0.1)), 2.5)
+			if dtex != null: _blit_centered(dtex, dp, dsc * (1.0 + 0.3 * ph))
+		"laser":                                           # FIRE a beam up that vaporizes a heron
+			var hy: float = box.position.y + 14.0 + sin(anim_t * 2.0) * 4.0
+			var firing: bool = t > 0.35
+			if firing:
+				draw_rect(Rect2(cx - 5.0, hy, 10.0, gy - hy - 10.0), Color(0.5, 0.95, 1.0, 0.85))
+				draw_rect(Rect2(cx - 2.0, hy, 4.0, gy - hy - 10.0), Color(0.9, 1.0, 1.0))
+			if not firing and tex_heron.size() > 0:
+				_blit_centered(tex_heron[0], Vector2(cx, hy + 6.0), 0.5)
+			elif firing:
+				for k in 5:
+					draw_circle(Vector2(cx + randf_range(-8, 8), hy + randf_range(0, 12)), 2.0, Color(1.0, 0.5, 0.2, 0.8))
+			if dtex != null: _blit_centered(dtex, Vector2(cx, gy - 10.0), dsc)
+		"afterburner":                                     # DASH across ablaze, trailing real fire
+			var ax := lerpf(box.position.x + 16.0, box.position.x + box.size.x - 16.0, t)
+			if tex_fire.size() > 0:
+				for k in 4:
+					var ff: Texture2D = tex_fire[(int(anim_t * 13.0) + k) % tex_fire.size()]
+					_blit_modulated(ff, Vector2(ax - 8.0 - k * 9.0, gy - 12.0), 0.34, Color(1.0, 0.6 - k * 0.08, 0.2, 0.85 - k * 0.18))
+			if dtex != null: _blit_centered(dtex, Vector2(ax, gy - 12.0), dsc)
+		"slowmo":                                          # a log & heron CRAWL down past a calm duck
+			var sd := fmod(anim_t * 9.0, box.size.y + 20.0)   # slow descent
+			if tex_log != null:
+				_blit_centered(tex_log, Vector2(cx - 22.0, box.position.y + sd - 10.0), 0.3)
+			if tex_heron.size() > 0:
+				_blit_centered(tex_heron[0], Vector2(cx + 24.0, box.position.y + fmod(sd + 30.0, box.size.y + 20.0) - 10.0), 0.42)
+			draw_arc(Vector2(cx, gy - 14.0), 13.0, 0, TAU, 16, Color(0.6, 0.9, 1.0, 0.6), 1.5)
 			var ang := -PI * 0.5 + t * TAU
-			draw_line(c, c + Vector2(cos(ang), sin(ang)) * 16.0, Color(0.7, 0.95, 1.0), 2.0)
-		"wild":                                            # cycles through the other specials' glyphs
-			var ids := ["mega", "laser", "slowmo", "afterburner"]
-			var which: String = ids[int(t * 8.0) % ids.size()]
-			_relic_glyph(which, c, 18.0, Color(0.7, 0.95, 1.0))
-			draw_arc(c, 26.0, 0, TAU, 18, Color(0.6, 0.9, 1.0, 0.3), 1.5)
+			draw_line(Vector2(cx, gy - 14.0), Vector2(cx, gy - 14.0) + Vector2(cos(ang), sin(ang)) * 10.0, Color(0.7, 0.95, 1.0), 1.5)
+			if dtex != null: _blit_centered(dtex, Vector2(cx, gy - 8.0), dsc)
 		_:
-			_relic_glyph(id, c, 18.0, Color(0.7, 0.95, 1.0))
+			if dtex != null: _blit_centered(dtex, Vector2(cx, gy - 8.0), dsc)
 
 func _blit_modulated(tex, pos: Vector2, scale: float, mod: Color) -> void:
 	if tex == null:
