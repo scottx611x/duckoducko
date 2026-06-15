@@ -1201,6 +1201,7 @@ func _dbg() -> void:
 	boss_globs.append({"x": 150.0, "y": 300.0, "vx": -60.0, "vy": 180.0})  # one in flight to show
 	boss.say = "this is MY river."; boss.say_t = anim_t      # show his speech bubble
 	boss.dive_stage = ""; boss.y = 150.0                     # float pose so the bubble sits clean
+	_summon_heron_add(); enemies[enemies.size() - 1].y = 240.0   # a summoned add mid-dive
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
@@ -2832,6 +2833,7 @@ func _start_boss() -> void:
 		"dive_t": gap, "dive_stage": "", "dive_x": 0.0, "hit_cool": 0.0,
 		"daze_t": 0.0, "spit_t": 1.6, "stomped": false,
 		"say": "", "say_t": -10.0, "sub": 0.0,
+		"eternal": final_gerald, "combo2": false, "add_t": 3.0,   # the Eternal's distinct kit
 		"intro": BOSS_INTROS[intro_pool][randi() % BOSS_INTROS[intro_pool].size()],
 	}
 	# the name is shown big by the intro band (_draw_boss_intro) — no redundant flash
@@ -2958,6 +2960,7 @@ func _update_boss(delta: float) -> void:
 				boss = null
 				boss_waves.clear()
 				boss_globs.clear()
+				enemies.clear()                   # sweep away any lingering Eternal adds
 				if music_player != null:
 					music_player.volume_db = 0.0
 
@@ -2972,14 +2975,21 @@ func _boss_fight(delta: float) -> void:
 		if boss.spit_t <= 0.0:
 			_boss_spit()
 			boss.spit_t = (1.4 if boss.phase2 else 2.2) * randf_range(0.85, 1.15)
+		# THE ETERNAL summons spectral heron ADDS that dive your lane mid-fight
+		if boss.eternal:
+			boss.add_t -= delta
+			if boss.add_t <= 0.0:
+				_summon_heron_add()
+				boss.add_t = randf_range(2.3, 3.4) * (0.6 if boss.phase2 else 1.0)
 		if boss.dive_t <= 0.0:
 			boss.dive_stage = "tele"; boss.t = 0.0
 			boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
 			if randf() < 0.5:                        # a little trash talk before he strikes
 				_gerald_say(GERALD_TAUNTS[randi() % GERALD_TAUNTS.size()])
 	elif boss.dive_stage == "tele":          # telegraph: the reticle locks onto the duck
-		boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / 0.6, 0.0, 1.0))
-		if boss.t >= 0.7:
+		var tdur: float = 0.42 if boss.combo2 else 0.7   # the Eternal's 2nd strike is FAST
+		boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / (tdur * 0.85), 0.0, 1.0))
+		if boss.t >= tdur:
 			boss.dive_stage = "down"; boss.t = 0.0
 			_sfx("fwoosh", 0.7)
 	elif boss.dive_stage == "down":
@@ -2987,17 +2997,25 @@ func _boss_fight(delta: float) -> void:
 		boss.x = boss.dive_x
 		boss.y = lerpf(150.0, BASE_Y + 18.0, p)   # slams nose-down into the water
 		if p >= 1.0:
-			boss.dive_stage = "dazed"; boss.t = 0.0
-			boss.daze_t = 1.5 - 0.15 * boss.idx   # tougher Geralds recover quicker
-			boss.stomped = false
+			# the slam ALWAYS lands: shockwave, splash, and a hit if you're caught
 			boss_waves.append({"x": boss.dive_x, "r": 18.0})
 			ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
 			_sfx("splash_big", 0.8)
 			duck_shake = maxf(duck_shake, 0.4)
-			# caught on the water at the impact point = you take the hit
 			if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
 				boss.hit_cool = 1.0
 				_boss_hits_player()
+			# THE ETERNAL chains a SECOND slam at your NEW spot before he's vulnerable
+			if boss.eternal and not boss.combo2 and randf() < 0.6:
+				boss.combo2 = true
+				boss.dive_stage = "tele"; boss.t = 0.0
+				boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+				_gerald_say("AGAIN.")
+			else:
+				boss.dive_stage = "dazed"; boss.t = 0.0
+				boss.daze_t = 1.5 - 0.15 * boss.idx   # tougher Geralds recover quicker
+				boss.stomped = false
+				boss.combo2 = false
 	elif boss.dive_stage == "dazed":
 		# he's beached and woozy, head low — HOP ONTO HIM to stomp
 		boss.y = BASE_Y + 18.0 + sin(anim_t * 3.0) * 3.0
@@ -3091,6 +3109,13 @@ func _boss_stomped() -> void:
 	_hit_boss(1)
 
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
+# THE ETERNAL conjures a lesser heron that dives a random lane — dodge it mid-duel
+func _summon_heron_add() -> void:
+	var hx := randf_range(BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+	enemies.append({"x": hx, "y": -70.0, "vy": speed * 0.5 + 300.0, "id": _next_enemy_id()})
+	_spawn_parts(hx, -40.0, 8, Color(0.7, 0.1, 0.14), 160.0)
+	_sfx("fwoosh", 0.8, -6.0)
+
 func _boss_spit() -> void:
 	var n: int = 3 if boss.phase2 else 2
 	if boss.idx >= 2:                            # the ETERNAL gerald hurls a wider volley
