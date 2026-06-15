@@ -190,7 +190,8 @@ const PAUSE_RESUME_BTN := Rect2(120.0, 470.0, 300.0, 64.0)
 const PAUSE_MENU_BTN := Rect2(160.0, 552.0, 220.0, 52.0)
 const DEATH_MENU_BTN := Rect2(60.0, 636.0, 200.0, 44.0)
 const DEATH_STATS_BTN := Rect2(280.0, 636.0, 200.0, 44.0)   # death-screen LOGBOOK button
-const MENU_STATS_BTN := Rect2(50.0, 700.0, 440.0, 42.0)     # menu LOGBOOK button
+const MENU_STATS_BTN := Rect2(50.0, 700.0, 213.0, 42.0)     # menu LOGBOOK button
+const MENU_CODEX_BTN := Rect2(277.0, 700.0, 213.0, 42.0)    # menu COMPENDIUM button
 
 # duck-select screen (menu buttons get breathing room on phone screens)
 const MENU_DUCKS_BTN := Rect2(50.0, 752.0, 185.0, 58.0)
@@ -329,7 +330,7 @@ const BOONS := [
 	{"id": "clutch",     "tier": 0, "name": "EGG CLUTCH",    "desc": "start with a brood of 4 ducklings", "deal": false},
 	{"id": "trailblazer","tier": 0, "name": "TRAILBLAZER",   "desc": "+22% pace all run — but the herons hunt you +40% harder", "deal": true},
 	{"id": "tailwind",   "tier": 0, "name": "TAILWIND",      "desc": "+18% pace for the entire run",      "deal": false},
-	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "every snack eaten also banks ft — BREADWINNER makes each worth +60% more","deal": false},
+	{"id": "breadwinner","tier": 0, "name": "BREADWINNER",   "desc": "adds feet to your run total for every snack gathered","deal": false},
 	{"id": "nestegg",    "tier": 0, "name": "NEST EGG",      "desc": "pocket 45 feathers right now",      "deal": false},
 	{"id": "goosedown",  "tier": 1, "name": "GOOSE DOWN",    "desc": "start cushioned with 3 shields",    "deal": false},
 	{"id": "lucky",      "tier": 1, "name": "LUCKY DUCK",    "desc": "begin with a random RARE power",    "deal": false},
@@ -493,6 +494,24 @@ const SHOP_GREETS := [
 	"specials win runs, friend.",
 	"browse, browse!",
 ]
+# THE COMPENDIUM: characters & creatures, revealed as you meet them (with lore)
+const CODEX := [
+	{"id": "gerald", "name": "GERALD THE IMMENSE", "tag": "boss · the heron",
+		"lore": "The river's self-appointed landlord: a great blue heron with a grudge and a beak like a boat-hook. Hurls feathers he insists are overdue 'rent'. Dodge his dive, then stomp him while he's dazed."},
+	{"id": "snapz", "name": "SNAPZ", "tag": "boss · the snapper",
+		"lore": "An ancient snapping turtle the size of a manhole cover — armoured, ill-tempered, and far quicker than something that old should be. His shell shrugs off everything; only his jammed, gaping jaws can be stomped."},
+	{"id": "eternal", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
+		"lore": "Gerald came back. Wrong. Bigger, bloodier, and no longer entirely alive, he has crossed back from beyond to reclaim HIS river. The last test of the current."},
+	{"id": "rusty", "name": "RUSTY", "tag": "guide · red-tailed hawk",
+		"lore": "A red-tailed hawk who appointed himself your mentor. Swoops in early to drop a tip (and a theatrical SKREE), then minds the feather shop from his perch. Insists he is NOT just decorative."},
+	{"id": "sadie", "name": "SADIE", "tag": "hazard · the good girl",
+		"lore": "Seventy pounds of wet, joyful chocolate lab in single-minded pursuit of a tennis ball. Means no harm whatsoever; will absolutely flatten you anyway. Never, ever harm-able — just hop clear."},
+	{"id": "elder", "name": "THE ANCIENT DUCK", "tag": "the shrine keeper",
+		"lore": "A bearded mallard older than the pond itself. Appears at the waterline to offer a blessing — richer for ducks who've bested the herons. Speaks mostly in riddles and quacks."},
+]
+var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
+var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
+var in_codex := false
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
 var turtle_timer := 28.0
@@ -882,6 +901,8 @@ func _load_save() -> void:
 		equipped_special = cfg.get_value("save", "equipped_special", "mega")
 		lifetime = cfg.get_value("save", "lifetime", {})
 		run_history = cfg.get_value("save", "run_history", [])
+		codex_seen = cfg.get_value("save", "codex_seen", [])
+		codex_viewed = cfg.get_value("save", "codex_viewed", [])
 		if "mega" not in specials_owned:
 			specials_owned.append("mega")
 		if equipped_special not in specials_owned:
@@ -905,7 +926,23 @@ func _save() -> void:
 	cfg.set_value("save", "equipped_special", equipped_special)
 	cfg.set_value("save", "lifetime", lifetime)
 	cfg.set_value("save", "run_history", run_history)
+	cfg.set_value("save", "codex_seen", codex_seen)
+	cfg.set_value("save", "codex_viewed", codex_viewed)
 	cfg.save("user://save.cfg")
+
+# mark a compendium character as ENCOUNTERED (lights up its entry + the menu NEW badge)
+func _codex_see(id: String) -> void:
+	if id in codex_seen:
+		return
+	codex_seen.append(id)
+	_save()
+
+func _codex_new_count() -> int:
+	var n := 0
+	for id in codex_seen:
+		if id not in codex_viewed:
+			n += 1
+	return n
 
 # does the player own this LOFT special? (scootybooty owns them all)
 func _owns_special(id: String) -> bool:
@@ -1100,6 +1137,14 @@ func _dbg() -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_stats.png")
 	in_stats = false; lifetime = {}; run_history = []
+	# the COMPENDIUM: most met, one still a mystery
+	codex_seen = ["gerald", "snapz", "rusty", "sadie", "elder"]
+	codex_viewed = codex_seen.duplicate()
+	_open_codex()
+	await get_tree().create_timer(0.2).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_codex.png")
+	in_codex = false; codex_seen = []; codex_viewed = []
 	reset_game()
 	# select screen: a locked duck (pintail) with cost text
 	_enter_menu()
@@ -1255,6 +1300,7 @@ func start_game() -> void:
 
 func _open_shrine() -> void:
 	in_shrine = true
+	_codex_see("elder")
 	shrine_open_t = anim_t
 	# only boons you've EARNED (tier <= bosses bested) can appear; beat bosses for richer ones
 	var pool: Array = BOONS.filter(func(b): return b.tier <= prev_run_bosses)
@@ -1451,6 +1497,7 @@ func _spawn_sadie() -> void:
 	var dir := -1.0 if randf() < 0.5 else 1.0
 	var sx := (BANK_W - 50.0) if dir > 0.0 else (VIEW.x - BANK_W + 50.0)
 	sadie = {"x": sx, "y": randf_range(200.0, 430.0), "dir": dir, "t": 0.0, "greeted": false}
+	_codex_see("sadie")
 	_sfx("quack", 0.5, -6.0)                       # the distant BOOF of a happy dog
 	_float_text(sadie.x + dir * 80.0, sadie.y - 56.0, "*boof!*", Color(0.85, 0.62, 0.4))
 
@@ -1494,6 +1541,7 @@ func _update_sadie(delta: float) -> void:
 func _spawn_hawk() -> void:
 	if tex_hawk.is_empty():
 		return
+	_codex_see("rusty")
 	var dir := -1.0 if randf() < 0.5 else 1.0       # dir = travel direction (1 = ->)
 	var sx := -70.0 if dir > 0.0 else VIEW.x + 70.0
 	# RUSTY is an early-game GUIDE: a friendly tip or cheer, nothing to do with bosses
@@ -2000,6 +2048,8 @@ func _on_press(pos: Vector2) -> void:
 			_open_shop()
 		elif MENU_STATS_BTN.has_point(pos):
 			_open_stats(false)
+		elif MENU_CODEX_BTN.has_point(pos):
+			_open_codex()
 		elif anim_t - menu_enter_t > 0.35:
 			start_game()                       # grace: a stray tap can't insta-start
 		return
@@ -2011,6 +2061,9 @@ func _on_press(pos: Vector2) -> void:
 		return
 	if in_stats:
 		_stats_press(pos)
+		return
+	if in_codex:
+		_codex_press(pos)
 		return
 	if not alive:
 		# tap a relic to inspect it (no retry); buttons for menu/logbook; else retry
@@ -2415,7 +2468,7 @@ func _process(delta: float) -> void:
 		if select_line == "" or anim_t - select_line_t > 3.8:
 			select_line = _duck_quip(ROSTER[sel_index].species)
 			select_line_t = anim_t
-	if not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and alive and not drafting and not paused:
+	if not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and not in_codex and alive and not drafting and not paused:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -2752,6 +2805,7 @@ func _start_boss() -> void:
 	boss_globs.clear()
 	var kind := "snapz" if idx == 1 else "gerald"   # the 15k-mark boss is the turtle
 	var final_gerald: bool = kind == "gerald" and idx >= 2
+	_codex_see("snapz" if kind == "snapz" else ("eternal" if final_gerald else "gerald"))
 	var hp := 4 + 2 * idx + boss_hp_bonus       # stomp him this many times to win
 	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
 	var bscale := 1.25                           # GERALD THE IMMENSE is a big bird
@@ -3965,6 +4019,83 @@ func _stats_graph(area: Rect2) -> void:
 		draw_rect(Rect2(bx, by, bw - 4.0, h), col)
 	draw_string(font, area.position + Vector2(10, 16), "recent runs", HORIZONTAL_ALIGNMENT_LEFT, area.size.x, 12, Color(1, 1, 1, 0.4))
 
+# ---- the COMPENDIUM: characters you've met, with lore ------------------------
+func _open_codex() -> void:
+	in_codex = true
+	in_menu = false
+	fade = 0.0
+	name_edit.visible = false
+	score_label.visible = false
+	if pace_label != null: pace_label.visible = false
+	loft_bar.visible = false
+	for id in codex_seen:                          # opening it clears the NEW badge
+		if id not in codex_viewed:
+			codex_viewed.append(id)
+	_save()
+	_sfx("click")
+
+func _codex_press(pos: Vector2) -> void:
+	if SEL_BACK_BTN.has_point(pos):
+		_sfx("click")
+		in_codex = false
+		_enter_menu()
+
+func _codex_tex(id: String):
+	match id:
+		"gerald", "eternal":
+			return tex_gerald[0] if tex_gerald.size() > 0 else null
+		"snapz":
+			return tex_snapz[0] if tex_snapz.size() > 0 else null
+		"rusty":
+			return tex_hawk[0] if tex_hawk.size() > 0 else null
+		"sadie":
+			return tex_sadie[0] if tex_sadie.size() > 0 else null
+		"elder":
+			return tex_elder
+	return null
+
+func _draw_codex() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.04, 0.05, 0.09, 1.0))
+	_fancy_title("COMPENDIUM", 92.0, 34, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
+	draw_style_box(_btn_sb(), SEL_BACK_BTN)
+	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_otext(Vector2(0, 128), "%d of %d souls of the river met" % [codex_seen.size(), CODEX.size()],
+		14, Color(1, 1, 1, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	var pitch := 124.0
+	for i in CODEX.size():
+		var e: Dictionary = CODEX[i]
+		var seen: bool = e.id in codex_seen
+		var rc := Rect2(26.0, 150.0 + i * pitch, VIEW.x - 52.0, pitch - 12.0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.09, 0.14, 0.95); sb.set_corner_radius_all(14)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(0.9, 0.7, 0.4, 0.55) if seen else Color(1, 1, 1, 0.12)
+		draw_style_box(sb, rc)
+		# portrait box on the left
+		var box := Rect2(rc.position + Vector2(10, 10), Vector2(92, rc.size.y - 20))
+		var bsb := StyleBoxFlat.new()
+		bsb.bg_color = Color(0.03, 0.05, 0.09, 0.9); bsb.set_corner_radius_all(10)
+		draw_style_box(bsb, box)
+		var tex = _codex_tex(e.id)
+		if seen and tex != null:
+			var fit: float = minf((box.size.x - 14.0) / tex.get_size().x, (box.size.y - 14.0) / tex.get_size().y)
+			if e.id == "eternal":                  # the undead twin reads bloody-red
+				_blit_modulated(tex, box.get_center(), fit, Color(1.5, 0.4, 0.42))
+			else:
+				_blit_centered(tex, box.get_center(), fit)
+		else:
+			_otext(Vector2(box.position.x, box.get_center().y + 12.0), "?", 48, Color(1, 1, 1, 0.25), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		# text on the right
+		var tx := box.position.x + box.size.x + 14.0
+		var tw := rc.position.x + rc.size.x - tx - 12.0
+		if seen:
+			draw_string(font, Vector2(tx, rc.position.y + 28.0), e.name, HORIZONTAL_ALIGNMENT_LEFT, tw, 19, Color(1, 0.92, 0.55))
+			draw_string(font, Vector2(tx, rc.position.y + 46.0), e.tag, HORIZONTAL_ALIGNMENT_LEFT, tw, 12, Color(0.7, 0.85, 1.0, 0.8))
+			_mtext(Vector2(tx, rc.position.y + 56.0 + font.get_ascent(12.5)), e.lore, 12, Color(1, 1, 1, 0.72), tw, HORIZONTAL_ALIGNMENT_LEFT)
+		else:
+			draw_string(font, Vector2(tx, rc.position.y + 30.0), "? ? ?", HORIZONTAL_ALIGNMENT_LEFT, tw, 22, Color(1, 1, 1, 0.4))
+			draw_string(font, Vector2(tx, rc.position.y + 56.0), "not yet encountered", HORIZONTAL_ALIGNMENT_LEFT, tw, 14, Color(1, 1, 1, 0.35))
+
 func _flash(msg: String, dur := 1.0) -> void:
 	center_label.add_theme_font_size_override("font_size", 44)
 	center_label.text = msg
@@ -4057,6 +4188,10 @@ func _draw() -> void:
 
 	if in_stats:
 		_draw_stats()
+		return
+
+	if in_codex:
+		_draw_codex()
 		return
 
 	if in_shrine:
@@ -4731,7 +4866,16 @@ func _draw_menu() -> void:
 	lsb.bg_color = Color(0.07, 0.12, 0.18, 0.92); lsb.set_corner_radius_all(12)
 	lsb.set_border_width_all(2); lsb.border_color = Color(0.5, 0.8, 1.0, 0.6)
 	draw_style_box(lsb, MENU_STATS_BTN)
-	_btn_label(MENU_STATS_BTN, "LOGBOOK", 20, Color(0.75, 0.9, 1.0))
+	_btn_label(MENU_STATS_BTN, "LOGBOOK", 19, Color(0.75, 0.9, 1.0))
+	draw_style_box(lsb, MENU_CODEX_BTN)
+	_btn_label(MENU_CODEX_BTN, "CODEX", 19, Color(0.75, 0.9, 1.0))
+	# a "NEW!" badge on the codex button when undiscovered entries await
+	var newc := _codex_new_count()
+	if newc > 0:
+		var bp := MENU_CODEX_BTN.position + Vector2(MENU_CODEX_BTN.size.x - 14.0, 2.0)
+		var npulse := 0.6 + 0.4 * sin(anim_t * 5.0)
+		draw_circle(bp, 13.0, Color(1.0, 0.32, 0.3, npulse))
+		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
 	_btn_label(MENU_DUCKS_BTN, "DUCKS", 24, Color(1, 1, 1, 0.95))
 	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
