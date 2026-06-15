@@ -876,7 +876,7 @@ def build_sadie(frame=0):
     return V
 
 
-def build_hawk(frame=0):
+def build_hawk(frame=0, beak_open=False):
     """RUSTY the red-tailed hawk: the game's friendly know-it-all GUIDE, caught
     mid glide-flap as he swoops across the sky to drop a tip. Built to read as a
     red-tail at a glance from a 3/4 side angle: dark-brown back & head, a pale
@@ -955,6 +955,10 @@ def build_hawk(frame=0):
     put(0, 1, 8, CERE); put(1, 1, 8, CERE, only_empty=True); put(-1, 1, 8, CERE, only_empty=True)
     put(0, 1, 9, BEAK)                                                 # beak juts forward
     put(0, 0, 10, BEAKD)                                              # tip curls down to a dark hook
+    if beak_open:                                                     # SCREECH: lower mandible drops, red maw gapes
+        MAW = (164, 54, 52)
+        put(0, -1, 9, BEAK); put(0, -2, 9, BEAKD)                    # dropped lower beak
+        put(0, 0, 9, MAW); put(0, -1, 8, MAW)                        # the open red gape
     # ---- yellow legs + grabby TALONS tucked under in flight ----
     for s in (1, -1):
         put(s, -2, 0, BROWNL)                                          # feathered thigh
@@ -1115,6 +1119,9 @@ def generate_critters(art_dir):
     hbb = (max(0, hbb[0] - 3), max(0, hbb[1] - 3), min(160, hbb[2] + 3), min(160, hbb[3] + 3))
     for f, im in enumerate(hawk_imgs):
         save(im.crop(hbb), "hawk_%d.png" % f)
+    # a beak-agape SCREECH pose (level glide), cropped to the SAME bbox so he holds still
+    screech = render(shade(build_hawk(0, beak_open=True)), math.radians(20), math.radians(22), out=160, scale=3.4)
+    save(screech.crop(hbb), "hawk_screech.png")
     # duckling: back view to match gameplay camera
     gy = math.radians(GAME_YAW)
     SHd = shade(build_duckling("folded"))

@@ -456,6 +456,10 @@ var sadie_timer := 40.0
 var hawk = null
 var hawk_timer := 18.0          # first fly-by comes early so he introduces himself
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
+var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
+var shop_screech_t := -9.0      # anim_t of the last tap on the shopkeeper
+var shop_line := ""             # the line he screeched (tap-triggered, not auto)
+const SHOP_RUSTY_RECT := Rect2(28.0, 86.0, 140.0, 110.0)   # tap-zone for the shopkeeper
 var hawk_visits := true         # RUSTY only guides on every OTHER run
 var runs_started := 0           # total runs (persisted) — RUSTY visits on odd ones
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
@@ -473,6 +477,16 @@ const HAWK_LINES := [
 	"Beat a boss and the Ancient Duck blesses your NEXT run richer. Greed pays here.",
 	"Double Hop, friend — flap AGAIN at the peak for a second, glorious ascent.",
 	"Psst. Name your duck something... daring. The river rewards the bold. *winks*",
+]
+# RUSTY's patter while he minds the shop counter (keep 'em SHORT — small bubble)
+const SHOP_GREETS := [
+	"welcome to my perch!",
+	"spend it, don't hoard it.",
+	"feathers burning a hole?",
+	"finest wares on the river.",
+	"a discerning duck, I see.",
+	"specials win runs, friend.",
+	"browse, browse!",
 ]
 # a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
 var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
@@ -614,6 +628,8 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://art/hawk_0.png"):
 		tex_hawk = [load("res://art/hawk_0.png"), load("res://art/hawk_1.png"),
 			load("res://art/hawk_2.png")]
+	if ResourceLoader.exists("res://art/hawk_screech.png"):
+		tex_hawk_screech = load("res://art/hawk_screech.png")
 	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
 		var fp := "res://art/fire_duck_%d.png" % fi
 		if ResourceLoader.exists(fp):
@@ -754,7 +770,7 @@ func _smoke() -> void:
 	print("SMOKE menu ok, has_art=", has_art, " sfx=", sfx.size())
 	feathers = 500
 	_open_shop()
-	_shop_press(_shop_row(0).get_center())             # buy DOWN JACKET
+	_shop_press(_shop_card_rect(0).get_center())       # buy DOWN JACKET
 	_enter_menu()
 	print("SMOKE shop jacket=", _meta("jacket"), " feathers=", feathers)
 	_open_select()
@@ -1062,11 +1078,17 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_locked.png")
-	# the feather shop (now 8 items — check the adaptive rows fit)
+	# the FEATHER SHOP: PERKS + SPECIALS card grid, RUSTY shopkeeper mid-screech
 	_open_shop()
-	await get_tree().create_timer(0.1).timeout
+	feathers = 600
+	meta_owned = ["jacket", "earlybird"]
+	specials_owned = ["mega", "laser"]
+	equipped_special = "laser"
+	shop_screech_t = anim_t; shop_line = "finest wares on the river."
+	await get_tree().create_timer(0.2).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_shop.png")
+	feathers = 0; meta_owned = []; specials_owned = ["mega"]; equipped_special = "mega"
 	# a SECRET duck in select (should read "??? SECRET ???", hidden name)
 	_open_select()
 	sel_index = ROSTER.size() - 2          # disco (locked secret)
@@ -3358,7 +3380,7 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 				c + Vector2(-s, s * 0.6)]), col)
 			draw_colored_polygon(PackedVector2Array([c + Vector2(s * 0.1, -s * 0.7), c + Vector2(s, 0),
 				c + Vector2(s * 0.1, s * 0.7)]), col)
-		"_shield", "shield":                               # a proper SHIELD crest
+		"_shield", "shield", "jacket":                     # a proper SHIELD crest
 			draw_colored_polygon(PackedVector2Array([c + Vector2(-s, -s * 0.9), c + Vector2(s, -s * 0.9),
 				c + Vector2(s, s * 0.2), c + Vector2(0, s * 1.1), c + Vector2(-s, s * 0.2)]), col)
 			draw_line(c + Vector2(0, -s * 0.5), c + Vector2(0, s * 0.6), Color(0.07, 0.11, 0.16), 2.0)
@@ -3377,12 +3399,12 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 			var wp := PackedVector2Array()
 			for i in 9: wp.append(c + Vector2(-s + i * s / 4.0, sin(i * 0.9) * s * 0.4))
 			draw_polyline(wp, col, 2.0)
-		"loft":                                            # an up-chevron (lift)
+		"loft", "warmup":                                  # an up-chevron (lift)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.4), c + Vector2(0, -s * 0.7), c + Vector2(s, s * 0.4)]), col, 3.0)
 		"double":                                          # two up-chevrons
 			draw_polyline(PackedVector2Array([c + Vector2(-s, 0), c + Vector2(0, -s), c + Vector2(s, 0)]), col, 2.5)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, s * 0.7), c + Vector2(0, -s * 0.3), c + Vector2(s, s * 0.7)]), col, 2.5)
-		"clutch":                                          # EGG CLUTCH: a single smooth egg
+		"clutch", "egghead":                               # EGG CLUTCH: a single smooth egg
 			var pts := PackedVector2Array()
 			for i in 20:
 				var a: float = TAU * i / 20.0
@@ -3407,12 +3429,12 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"lucky":                                           # a lucky four-leaf clover
 			for a in [0.0, 90.0, 180.0, 270.0]:
 				draw_circle(c + Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a))) * s * 0.5, s * 0.4, col)
-		"gold":                                            # a coin
+		"gold", "pockets":                                 # a coin
 			draw_circle(c, s, col); draw_circle(c, s * 0.7, Color(0.07, 0.11, 0.16))
 			draw_circle(c, s * 0.45, col)
 		"nestegg":                                         # an egg
 			draw_circle(c + Vector2(0, s * 0.15), s * 0.7, col)
-		"snackhawk", "wingducks":                          # wings / talon (a W)
+		"snackhawk", "wingducks", "earlybird":             # wings / talon (a W)
 			draw_polyline(PackedVector2Array([c + Vector2(-s, -s * 0.3), c + Vector2(-s * 0.4, s * 0.4),
 				c + Vector2(0, -s * 0.4), c + Vector2(s * 0.4, s * 0.4), c + Vector2(s, -s * 0.3)]), col, 2.0)
 		"buffet":                                          # a fork
@@ -3424,14 +3446,14 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 		"cannon":                                          # a cannon
 			draw_circle(c + Vector2(-s * 0.3, s * 0.3), s * 0.5, col)
 			draw_line(c + Vector2(-s * 0.2, 0), c + Vector2(s, -s * 0.6), col, 4.0)
-		"hotwheels":                                       # a flame
+		"hotwheels", "thermal":                            # a flame
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s * 0.7, s * 0.3),
 				c + Vector2(s * 0.3, s), c + Vector2(-s * 0.3, s), c + Vector2(-s * 0.7, s * 0.3)]), col)
-		"tailwind":                                        # wind: three speed lines
+		"tailwind", "flyer":                               # wind: three speed lines
 			for dy in [-s * 0.5, 0.0, s * 0.5]:
 				draw_line(c + Vector2(-s, dy), c + Vector2(s * 0.6, dy), col, 2.0)
 				draw_line(c + Vector2(s * 0.6, dy), c + Vector2(s * 0.2, dy - s * 0.3), col, 2.0)
-		"breadwinner":                                     # a loaf of bread
+		"breadwinner", "basket":                           # a loaf of bread
 			draw_arc(c + Vector2(0, s * 0.3), s, PI, TAU, 14, col, 3.0)
 			draw_line(c + Vector2(-s, s * 0.3), c + Vector2(s, s * 0.3), col, 3.0)
 		"famine":                                          # an empty bowl
@@ -3505,6 +3527,28 @@ func _draw_run_timeline() -> void:
 		draw_texture_rect(hero, Rect2(Vector2(dx, y) - hs * 0.5, hs), false)
 	else:
 		draw_circle(Vector2(dx, y), mr - 4.0, Color(0.97, 0.84, 0.27))
+
+# a playful CENTERED title: each letter bobs on its own, two-tone shimmer, chunky outline
+func _fancy_title(text: String, cy: float, size: int, c1: Color, c2: Color, amp := 5.0) -> void:
+	var total := 0.0
+	for i in text.length():
+		total += font.get_char_size(text.unicode_at(i), size).x
+	var x := VIEW.x * 0.5 - total * 0.5
+	var outl := [Vector2(-3, 0), Vector2(3, 0), Vector2(0, -3), Vector2(0, 3),
+		Vector2(-2, -2), Vector2(2, -2), Vector2(-2, 2), Vector2(2, 2)]
+	for i in text.length():
+		var code := text.unicode_at(i)
+		var cw: float = font.get_char_size(code, size).x
+		var bob: float = sin(anim_t * 3.0 + i * 0.55) * amp
+		var p := Vector2(x, cy + bob)
+		var col: Color = c1.lerp(c2, 0.5 + 0.5 * sin(float(i) * 0.6))
+		if text[i] != " ":
+			for o in outl:
+				draw_char(font, p + o, text[i], size, Color(0.06, 0.08, 0.12, 0.92))
+			# a little top highlight for a candy look
+			draw_char(font, p + Vector2(0, -1.5), text[i], size, col.lightened(0.35))
+			draw_char(font, p, text[i], size, col)
+		x += cw
 
 func _otext(pos: Vector2, txt: String, size: int, col: Color, width := -1.0,
 		align := HORIZONTAL_ALIGNMENT_CENTER, osize := 6) -> void:
@@ -4409,7 +4453,7 @@ func _draw_menu() -> void:
 	var cx := VIEW.x * 0.5
 	# title
 	var tbob := sin(anim_t * 2.0) * 6.0
-	_otext(Vector2(0, 200 + tbob), "DUCKODUCKO", 66, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 12)
+	_fancy_title("DUCKODUCKO", 200.0, 66, Color(1, 0.9, 0.33), Color(1, 0.55, 0.18), 7.0)
 	_otext(Vector2(0, 246 + tbob), "a whimsical duck hopper", 24, Color(0.95, 0.97, 1.0, 0.85))
 	var fact: String = FACTS[int(anim_t / 5.0) % FACTS.size()]
 	_mtext(Vector2(30, 284), "duck fact: " + fact, 17, Color(1, 1, 1, 0.6), VIEW.x - 60.0, HORIZONTAL_ALIGNMENT_CENTER, 4)
@@ -4491,19 +4535,38 @@ func _spin_frame(sp: String, yaw: float, beak_open := false):
 func _shop_count() -> int:
 	return META.size() + SPECIALS.size() - 1
 
-func _shop_row(i: int) -> Rect2:
-	# pitch shrinks as the catalogue grows so the rows always fit on screen
-	var top := 176.0
-	var pitch: float = minf(SHOP_ROW_H + 14.0, (952.0 - top) / float(_shop_count()))
-	return Rect2(50.0, top + i * pitch, VIEW.x - 100.0, pitch - 12.0)
+# 2-column card grid: PERKS up top, then the LOFT SPECIALS band below
+const SHOP_PERK_Y := 214.0
+const SHOP_SPEC_Y := 690.0
+func _shop_card_rect(i: int) -> Rect2:
+	var cw := 240.0
+	var ch := 94.0
+	var gx := 12.0
+	var gy := 12.0
+	var x0 := (VIEW.x - (cw * 2.0 + gx)) * 0.5
+	var col: int
+	var row: int
+	var band_y: float
+	if i < META.size():
+		col = i % 2; row = i / 2; band_y = SHOP_PERK_Y
+	else:
+		var k: int = i - META.size()
+		col = k % 2; row = k / 2; band_y = SHOP_SPEC_Y
+	return Rect2(x0 + col * (cw + gx), band_y + row * (ch + gy), cw, ch)
 
 func _shop_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.has_point(pos):
 		_sfx("click")
 		_enter_menu()
 		return
+	if SHOP_RUSTY_RECT.has_point(pos):             # tap the shopkeeper -> he SCREECHES a quip
+		shop_screech_t = anim_t
+		shop_line = SHOP_GREETS[randi() % SHOP_GREETS.size()]
+		_sfx("fwoosh", 1.5, -2.0)                  # a sharp raptor SKREE
+		_sfx("quack", 1.7, 2.0)
+		return
 	for i in _shop_count():
-		if not _shop_row(i).has_point(pos):
+		if not _shop_card_rect(i).has_point(pos):
 			continue
 		if i < META.size():                        # a permanent META perk
 			var m: Dictionary = META[i]
@@ -4514,7 +4577,7 @@ func _shop_press(pos: Vector2) -> void:
 				meta_owned.append(m.id)
 				_save()
 				_sfx("unlock")
-				_spawn_parts(VIEW.x * 0.5, _shop_row(i).get_center().y, 14, Color(1, 0.86, 0.35), 200.0)
+				_spawn_parts(_shop_card_rect(i).get_center().x, _shop_card_rect(i).get_center().y, 14, Color(1, 0.86, 0.35), 200.0)
 			else:
 				_sfx("bonk", 1.4, -8.0)
 		else:                                      # a LOFT special: buy it, or equip if owned
@@ -4530,76 +4593,81 @@ func _shop_press(pos: Vector2) -> void:
 				equipped_special = sp.id
 				_save()
 				_sfx("unlock"); _sfx("chime", 1.6)
-				_spawn_parts(VIEW.x * 0.5, _shop_row(i).get_center().y, 16, Color(0.5, 0.9, 1.0), 220.0)
+				_spawn_parts(_shop_card_rect(i).get_center().x, _shop_card_rect(i).get_center().y, 16, Color(0.5, 0.9, 1.0), 220.0)
 				_flash("%s UNLOCKED!" % sp.name)
 			else:
 				_sfx("bonk", 1.4, -8.0)
 		return
 
 func _draw_shop() -> void:
-	_otext(Vector2(0, 104), "FEATHER SHOP", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
-	_otext(Vector2(0, 140), "permanent. every run. very duck.", 16, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	# RUSTY the red-tailed hawk tends the shop — TAP him and he screeches a quip (like a duck)
+	if not tex_hawk.is_empty():
+		var rp := Vector2(86.0, 138.0)
+		var screeching: bool = anim_t - shop_screech_t < 0.45
+		var rfr: Texture2D = tex_hawk[int(anim_t * 4.0) % tex_hawk.size()]
+		if screeching and tex_hawk_screech != null:
+			rfr = tex_hawk_screech
+		var bob: float = (sin(anim_t * 22.0) * 3.0) if screeching else (sin(anim_t * 1.4) * 4.0)
+		draw_set_transform(rp + Vector2(0, bob), sin(anim_t * 1.2) * 0.05, Vector2(-1.0, 1.0))   # face inward
+		var rsz: Vector2 = rfr.get_size() * DUCK_DRAW * 0.9
+		draw_texture_rect(rfr, Rect2(-rsz * 0.5, rsz), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if anim_t - shop_screech_t < 2.6 and shop_line != "":     # the quip he just screeched
+			_speech_bubble(Vector2(196.0, 168.0), shop_line,
+				Color(0.99, 0.93, 0.74, 0.97), Color(0.78, 0.42, 0.16, 0.95), 14, -1.0)
+		else:
+			_otext(Vector2(36, 196), "tap me!", 12, Color(0.85, 0.7, 0.5, 0.55), 120, HORIZONTAL_ALIGNMENT_CENTER, 2)
+	_fancy_title("FEATHER SHOP", 96.0, 38, Color(1, 0.9, 0.35), Color(1, 0.58, 0.2), 4.0)
 	_feather_text(Vector2(VIEW.x - 20, 60), "%d" % feathers, 26, Color(1, 0.92, 0.45), "right")
 	draw_style_box(_btn_sb(), SEL_BACK_BTN)
 	_btn_label(SEL_BACK_BTN, "< back", 22)
+	# PERKS section
+	_otext(Vector2(40, SHOP_PERK_Y - 30.0), "PERMANENT PERKS", 16, Color(1, 0.86, 0.4, 0.8), VIEW.x - 80, HORIZONTAL_ALIGNMENT_LEFT, 3)
 	for i in META.size():
-		var rc := _shop_row(i)
 		var m: Dictionary = META[i]
-		var owned := _meta(m.id)
-		var affordable: bool = feathers >= m.cost
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.07, 0.13, 0.19, 0.93)
-		sb.set_corner_radius_all(16)
-		sb.set_border_width_all(2)
-		if owned:
-			sb.border_color = Color(0.45, 0.85, 0.5, 0.9)
-		elif affordable:
-			sb.border_color = Color(1, 0.86, 0.35, 0.7 + 0.3 * sin(anim_t * 4.0 + i))
-		else:
-			sb.border_color = Color(1, 1, 1, 0.18)
-		draw_style_box(sb, rc)
-		var tcol := Color.WHITE if (owned or affordable) else Color(1, 1, 1, 0.55)
-		draw_string(font, Vector2(rc.position.x + 22, rc.position.y + 40), m.name,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 140, 25, tcol)
-		draw_string(font, Vector2(rc.position.x + 22, rc.position.y + 70), m.desc,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 140, 17, Color(1, 1, 1, 0.65))
-		if owned:
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 56), "OWNED",
-				HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 20, 20, Color(0.45, 0.85, 0.5))
-		else:
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 56), "%d feathers" % m.cost,
-				HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 20, 22,
-				Color(1, 0.86, 0.35) if affordable else Color(1, 1, 1, 0.45))
-	# the LOFT SPECIALS section — buy a new special, or tap an owned one to equip it
+		_shop_card(_shop_card_rect(i), m.id, m.name, m.desc, m.cost, _meta(m.id), false, false)
+	# LOFT SPECIALS section — buy a new special, or tap an owned one to equip it
+	_otext(Vector2(40, SHOP_SPEC_Y - 30.0), "LOFT SPECIALS  ·  tap to equip", 16, Color(0.5, 0.92, 1.0, 0.85), VIEW.x - 80, HORIZONTAL_ALIGNMENT_LEFT, 3)
 	for si in range(1, SPECIALS.size()):
 		var sp: Dictionary = SPECIALS[si]
-		var rc := _shop_row(META.size() + si - 1)
-		var owned := _owns_special(sp.id)
-		var equipped: bool = equipped_special == sp.id
-		var affordable: bool = feathers >= sp.cost
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.05, 0.13, 0.18, 0.94)
-		sb.set_corner_radius_all(16)
-		sb.set_border_width_all(2)
-		if equipped:
-			sb.border_color = Color(0.5, 0.92, 1.0, 0.95)
-		elif owned:
-			sb.border_color = Color(0.4, 0.7, 0.8, 0.7)
-		elif affordable:
-			sb.border_color = Color(0.5, 0.85, 1.0, 0.6 + 0.4 * sin(anim_t * 4.0 + si))
-		else:
-			sb.border_color = Color(1, 1, 1, 0.18)
-		draw_style_box(sb, rc)
-		_relic_glyph(sp.id, rc.position + Vector2(30, rc.size.y * 0.5), 12.0, Color(0.6, 0.92, 1.0))
-		var tcol := Color.WHITE if (owned or affordable) else Color(1, 1, 1, 0.55)
-		draw_string(font, Vector2(rc.position.x + 56, rc.position.y + 36), "%s  ✦special" % sp.name,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 150, 23, tcol)
-		draw_string(font, Vector2(rc.position.x + 56, rc.position.y + 62), sp.desc,
-			HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 60, 15, Color(1, 1, 1, 0.62))
-		var tag := "EQUIPPED" if equipped else ("tap to equip" if owned else "%d feathers" % sp.cost)
-		var tagcol := Color(0.5, 0.92, 1.0) if equipped else (Color(0.6, 0.8, 0.9) if owned else (Color(0.5, 0.85, 1.0) if affordable else Color(1, 1, 1, 0.45)))
-		draw_string(font, Vector2(rc.position.x, rc.position.y + 34), tag,
-			HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 18, 18, tagcol)
+		_shop_card(_shop_card_rect(META.size() + si - 1), sp.id, sp.name, sp.desc, sp.cost,
+			_owns_special(sp.id), true, equipped_special == sp.id)
+
+# one shop card — icon, name, wrapped blurb, and a price / OWNED / EQUIPPED tag
+func _shop_card(rc: Rect2, id: String, nm: String, desc: String, cost: int, owned: bool, special: bool, equipped: bool) -> void:
+	var affordable: bool = feathers >= cost
+	var accent := Color(0.5, 0.92, 1.0) if special else Color(1, 0.86, 0.4)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.13, 0.18, 0.95) if special else Color(0.07, 0.12, 0.18, 0.95)
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(2)
+	if equipped:
+		sb.border_color = Color(0.5, 0.92, 1.0, 0.95)
+	elif owned:
+		sb.border_color = Color(0.45, 0.85, 0.5, 0.85)
+	elif affordable:
+		sb.border_color = Color(accent.r, accent.g, accent.b, 0.55 + 0.35 * sin(anim_t * 3.5 + rc.position.y))
+	else:
+		sb.border_color = Color(1, 1, 1, 0.16)
+	draw_style_box(sb, rc)
+	# icon disc top-left
+	var ic := rc.position + Vector2(24, 26)
+	draw_circle(ic, 17.0, Color(accent.r, accent.g, accent.b, 0.14))
+	_relic_glyph(id, ic, 11.0, accent.lightened(0.2))
+	var dim: float = 1.0 if (owned or affordable) else 0.5
+	draw_string(font, rc.position + Vector2(48, 27), nm, HORIZONTAL_ALIGNMENT_LEFT, rc.size.x - 104, 16, Color(1, 1, 1, dim))
+	# the blurb fills the lower two-thirds (no tag crowding it now)
+	_mtext(rc.position + Vector2(14, 46 + font.get_ascent(13)), desc, 13, Color(1, 1, 1, 0.6 * dim + 0.1), rc.size.x - 24)
+	# the status tag rides the TOP-RIGHT corner, clear of the blurb
+	var tag := ""
+	var tagcol := accent
+	if equipped:
+		tag = "◆ EQUIPPED"; tagcol = Color(0.5, 0.92, 1.0)
+	elif owned:
+		tag = "✓ OWNED" if not special else "tap to equip"; tagcol = Color(0.5, 0.85, 0.55)
+	else:
+		tag = "%d ✦" % cost; tagcol = accent if affordable else Color(1, 1, 1, 0.4)
+	draw_string(font, rc.position + Vector2(0, 26), tag, HORIZONTAL_ALIGNMENT_RIGHT, rc.size.x - 12, 14, tagcol)
 
 # ---- duck-select screen ------------------------------------------------------
 func _thumb_rect(i: int) -> Rect2:
