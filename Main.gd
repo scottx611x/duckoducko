@@ -431,6 +431,11 @@ var enemy_seq := 0              # stable heron ids (missile targeting)
 # She CAN end YOUR run though: paddle into her and that's the ballgame (hop over!).
 var sadie = null                # null or {x, y, dir, t}
 var sadie_timer := 40.0
+# a lurking snapping turtle that periodically surfaces to SNAP at your lane (dodge it)
+var haz_turtle = null           # null or {x, stage, t, snap_x, sub}
+var turtle_timer := 28.0
+const TURTLE_DECK := ["snapped.", "the turtle got you.", "GULP.",
+	"never trust still water.", "a jaw from the deep.", "snip snap, you're a snack."]
 var tex_sadie := []
 var tex_chuckit: Texture2D
 var tex_fire := []              # ON FIRE: voxel flame volume frames (behind the duck)
@@ -907,6 +912,7 @@ func _dbg() -> void:
 	shield_charges = 2                   # show the relic row (shield + a build)
 	picked = {"spring": 1, "gold": 1, "thunder": 1, "loft": 2, "magnet": 1, "hotwheels": 1}
 	fire_t = 3.0
+	haz_turtle = {"x": 360.0, "stage": "snap", "t": 0.12, "snap_x": 360.0, "sub": 0.2}  # show the turtle
 	logs.append({"x": 130.0, "y": 200.0, "w": 170.0, "h": 46.0, "missed": false, "phase": 0.0, "frog": true, "frog_gone": false})
 	logs.append({"x": 380.0, "y": 480.0, "w": 150.0, "h": 46.0, "missed": false, "spring": true, "phase": 1.3, "frog": false, "frog_gone": false})
 	enemies.append({"x": 300.0, "y": 360.0, "vy": 0.0, "id": _next_enemy_id()})
@@ -1335,6 +1341,54 @@ func _update_sadie(delta: float) -> void:
 		sadie = null
 		sadie_timer = randf_range(45.0, 80.0)      # INFREQUENT: a cameo, not a mechanic
 
+# a periodic snapping-turtle ambush during normal play: it lurks in the murk, locks
+# onto your lane, then ERUPTS in a snap — hop over it (be airborne) or be elsewhere.
+func _update_turtle(delta: float) -> void:
+	if boss != null:                               # no turtles during a boss duel
+		haz_turtle = null
+		return
+	if haz_turtle == null:
+		if distance > 4500.0:                      # starts showing up a little ways in
+			turtle_timer -= delta
+			if turtle_timer <= 0.0:
+				haz_turtle = {"x": clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0),
+					"stage": "lurk", "t": 0.0, "snap_x": duck_x, "sub": 1.0}
+				_sfx("fwoosh", 0.5, -6.0)
+		return
+	var tt = haz_turtle
+	tt.t += delta
+	match tt.stage:
+		"lurk":                                    # drift toward the duck under the murk
+			tt.sub = move_toward(tt.sub, 1.0, delta * 3.0)
+			tt.x = move_toward(tt.x, clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0), 110.0 * delta)
+			if fmod(tt.t, 0.4) < delta:
+				ripples.append({"x": tt.x, "y": BASE_Y - 30.0, "t": 0.0, "max": 40.0})
+			if tt.t > 1.4:
+				tt.stage = "warn"; tt.t = 0.0; tt.snap_x = tt.x
+		"warn":                                    # churn telegraph — DODGE this lane
+			if tt.t > 0.7:
+				tt.stage = "snap"; tt.t = 0.0; tt.sub = 0.0
+				_sfx("crunch", 0.9); _sfx("splash_big", 0.6)
+				duck_shake = maxf(duck_shake, 0.3)
+				ripples.append({"x": tt.snap_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
+				_spawn_parts(tt.snap_x, BASE_Y, 14, Color(0.7, 0.9, 0.85), 220.0)
+				# the BITE: caught on the water at the strike point = it gets you
+				if absf(duck_x - tt.snap_x) < 46.0 and not is_airborne() and not is_invincible():
+					if shield_charges > 0:
+						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0)
+					elif ducklings_n > 0:
+						_lose_duckling()
+					else:
+						die(TURTLE_DECK[randi() % TURTLE_DECK.size()])
+		"snap":
+			if tt.t > 0.5:
+				tt.stage = "dive"; tt.t = 0.0
+		"dive":                                    # sink back into the deep and leave
+			tt.sub = move_toward(tt.sub, 1.0, delta * 2.5)
+			if tt.t > 0.5:
+				haz_turtle = null
+				turtle_timer = randf_range(30.0, 55.0)
+
 func _wingduck_pos(side: int) -> Vector2:
 	return Vector2(clampf(duck_x + 76.0 * side, BANK_W + 20.0, VIEW.x - BANK_W - 20.0),
 		BASE_Y + 10.0 + sin(anim_t * 3.0 + side) * 5.0)
@@ -1600,6 +1654,8 @@ func reset_game() -> void:
 	prop_timer = 5.0
 	sadie = null
 	sadie_timer = 40.0
+	haz_turtle = null
+	turtle_timer = randf_range(22.0, 38.0)
 	if music_player != null:
 		music_player.pitch_scale = 1.0
 	cam.zoom = Vector2.ONE
@@ -2004,6 +2060,7 @@ func _update_play(delta: float) -> void:
 
 	# Sadie: the chocolate lab, in INFREQUENT pursuit of her chuckit
 	_update_sadie(delta)
+	_update_turtle(delta)
 
 	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
 	# range get tagged with the pulling duckling and slide toward it until gulped.
@@ -2865,6 +2922,39 @@ func _draw_relic(rect: Rect2, r: Dictionary) -> void:
 		_otext(rect.position + Vector2(rect.size.x - 11, rect.size.y - 4), "%d" % r.n, 12,
 			Color(1, 1, 1, 0.95), 16, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
+# the lurking turtle hazard: a murky shape that erupts to snap at your lane
+func _draw_haz_turtle() -> void:
+	if haz_turtle == null or tex_snapz.is_empty():
+		return
+	var tt = haz_turtle
+	var here: float = tt.snap_x if tt.stage in ["warn", "snap"] else tt.x
+	# churning telegraph the instant before it strikes
+	if tt.stage == "warn":
+		var tp: float = clampf(tt.t / 0.7, 0.0, 1.0)
+		var col := Color(0.45, 0.7, 0.5, 0.4 + 0.45 * tp)
+		draw_arc(Vector2(tt.snap_x, BASE_Y), lerpf(54.0, 22.0, tp), 0, TAU, 24, col, 3.0)
+		for b in 6:
+			var ba := anim_t * 4.5 + b * 1.4
+			draw_circle(Vector2(tt.snap_x + cos(ba) * 20.0, BASE_Y + sin(ba * 1.3) * 9.0), 2.0 + float(b % 3), Color(0.62, 0.82, 0.66, 0.5))
+	var fr := 2 if tt.stage == "snap" else (1 if tt.stage == "warn" else 0)
+	var gt: Texture2D = tex_snapz[fr]
+	var gsz := gt.get_size() * 1.5
+	var gpos := Vector2(here, BASE_Y - 22.0)
+	if tex_shadow != null:
+		var shs := tex_shadow.get_size() * 2.6
+		draw_texture_rect(tex_shadow, Rect2(Vector2(here, BASE_Y + 6.0) - shs * 0.5, shs), false, Color(0, 0, 0, 0.2))
+	var mod := Color(1, 1, 1)
+	var sub: float = tt.sub
+	if sub > 0.02:                                  # murky while submerged
+		mod = mod.lerp(mod * Color(0.42, 0.6, 0.58), sub * 0.85)
+		mod.a = 1.0 - sub * 0.62
+	draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+	if sub > 0.2:
+		for k in 5:
+			var bx2: float = here + sin(anim_t * 1.4 + k * 2.0) * gsz.x * 0.3
+			var by2: float = gpos.y + gsz.y * 0.2 - fmod(anim_t * 40.0 + k * 30.0, gsz.y * 0.6)
+			draw_circle(Vector2(bx2, by2), 2.0 + float(k % 2), Color(0.62, 0.82, 0.76, 0.4 * sub))
+
 # a small distinct emblem per power — relic-style, drawn procedurally
 func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 	match id:
@@ -3273,6 +3363,8 @@ func _draw() -> void:
 			draw_rect(Rect2(-l.w * 0.5, -l.h * 0.5, l.w, l.h),
 				Color(0.85, 0.7, 0.3) if springy else Color(0.45, 0.30, 0.18))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	_draw_haz_turtle()
 
 	# Sadie: head, shoulders, and optimism above the waterline. The chuckit bobs
 	# forever ahead of her, which is the whole point of being a dog.
