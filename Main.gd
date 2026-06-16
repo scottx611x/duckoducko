@@ -69,7 +69,7 @@ const UPGRADES := [
 	# the 1942 tier: legendaries that change what the game IS
 	{"id": "cannon", "name": "CRUMB CANNON", "desc": "auto-fire crumbs: smash herons, chip logs", "rarity": 3},
 	{"id": "wingducks", "name": "WINGDUCKS", "desc": "escorts kamikaze herons — and fly back", "rarity": 3},
-	{"id": "nova", "name": "SONIC QUACK", "desc": "your LASER becomes a screen-clearing QUACK", "rarity": 3},
+	{"id": "nova", "name": "MEGA QUACK", "desc": "your LASER becomes a sonic BOOM that blasts everything sky-high", "rarity": 3},
 	{"id": "hotwheels", "name": "ON FIRE", "desc": "snack streaks IGNITE you — melt everything", "rarity": 3},
 ]
 const RARITY_W := [1.0, 0.5, 0.2, 0.08]
@@ -1923,6 +1923,13 @@ func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
 		parts.append({"x": x, "y": y, "vx": cos(a) * s, "vy": sin(a) * s - spd * 0.45,
 			"t": 0.0, "life": randf_range(0.3, 0.65), "col": col})
 
+# launch debris SKY-HIGH — a strong upward fountain that arcs up and splashes back
+func _erupt(x: float, y: float, n: int, col: Color) -> void:
+	for i in n:
+		parts.append({"x": x + randf_range(-14, 14), "y": y,
+			"vx": randf_range(-160, 160), "vy": randf_range(-580, -300),
+			"t": 0.0, "life": randf_range(0.9, 1.7), "col": col})
+
 # a big dramatic SPLASH for something breaching the surface — a foam crown of
 # rings + a fan of water droplets thrown up and out.
 func _water_burst(x: float, y: float, power := 1.0) -> void:
@@ -2422,21 +2429,29 @@ func fire_laser() -> void:
 
 # SONIC QUACK: one quack. zero survivors.
 func _sonic_quack() -> void:
-	_sfx("quack", 0.55)
-	_sfx("splash_big", 0.75)
-	_flash("QUACK.")
-	duck_shake = 0.35
+	# MEGA QUACK: a sonic BOOM that shakes the river and launches everything sky-high
+	_sfx("quack", 0.45)
+	_sfx("splash_big", 0.95)
+	_sfx("mega", 0.6)
+	_flash("MEGA QUACK!!")
+	duck_shake = 0.85
+	# a colossal triple shockwave rolling out from the duck
+	for r in 3:
+		ripples.append({"x": duck_x, "y": BASE_Y, "t": -float(r) * 0.05, "max": 700.0,
+			"col": Color(0.75, 0.92, 1.0)})
+	# LOGS erupt into splinters; HERONS are blasted apart (and rain feathers)
 	for l in logs:
-		ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 80.0})
-		_spawn_parts(l.x, l.y, 8, Color(0.62, 0.42, 0.24), 170.0)
-		if _up("buffet") > 0:
-			items.append({"x": l.x, "y": l.y, "got": false, "kind": _pick_kind()})
+		_erupt(l.x, l.y, 16, Color(0.62, 0.42, 0.24))
 	for e in enemies:
-		ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 90.0})
-		_spawn_parts(e.x, e.y, 10, Color(0.7, 0.75, 0.85), 200.0)
+		_erupt(e.x, e.y, 12, Color(0.72, 0.76, 0.86))
+		_erupt(e.x, e.y, 7, Color(0.96, 0.96, 1.0))   # a burst of feathers
+	# SNACKS & feathers on the water get blown out of it too
+	for it in items:
+		if not it.got:
+			_erupt(it.x, it.y, 6, Color(1.0, 0.86, 0.4))
 	logs.clear()
 	enemies.clear()
-	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 640.0})
+	haz_turtle = null
 	_hit_boss(2)                               # a screen-clearing QUACK staggers Gerald hard
 
 # the LOFT meter is full — fire whichever special you have equipped this run
@@ -2808,6 +2823,26 @@ func _update_play(delta: float) -> void:
 		dash_t -= delta
 		distance += speed * delta                  # AFTERBURNER: a second helping of pace
 		duck_shake = maxf(duck_shake, 0.12)
+		# you don't just phase through — you MELT everything in the blazing path
+		var dr: float = DUCK_R * _size_mul() + 26.0
+		var lkeep: Array = []
+		for l in logs:
+			if absf(l.x - duck_x) < l.w * 0.5 + dr and absf(l.y - BASE_Y) < l.h * 0.5 + dr:
+				_spawn_parts(l.x, l.y, 10, Color(1.0, 0.5, 0.15), 210.0)
+				ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 90.0, "col": Color(1.0, 0.55, 0.2)})
+				_add_loft(0.05)
+			else:
+				lkeep.append(l)
+		logs = lkeep
+		var ekeep: Array = []
+		for e in enemies:
+			if absf(e.x - duck_x) < 48.0 and absf(e.y - BASE_Y) < 52.0:
+				_spawn_parts(e.x, e.y, 14, Color(1.0, 0.5, 0.12), 230.0)
+				_float_text(e.x, e.y - 24.0, "MELTED.", Color(1.0, 0.55, 0.2))
+				_st("herons")
+			else:
+				ekeep.append(e)
+		enemies = ekeep
 	if laser_t > 0.0:
 		laser_t -= delta
 		_laser_burn()
