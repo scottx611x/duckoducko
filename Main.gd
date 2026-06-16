@@ -224,6 +224,13 @@ const ROSTER := [
 	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "size": 0.98, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
 	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
 ]
+# each duck has its OWN voice — roughly by size (big = deep honk, small = squeaky),
+# hand-tuned for character. rubber ducky is the exception: it squeaks.
+const QUACK_PITCH := {
+	"mallard": 1.0, "hen": 1.14, "wood": 1.06, "bufflehead": 1.36, "shoveler": 0.9,
+	"pintail": 1.0, "hoodie": 1.08, "ruddy": 1.2, "canvasback": 0.86, "harlequin": 1.12,
+	"eider": 0.72, "golden": 0.96, "disco": 1.18, "shadow": 0.76,
+}
 
 # ---- state -------------------------------------------------------------------
 enum St { GROUNDED, HOPPING, MEGA }
@@ -334,6 +341,13 @@ var select_line_t := 0.0
 func _duck_quip(sp: String) -> String:
 	var lines: Array = DUCK_LINES.get(sp, ["...", "let's go.", "paused."])
 	return lines[randi() % lines.size()]
+
+# a duck speaks in ITS OWN voice — per-species pitch (rubber duckies squeak)
+func _quack(sp: String, vol := 0.0) -> void:
+	if sp == "rubberduck":
+		_sfx("squeak", randf_range(0.95, 1.08), vol)
+	else:
+		_sfx("quack", float(QUACK_PITCH.get(sp, 1.0)) * randf_range(0.95, 1.05), vol)
 # boon "tier" = how many bosses you must have bested for it to enter the shrine pool.
 # the elder always appears, but only offers richer blessings once you've earned them.
 const BOONS := [
@@ -2142,7 +2156,7 @@ func _on_press(pos: Vector2) -> void:
 			menu_taps += 1                         # he LOVES this
 			menu_spin_vel += 9.0
 			menu_quack_t = anim_t                  # beak open, mid-QUACK
-			_sfx("quack", randf_range(0.85, 1.2))
+			_quack(last_species if ducks.has(last_species) else "mallard", 0.0)
 			if menu_taps == 5:
 				menu_msg = "ok. ok. you have my attention."
 				menu_msg_t = anim_t
@@ -2232,10 +2246,7 @@ func _on_press(pos: Vector2) -> void:
 				pause_power_sel = -1
 				menu_quack_t = anim_t
 				pause_line = _duck_quip(species); pause_line_t = anim_t
-				if species == "rubberduck":
-					_sfx("squeak", randf_range(0.95, 1.05))
-				else:
-					_sfx("quack", randf_range(0.95, 1.1))
+				_quack(species)
 			else:
 				pause_power_sel = -1               # tap empty space -> dismiss the popup
 		return
@@ -2336,10 +2347,7 @@ func _select_press(pos: Vector2) -> void:
 		menu_quack_t = anim_t
 		select_line = _duck_quip(ROSTER[sel_index].species)
 		select_line_t = anim_t
-		if ROSTER[sel_index].species == "rubberduck":
-			_sfx("squeak", randf_range(0.95, 1.05))
-		else:
-			_sfx("quack", randf_range(0.95, 1.1))
+		_quack(ROSTER[sel_index].species)
 
 func _on_release() -> void:
 	if not pressed:
@@ -2811,12 +2819,9 @@ func _update_play(delta: float) -> void:
 	theme_sweep = minf(theme_sweep + delta * 0.8, 1.0)
 
 	# the duck grows impatient (one judgmental quack per idle bout).
-	# rubber duckies do not quack. rubber duckies squeak.
+	# rubber duckies do not quack. rubber duckies squeak. every duck has its own voice.
 	if idle_timer > 8.0 and not quacked and state == St.GROUNDED:
-		if species == "rubberduck":
-			_sfx("squeak", randf_range(0.95, 1.05))
-		else:
-			_sfx("quack", 1.0)
+		_quack(species)
 		quacked = true
 		_st("quacks")
 	elif idle_timer < 8.0:
