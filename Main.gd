@@ -936,6 +936,11 @@ func _load_save() -> void:
 		run_history = cfg.get_value("save", "run_history", [])
 		codex_seen = cfg.get_value("save", "codex_seen", [])
 		codex_viewed = cfg.get_value("save", "codex_viewed", [])
+		# backfill the CODEX from saved run history: reveal every power-up you've used
+		for r in run_history:
+			for uid in r.get("picked", {}):
+				if uid not in codex_seen:
+					codex_seen.append(uid)
 		if "mega" not in specials_owned:
 			specials_owned.append("mega")
 		if "wild" not in specials_owned:                 # grant WILD CARD + restore the classic whimsy
