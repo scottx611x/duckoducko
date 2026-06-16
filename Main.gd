@@ -453,6 +453,9 @@ var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
 
 # roguelike run state
 var drafting := false
+var boss_draft := false          # this draft is a BOSS-DEFEAT spoils pick (special framing)
+var boss_draft_name := ""        # which boss you bested
+var boss_draft_feathers := 0     # feathers showered for the kill
 var draft_choices: Array = []
 var draft_open_t := 0.0         # taps are ignored briefly after a draft opens
 var last_pick_name := ""        # name of the most recently granted power (for boss spoils banner)
@@ -1274,6 +1277,14 @@ func _dbg() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
+	# the BOSS-DEFEAT spoils pick
+	picked = {}
+	boss_draft_name = "GERALD THE ETERNAL"; boss_draft_feathers = 35
+	_open_boss_draft(3)
+	await get_tree().create_timer(0.5).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/s_bossreward.png")
+	drafting = false; boss_draft = false
 	# SNAPZ the turtle — capture LURK (submerged), SNAP (erupting), STUCK (vulnerable)
 	boss = null
 	next_boss_idx = 1
@@ -1542,6 +1553,9 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_codex_see("wingducks")
 		wd_respawn.clear()
 	drafting = false
+	if boss_draft:
+		boss_draft = false
+		score_label.visible = true                 # restore the gameplay HUD after the victory screen
 	last_pick_name = u.name
 	_sfx("unlock")
 	if boss != null:
@@ -2024,6 +2038,7 @@ func reset_game() -> void:
 	theme_prev = 0
 	theme_sweep = 1.0
 	drafting = false
+	boss_draft = false
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -3017,17 +3032,37 @@ func _boss_leave() -> void:
 	run_feathers += reward
 	for i in 26:
 		_spawn_parts(randf_range(60, VIEW.x - 60), randf_range(120, 360), 1, Color(1, 0.9, 0.4), 130.0)
-	# the SPOILS OF WAR: best a boss, take home a high-tier power (rare, or legendary later)
-	var rarity: int = 3 if int(boss.idx) >= 1 else 2
-	last_pick_name = ""
-	_grant_random_upgrade(rarity)
-	# ONE consolidated awards banner so the spoils actually register (held long)
-	var banner := "%s DEFEATED!\n+%d feathers" % [who, reward]
-	if last_pick_name != "":
-		banner += "  •  %s" % last_pick_name
-	if next_boss_idx <= 2:
-		banner += "\nnext run's shrine grows richer"
-	_flash(banner, 3.0)
+	# the SPOILS OF WAR: a prominent PICK-YOUR-REWARD screen (high-tier powers)
+	var min_rar: int = 3 if int(boss.idx) >= 1 else 2
+	boss_draft_name = ("GERALD THE ETERNAL" if boss.idx >= 2 else "SNAPZ" if boss.kind == "snapz" else "GERALD THE IMMENSE")
+	boss_draft_feathers = reward
+	_open_boss_draft(min_rar)
+
+# the boss-defeat reward: a held, clearly-framed draft of HIGH-tier powers to pick
+func _open_boss_draft(min_rar: int) -> void:
+	drafting = true
+	boss_draft = true
+	draft_open_t = anim_t
+	draft_choices = _deal_boss_draft(min_rar)
+	center_label.visible = false
+	score_label.visible = false                    # clear the gameplay HUD behind the victory screen
+	if pace_label != null: pace_label.visible = false
+	loft_bar.visible = false
+	_sfx("chime", 1.6)
+	_sfx("unlock", 1.1)
+
+# deal 3 distinct powers of at least min_rar (legendaries are the prize for the Eternal)
+func _deal_boss_draft(min_rar: int) -> Array:
+	var pool := UPGRADES.filter(func(u): return u.rarity >= min_rar and picked.get(u.id, 0) == 0)
+	if pool.size() < 3:                            # not enough fresh high-tier — widen the net
+		pool = UPGRADES.filter(func(u): return u.rarity >= maxi(1, min_rar - 1))
+	pool.shuffle()
+	var out: Array = []
+	for u in pool:
+		if out.size() >= 3:
+			break
+		out.append(u)
+	return out
 
 # your damaging LEGENDARIES chip the boss slowly (wingducks, ON FIRE, cannon...).
 # fractional damage accumulates into whole HP. Bypasses SNAPZ's armor — these are
@@ -4924,10 +4959,19 @@ func _draw() -> void:
 	# and taps are ignored for the first beat so hop-spam can't click through)
 	if drafting:
 		var ot := anim_t - draft_open_t
-		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6 * minf(ot / 0.25, 1.0)))
-		_otext(Vector2(0, 232), "CHOOSE AN UPGRADE", 38, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
-		_otext(Vector2(0, 264), "checkpoint %d ft — the river waits" % int(distance / 10.0),
-			17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		if boss_draft:                                     # BOSS DEFEAT spoils — bold + golden
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.05, 0.04, 0.02, 0.82 * minf(ot / 0.25, 1.0)))
+			# a triumphant gold banner across the top
+			draw_rect(Rect2(0, 150, VIEW.x, 96), Color(0.7, 0.5, 0.1, 0.18 * minf(ot / 0.2, 1.0)))
+			_fancy_title("VICTORY!", 188.0, 40, Color(1, 0.92, 0.4), Color(1, 0.6, 0.15), 5.0)
+			_otext(Vector2(0, 226), "%s DEFEATED  ·  +%d feathers" % [boss_draft_name, boss_draft_feathers],
+				18, Color(1, 0.95, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+			_otext(Vector2(0, 280), "claim your SPOILS — pick a power", 17, Color(1, 0.9, 0.55, 0.9), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		else:
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.6 * minf(ot / 0.25, 1.0)))
+			_otext(Vector2(0, 232), "CHOOSE AN UPGRADE", 38, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
+			_otext(Vector2(0, 264), "checkpoint %d ft — the river waits" % int(distance / 10.0),
+				17, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 		for i in draft_choices.size():
 			var ap := clampf((ot - 0.08 - i * 0.13) / 0.3, 0.0, 1.0)
 			if ap <= 0.0:
@@ -4962,8 +5006,8 @@ func _draw() -> void:
 			var nm: String = u.name if owned == 0 else "%s  ×%d" % [u.name, owned + 1]
 			draw_string(font, Vector2(rc.position.x + 40.0, rc.position.y + 58), nm,
 				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - 40.0, 27, Color(1, 1, 1, ap))
-			draw_string(font, Vector2(rc.position.x + 40.0, rc.position.y + 94), u.desc,
-				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - 40.0, 18, Color(1, 1, 1, 0.75 * ap))
+			_mtext(Vector2(rc.position.x + 44.0, rc.position.y + 84.0 + font.get_ascent(16)), u.desc,
+				16, Color(1, 1, 1, 0.75 * ap), rc.size.x - 56.0, HORIZONTAL_ALIGNMENT_CENTER)
 		return
 
 	# ZEN MODE: a calm blue vignette while bullet-time is active
