@@ -155,14 +155,18 @@ const LOG_TINT := [
 	Color(0.80, 0.88, 1.08),   # Aurora Lake — frost-rimed, icy blue
 ]
 
-# collectibles: score (adds to distance) + loft fill + spawn weight
+# collectibles: score (adds to distance) + loft fill + spawn weight + TIER (0 common,
+# 1 uncommon, 2 rare — rarer snacks are worth more and sparkle with a bonus feather)
 const ITEM_DEFS := [
 	# loft values run lean on purpose: a special should be EARNED (~1/min), not a faucet
-	{"name": "feather", "score": 30.0, "loft": 0.07, "weight": 5},
-	{"name": "bread",   "score": 20.0, "loft": 0.06, "weight": 3},
-	{"name": "berry",   "score": 45.0, "loft": 0.10, "weight": 2},
-	{"name": "bug",     "score": 70.0, "loft": 0.13, "weight": 1},
-	{"name": "ducky",   "score": 10.0, "loft": 0.18, "weight": 1},   # it squeaks.
+	{"name": "bread",   "score": 20.0, "loft": 0.06, "weight": 5, "tier": 0},
+	{"name": "feather", "score": 30.0, "loft": 0.07, "weight": 5, "tier": 0},
+	{"name": "acorn",   "score": 28.0, "loft": 0.07, "weight": 4, "tier": 0},
+	{"name": "berry",   "score": 45.0, "loft": 0.10, "weight": 3, "tier": 1},
+	{"name": "popcorn", "score": 55.0, "loft": 0.11, "weight": 2, "tier": 1},
+	{"name": "bug",     "score": 70.0, "loft": 0.13, "weight": 2, "tier": 1},
+	{"name": "ducky",   "score": 10.0, "loft": 0.18, "weight": 1, "tier": 2},   # it squeaks.
+	{"name": "donut",   "score": 120.0, "loft": 0.16, "weight": 1, "tier": 2},  # the RARE treat
 ]
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -531,7 +535,7 @@ const CODEX := [
 ]
 const CODEX_CATS := [["boss", "BOSSES"], ["enemy", "ENEMIES"], ["friend", "FRIENDS"],
 	["power", "POWER-UPS"], ["snack", "SNACKS"], ["trash", "RIVER TRASH"]]
-const PROP_NAMES := ["boat", "bottle", "flipflop", "cone", "gnome", "boot", "noodle", "umbrella"]
+const PROP_NAMES := ["boat", "bottle", "flipflop", "cone", "gnome", "boot", "noodle", "umbrella", "rubberduck", "sock", "can"]
 var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
 var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
 var in_codex := false
@@ -711,7 +715,7 @@ func _ready() -> void:
 			"idle": [load("res://art/duckling_idle_0.png"), load("res://art/duckling_idle_1.png")],
 			"hop": [load("res://art/duckling_hop_0.png"), load("res://art/duckling_hop_1.png")],
 		}
-	for pn in ["boat", "bottle", "flipflop", "cone", "gnome", "boot", "noodle", "umbrella"]:
+	for pn in PROP_NAMES:
 		var pp := "res://art/prop_%s.png" % pn
 		if ResourceLoader.exists(pp):
 			tex_props.append(load(pp))
@@ -3504,9 +3508,17 @@ func _collect(it: Dictionary) -> void:
 		run_feathers += 1 * int(mult)
 	if def.name == "ducky":
 		_sfx("squeak", randf_range(0.95, 1.1))     # it squeaks.
-		_flash("squeak.")
 	else:
-		_sfx("collect", 1.0 + it.kind * 0.12)      # rarer = brighter ping
+		_sfx("collect", 1.0 + int(def.get("tier", 0)) * 0.25)   # rarer = brighter ping
+	# TIER reward: rare snacks pay a bonus feather and POP with a sparkle
+	var tier := int(def.get("tier", 0))
+	if tier >= 2:
+		run_feathers += 2 + tier
+		_sfx("chime", 1.5)
+		_float_text(it.x, it.y - 24.0, "%s!  +%d" % [def.name.to_upper(), 2 + tier], Color(1.0, 0.72, 0.95))
+		_spawn_parts(it.x, it.y, 14, Color(1.0, 0.8, 0.95), 190.0)
+	elif tier == 1:
+		_spawn_parts(it.x, it.y, 5, Color(0.8, 0.95, 1.0), 100.0)
 	ripples.append({"x": it.x, "y": it.y, "t": 0.0, "max": 40.0})
 	_spawn_parts(it.x, it.y, 6, Color(1.0, 0.9, 0.5), 110.0)
 

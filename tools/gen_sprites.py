@@ -713,6 +713,86 @@ from voxel_duck import generate_ducks, generate_critters
 generate_ducks(ART)
 generate_critters(ART)          # voxel heron + ducklings (replaces 2D make_heron)
 
+def make_acorn():
+    """An acorn. Peak squirrel currency, decent duck snack."""
+    img = Image.new("RGBA", (11, 13), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    NUT = (196, 132, 70, 255); NUTL = (224, 168, 104, 255); CAP = (110, 74, 44, 255)
+    d.ellipse([2, 4, 9, 12], fill=NUT)
+    d.ellipse([3, 6, 6, 9], fill=NUTL)
+    d.chord([1, 1, 10, 7], 180, 360, fill=CAP)
+    d.line([(5, 0), (5, 2)], fill=CAP)
+    return add_outline(img)
+
+
+def make_popcorn():
+    """A fluffy kernel of popcorn. Escaped the movie.  (uncommon)"""
+    img = Image.new("RGBA", (13, 13), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    POP = (250, 240, 206, 255); POPS = (236, 214, 150, 255)
+    for (x, y, r) in [(4, 5, 3), (8, 4, 3), (6, 8, 3), (3, 9, 2), (9, 9, 2)]:
+        d.ellipse([x - r, y - r, x + r, y + r], fill=POP)
+    d.ellipse([6, 4, 9, 7], fill=POPS)
+    return add_outline(img)
+
+
+def make_donut():
+    """A frosted, sprinkled donut. The RARE treat — every duck's dream.  (rare)"""
+    img = Image.new("RGBA", (15, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    DOUGH = (198, 140, 78, 255); FROST = (240, 120, 168, 255); FROSTH = (252, 168, 200, 255)
+    d.ellipse([1, 1, 13, 13], fill=DOUGH)
+    d.ellipse([1, 0, 13, 11], fill=FROST)
+    d.ellipse([3, 2, 8, 6], fill=FROSTH)
+    for (sx, sy, c) in [(4, 3, (90, 200, 230)), (9, 3, (250, 230, 90)), (6, 1, (120, 220, 120)),
+                        (10, 6, (240, 240, 250)), (3, 6, (250, 150, 90))]:
+        d.rectangle([sx, sy, sx + 1, sy + 1], fill=c + (255,))
+    d.ellipse([5, 5, 9, 9], fill=(0, 0, 0, 0))                 # the hole
+    return add_outline(img)
+
+
+def make_rubberduck():
+    """A lost rubber ducky, bobbing along. Squeaks softly to itself."""
+    img = Image.new("RGBA", (14, 12), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    Y = (250, 214, 70, 255); YD = (224, 178, 44, 255); BILL = (242, 138, 48, 255)
+    d.ellipse([2, 5, 11, 11], fill=Y)                          # body
+    d.ellipse([7, 1, 13, 7], fill=Y)                           # head
+    d.ellipse([8, 3, 10, 5], fill=(30, 26, 22, 255))           # eye
+    d.polygon([(12, 3), (14, 4), (12, 5)], fill=BILL)          # bill
+    d.ellipse([3, 8, 7, 11], fill=YD)
+    return add_outline(img)
+
+
+def make_sock():
+    """A single wet sock. Its partner is in another river."""
+    img = Image.new("RGBA", (11, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    SOCK = (228, 232, 240, 255); BAND = (120, 150, 210, 255)
+    d.rounded_rectangle([2, 0, 7, 9], radius=1, fill=SOCK)
+    d.rectangle([2, 1, 7, 3], fill=BAND)
+    d.polygon([(2, 8), (8, 8), (10, 13), (2, 13)], fill=SOCK)  # the foot
+    return add_outline(img)
+
+
+def make_can():
+    """A dented soda can. Caffeine for the river.  (flotsam)"""
+    img = Image.new("RGBA", (9, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    TIN = (200, 70, 64, 255); TINL = (236, 120, 110, 255); LID = (188, 192, 198, 255)
+    d.rectangle([1, 2, 7, 13], fill=TIN)
+    d.rectangle([2, 2, 3, 13], fill=TINL)
+    d.rectangle([1, 0, 7, 2], fill=LID)
+    d.rectangle([2, 6, 6, 9], fill=(244, 240, 232, 255))       # label band
+    return add_outline(img)
+
+
+save(make_acorn(), "acorn.png")
+save(make_popcorn(), "popcorn.png")
+save(make_donut(), "donut.png")
+save(make_rubberduck(), "prop_rubberduck.png")
+save(make_sock(), "prop_sock.png")
+save(make_can(), "prop_can.png")
 save(make_shadow(), "shadow.png")
 save(make_log(), "log.png")
 save(make_feather(), "feather.png")
