@@ -330,7 +330,51 @@ def screech():
     return out
 
 
+def scratch():
+    """LUCIEN's record scratch — a wikki-wikki vinyl pitch-bend with crackle."""
+    dur = 0.4
+    n = int(SR * dur)
+    out = []
+    phase = 0.0
+    for i in range(n):
+        t = i / SR
+        ph = t / dur
+        bend = math.sin(ph * math.pi * 4.0)
+        f = 200.0 * (2.0 ** (bend * 1.3))
+        phase += f / SR
+        saw = (phase % 1.0) * 2.0 - 1.0
+        crackle = random.uniform(-1, 1) * 0.22
+        e = env(t, dur, attack=0.004, curve=1.5)
+        out.append((saw * 0.55 + crackle * e) * e * 0.95)
+    return out
+
+
+def djdrop():
+    """LUCIEN's DJ DROP on a tap — a punchy 808 sub-bass drop + kick, hip-hop flavour (not a scratch)."""
+    dur = 0.66
+    n = int(SR * dur)
+    out = []
+    kphase = 0.0
+    bphase = 0.0
+    for i in range(n):
+        t = i / SR
+        # KICK: a fast pitch-dropping sine thump right at the top
+        kf = 132.0 * (2.0 ** (-t * 26.0)) + 46.0
+        kphase += kf / SR
+        kick = math.sin(kphase * 2.0 * math.pi) * env(t, 0.18, attack=0.002, curve=4.0)
+        # 808 SUB-BASS DROP — a low note bending DOWN (the "drop"), soft-clipped for grit
+        bf = 84.0 * (2.0 ** (-t * 1.7))
+        bphase += bf / SR
+        sub = math.tanh(math.sin(bphase * 2.0 * math.pi) * 1.9) * env(t, dur, attack=0.012, curve=1.5) * 0.72
+        # a crisp air/vinyl burst on the hit
+        air = random.uniform(-1, 1) * 0.16 * env(t, 0.07, attack=0.001, curve=3.0)
+        out.append(kick * 0.92 + sub * 0.85 + air)
+    return out
+
+
 if __name__ == "__main__":
+    save("djdrop.wav", djdrop())
+    save("scratch.wav", scratch())
     save("screech.wav", screech())
     save("hop.wav", hop())
     save("splash.wav", splash(False))

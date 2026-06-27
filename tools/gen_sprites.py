@@ -751,6 +751,20 @@ def make_donut():
     return add_outline(img)
 
 
+def make_goldegg():
+    """A legendary GOLDEN EGG, faintly aglow — the rarest prize the river ever floats.  (legendary)"""
+    img = Image.new("RGBA", (15, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    GOLD = (240, 196, 64, 255); GOLDH = (255, 234, 150, 255); GOLDD = (196, 148, 38, 255)
+    d.ellipse([3, 1, 11, 14], fill=GOLD)                  # egg body
+    d.ellipse([3, 8, 11, 14], fill=GOLDD)                 # shaded base
+    d.ellipse([3, 1, 11, 9], fill=GOLD)                   # lit crown
+    d.ellipse([4, 2, 8, 7], fill=GOLDH)                   # highlight
+    d.point((10, 4), fill=(255, 255, 255, 255))           # sparkles
+    d.point((6, 11), fill=(255, 250, 210, 255))
+    return add_outline(img)
+
+
 def make_rubberduck():
     """A lost rubber ducky, bobbing along. Squeaks softly to itself."""
     img = Image.new("RGBA", (14, 12), (0, 0, 0, 0))
@@ -784,12 +798,154 @@ def make_can():
     d.rectangle([2, 2, 3, 13], fill=TINL)
     d.rectangle([1, 0, 7, 2], fill=LID)
     d.rectangle([2, 6, 6, 9], fill=(244, 240, 232, 255))       # label band
+    # the DENT — a crushed crease on the right, notching the silhouette
+    DENT = (130, 40, 38, 255)
+    d.point((7, 4), fill=(0, 0, 0, 0)); d.point((7, 5), fill=(0, 0, 0, 0))   # punched-in edge
+    d.rectangle([5, 4, 6, 6], fill=DENT)                                     # crease shadow
+    d.point((6, 11), fill=DENT); d.point((5, 11), fill=DENT)                 # a second ding lower down
     return add_outline(img)
 
 
+def make_pretzel():
+    """A golden twisted soft pretzel, dusted with salt flecks.  (snack)"""
+    img = Image.new("RGBA", (15, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    DOUGH = (188, 124, 56, 255); DOUGHL = (224, 162, 86, 255); DOUGHD = (146, 92, 40, 255)
+    SALT = (244, 244, 238, 255)
+    # outer pretzel ring (the two big loops)
+    d.ellipse([1, 4, 8, 12], fill=DOUGH)
+    d.ellipse([6, 4, 13, 12], fill=DOUGH)
+    d.ellipse([3, 6, 6, 10], fill=(0, 0, 0, 0))         # hole left
+    d.ellipse([8, 6, 11, 10], fill=(0, 0, 0, 0))        # hole right
+    # the crossed twist at the top
+    d.line([(4, 6), (10, 2)], fill=DOUGH, width=2)
+    d.line([(10, 6), (4, 2)], fill=DOUGH, width=2)
+    # sheen along upper-left of the loops
+    d.line([(2, 6), (4, 4)], fill=DOUGHL)
+    d.line([(7, 6), (9, 4)], fill=DOUGHL)
+    # browned underside
+    d.line([(2, 11), (6, 11)], fill=DOUGHD)
+    d.line([(9, 11), (12, 11)], fill=DOUGHD)
+    # salt flecks
+    for (sx, sy) in [(5, 3), (9, 3), (3, 8), (11, 8), (7, 10)]:
+        img.putpixel((sx, sy), SALT)
+    return add_outline(img)
+
+
+def make_grapes():
+    """A small cluster of purple grapes.  (snack)"""
+    img = Image.new("RGBA", (13, 15), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    GR = (118, 70, 148, 255); GRL = (158, 108, 188, 255); GRH = (196, 156, 216, 255)
+    STEM = (96, 132, 60, 255); LEAF = (110, 158, 70, 255)
+    # stem + little leaf up top
+    d.line([(6, 0), (6, 3)], fill=STEM)
+    d.polygon([(7, 1), (11, 1), (9, 4)], fill=LEAF)
+    # cluster of berries, widest at top, tapering to one at the bottom
+    rows = [(3, 4, [3, 6, 9]), (1, 7, [2, 5, 8, 11]), (1, 10, [4, 7, 10]), (1, 13, [6, 9])]
+    for (_, cy, xs) in rows:
+        for cx in xs:
+            d.ellipse([cx - 2, cy - 2, cx + 1, cy + 1], fill=GR)
+            img.putpixel((cx - 1, cy - 1), GRL)
+            img.putpixel((cx, cy), GRH)
+    return add_outline(img)
+
+
+def make_marshmallow():
+    """A toasted marshmallow on a stick: white with browned, blistered edges.  (snack)"""
+    img = Image.new("RGBA", (12, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    MAL = (244, 240, 230, 255); MALD = (212, 206, 192, 255)
+    TOAST = (176, 116, 62, 255); CHAR = (120, 76, 42, 255)
+    STICK = (148, 110, 70, 255)
+    # the roasting stick poking out the bottom
+    d.line([(6, 11), (6, 15)], fill=STICK)
+    # plump pillow body
+    d.rounded_rectangle([1, 2, 10, 12], radius=3, fill=MAL)
+    d.line([(2, 4), (2, 10)], fill=MALD)                # soft side shade
+    # toasted top crust + a couple of blistered char spots
+    d.rounded_rectangle([1, 2, 10, 5], radius=3, fill=TOAST)
+    d.rectangle([1, 4, 10, 5], fill=TOAST)
+    img.putpixel((4, 3), CHAR)
+    img.putpixel((8, 4), CHAR)
+    d.line([(2, 11), (9, 11)], fill=TOAST)             # browned underside
+    return add_outline(img)
+
+
+def make_minnow():
+    """A tiny silver fish/minnow, flicking along.  (snack)"""
+    img = Image.new("RGBA", (16, 9), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    SIL = (196, 206, 214, 255); SILH = (234, 240, 246, 255); SILD = (140, 156, 170, 255)
+    FIN = (120, 158, 178, 255)
+    # body, head to the left
+    d.ellipse([2, 2, 12, 7], fill=SIL)
+    d.ellipse([3, 2, 9, 4], fill=SILH)                  # dorsal sheen
+    d.line([(4, 6), (11, 6)], fill=SILD)               # belly line
+    # forked tail at the right
+    d.polygon([(11, 4), (15, 1), (15, 8)], fill=FIN)
+    d.polygon([(12, 4), (13, 3), (13, 6)], fill=SILD)  # tail base
+    # little top fin
+    d.polygon([(6, 2), (9, 0), (9, 2)], fill=FIN)
+    img.putpixel((4, 4), (24, 24, 28, 255))            # eye
+    return add_outline(img)
+
+
+def make_bobber():
+    """A red-and-white fishing bobber.  (flotsam)"""
+    img = Image.new("RGBA", (11, 14), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    RED = (210, 56, 56, 255); REDL = (240, 110, 100, 255)
+    WHT = (240, 238, 230, 255); WHTD = (206, 204, 196, 255)
+    CAP = (60, 60, 68, 255)
+    # round float: red top half, white bottom half
+    d.ellipse([1, 2, 9, 12], fill=WHT)
+    d.chord([1, 2, 9, 12], 180, 360, fill=RED)
+    d.line([(3, 4), (5, 3)], fill=REDL)                # top highlight
+    d.line([(2, 9), (8, 9)], fill=WHTD)               # waist shade
+    d.line([(1, 7), (9, 7)], fill=CAP)                # the divider band
+    # little antenna nub on top
+    d.line([(5, 0), (5, 2)], fill=CAP)
+    return add_outline(img)
+
+
+def make_kite():
+    """A tattered diamond kite with a little tail.  (flotsam)"""
+    img = Image.new("RGBA", (14, 18), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    K1 = (206, 92, 80, 255); K2 = (224, 178, 70, 255)
+    K3 = (84, 142, 178, 255); K4 = (108, 168, 108, 255)
+    SPAR = (70, 56, 44, 255); BOW = (236, 196, 200, 255)
+    cx = 6
+    # four diamond quadrants for a patchwork kite
+    d.polygon([(cx, 0), (12, 6), (cx, 6)], fill=K1)     # top-right
+    d.polygon([(cx, 0), (0, 6), (cx, 6)], fill=K2)      # top-left
+    d.polygon([(cx, 12), (12, 6), (cx, 6)], fill=K3)    # bottom-right
+    d.polygon([(cx, 12), (0, 6), (cx, 6)], fill=K4)     # bottom-left
+    # cross spars
+    d.line([(cx, 0), (cx, 12)], fill=SPAR)
+    d.line([(0, 6), (12, 6)], fill=SPAR)
+    # tattered nicks out of the edges
+    for (tx, ty) in [(3, 3), (9, 9), (10, 4)]:
+        img.putpixel((tx, ty), (0, 0, 0, 0))
+    # wavy tail with little bows
+    for (ty, tx) in [(13, 6), (14, 7), (15, 6), (16, 7), (17, 6)]:
+        img.putpixel((tx, ty), SPAR)
+    img.putpixel((7, 14), BOW)
+    img.putpixel((6, 16), BOW)
+    return add_outline(img)
+
+
+save(make_pretzel(), "snack_pretzel.png")
+save(make_grapes(), "snack_grapes.png")
+save(make_marshmallow(), "snack_marshmallow.png")
+save(make_minnow(), "snack_minnow.png")
+save(make_bobber(), "flotsam_bobber.png")
+save(make_kite(), "flotsam_kite.png")
 save(make_acorn(), "acorn.png")
 save(make_popcorn(), "popcorn.png")
 save(make_donut(), "donut.png")
+save(make_goldegg(), "goldegg.png")
 save(make_rubberduck(), "prop_rubberduck.png")
 save(make_sock(), "prop_sock.png")
 save(make_can(), "prop_can.png")

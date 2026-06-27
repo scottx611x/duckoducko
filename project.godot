@@ -9,8 +9,8 @@ config/name="DUCKODUCKO"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.png"
+boot_splash/show_image=false
 boot_splash/bg_color=Color(0.149, 0.361, 0.486, 1)
-boot_splash/image="res://art/splash.png"
 boot_splash/fullsize=false
 boot_splash/use_filter=false
 

@@ -1,0 +1,12 @@
+apiVersion: 1
+datasources:
+  - name: BotSim
+    type: yesoreyeram-infinity-datasource
+    uid: botsim-infinity
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      # Infinity fetches server-side via the Grafana backend proxy, so the internal
+      # docker hostname works and there are no CORS concerns.
+      global_queries: []
