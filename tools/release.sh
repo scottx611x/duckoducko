@@ -1,42 +1,36 @@
 #!/bin/bash
-# Build the Android APK + a web bundle and attach both to a GitHub release on
-# the public releases-only repo (scottx611x/duckoducko-web).
-# Usage: tools/release.sh v0.10-beta     (gh must be authed as scottx611x)
+# Build the Android APK + a web bundle, attach both to a GitHub release on the
+# (now public) source repo scottx611x/duckoducko, and deploy the web build to
+# GitHub Pages via the gh-pages branch (keeps main source-only; custom domain).
+# Usage: tools/release.sh vX.Y.Z     (gh must be authed as scottx611x)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-TAG="${1:?usage: tools/release.sh vX.Y-beta}"
+TAG="${1:?usage: tools/release.sh vX.Y.Z}"
+REPO="scottx611x/duckoducko"
 mkdir -p build
 godot --headless --path . --export-debug "Android" build/duckoducko.apk
 godot --headless --path . --export-release "Web" docs/index.html
 rm -f build/duckoducko-web.zip
 (cd docs && zip -qr ../build/duckoducko-web.zip . -x ".nojekyll")
+# GitHub release (APK + web zip)
 gh release create "$TAG" build/duckoducko.apk build/duckoducko-web.zip \
-    --repo scottx611x/duckoducko-web --title "DUCKODUCKO $TAG" \
+    --repo "$REPO" --title "DUCKODUCKO $TAG" \
     --notes "🦆 PLAY IN BROWSER: https://duckoducko.scott-ouellette.com — Android: install the APK (allow 'unknown apps'). Web: unzip and serve with \`python3 -m http.server\`." \
     2>/dev/null \
-    || gh release upload "$TAG" build/duckoducko.apk build/duckoducko-web.zip \
-        --clobber --repo scottx611x/duckoducko-web
-echo "https://github.com/scottx611x/duckoducko-web/releases/tag/$TAG"
-
-# --- deploy the web build to the LIVE GitHub Pages site (scottx611x/duckoducko-web, main:/docs) ---
-# Pages serves a static snapshot, so each release re-syncs docs/ into the repo and pushes.
+    || gh release upload "$TAG" build/duckoducko.apk build/duckoducko-web.zip --clobber --repo "$REPO"
+echo "release: https://github.com/$REPO/releases/tag/$TAG"
+# --- deploy the web build to Pages (gh-pages branch, force-pushed; main stays source-only) ---
 echo "deploying web build to Pages..."
 WORK="$(mktemp -d)"
-gh repo clone scottx611x/duckoducko-web "$WORK/web" -- -q --depth 1
-rm -rf "$WORK/web/docs"; mkdir -p "$WORK/web/docs"
-cp docs/index.* "$WORK/web/docs/"
-rm -f "$WORK/web/docs"/*.import          # editor import metadata isn't needed to serve
-touch "$WORK/web/docs/.nojekyll"         # stop Jekyll from eating engine files
-echo "duckoducko.scott-ouellette.com" > "$WORK/web/docs/CNAME"  # keep the Pages custom domain across releases
-python3 tools/web_meta.py "$WORK/web/docs"   # social link-preview meta + installable PWA manifest
-git -C "$WORK/web" add -A docs
-if git -C "$WORK/web" diff --cached --quiet; then
-    echo "Pages: no web changes to deploy"
-else
-    git -C "$WORK/web" -c user.name="scottx611x" -c user.email="scottx611x@gmail.com" \
-        commit -q -m "Deploy DUCKODUCKO web build ($TAG) for GitHub Pages"
-    git -C "$WORK/web" push -q origin HEAD:main
-    echo "Pages updated -> https://duckoducko.scott-ouellette.com"
-fi
+cp docs/index.* "$WORK/"
+rm -f "$WORK"/*.import                                   # editor import metadata not needed to serve
+touch "$WORK/.nojekyll"                                  # stop Jekyll from eating engine files
+echo "duckoducko.scott-ouellette.com" > "$WORK/CNAME"    # keep the Pages custom domain
+python3 tools/web_meta.py "$WORK"                        # social link-preview meta + installable PWA manifest
+git -C "$WORK" init -q
+git -C "$WORK" checkout -q -b gh-pages
+git -C "$WORK" add -A
+git -C "$WORK" -c user.name="scottx611x" -c user.email="scottx611x@gmail.com" commit -q -m "Deploy DUCKODUCKO web build ($TAG)"
+git -C "$WORK" push -qf git@github.com:scottx611x/duckoducko.git gh-pages
 rm -rf "$WORK"
 echo "PLAY: https://duckoducko.scott-ouellette.com"
