@@ -28,6 +28,7 @@ cp docs/index.* "$WORK/web/docs/"
 rm -f "$WORK/web/docs"/*.import          # editor import metadata isn't needed to serve
 touch "$WORK/web/docs/.nojekyll"         # stop Jekyll from eating engine files
 echo "duckoducko.scott-ouellette.com" > "$WORK/web/docs/CNAME"  # keep the Pages custom domain across releases
+python3 tools/web_meta.py "$WORK/web/docs"   # social link-preview meta + installable PWA manifest
 git -C "$WORK/web" add -A docs
 if git -C "$WORK/web" diff --cached --quiet; then
     echo "Pages: no web changes to deploy"
