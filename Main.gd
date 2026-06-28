@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.12.1"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.12.2"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -4713,14 +4713,6 @@ func _select_press(pos: Vector2) -> void:
 		hen_mode = randf() < 0.3 and ROSTER[sel_index].species != "hen"
 		select_line = ""; select_yaw = 0.32
 		_save(); _sfx("unlock", 1.25); _flash("? SURPRISE DUCK ?", 1.6)
-		return
-	var pack := _packable_ducks()
-	if SEL_PACK_BTN.has_point(pos) and not pack.is_empty():
-		if feathers >= PACK_COST:
-			feathers -= PACK_COST
-			_start_slot_spin()                     # SPIN — a new duck is a RARE jackpot now
-		else:
-			_sfx("bonk", 1.4, -8.0)                # can't afford a spin
 		return
 	if SEL_PLAY_BTN.has_point(pos):
 		if _is_unlocked(sel_index):
@@ -11830,7 +11822,7 @@ func _draw_shop() -> void:
 	if tex_sadie_greet != null:                          # SADIE tends the wardrobe — she greets from here
 		var sbob := absf(sin(anim_t * 2.2)) * 2.0
 		_blit_modulated(tex_sadie_greet, SHOP_WEAR_BTN.position + Vector2(34.0, 25.0 - sbob), 1.05, Color(1.4, 1.32, 1.22))
-	draw_string(font, SHOP_WEAR_BTN.position + Vector2(70.0, 33.0), "* WARDROBE — head & body >", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1.0, 0.92, 0.72))
+	draw_string(font, SHOP_WEAR_BTN.position + Vector2(70.0, 33.0), "* SADIE'S WARDROBE >", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1.0, 0.92, 0.72))
 	# LOONY's JUKEBOX gets its own whimsical screen — this is just the door to it
 	var ljb := Rect2(40.0, 800.0, VIEW.x - 80.0, 52.0)
 	var lsb := StyleBoxFlat.new()
@@ -12242,22 +12234,7 @@ func _draw_select() -> void:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d feathers to unlock — you have %d" % [duck.cost, feathers],
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 
-	# MYSTERY EGG — a gacha card pack: roll a random LOCKED duck for a flat price (cheaper on average
-	# than buying the pricey ones outright; the gamble is which duck hatches)
-	if not _packable_ducks().is_empty():
-		var aff: bool = feathers >= PACK_COST
-		var psb := StyleBoxFlat.new()
-		psb.bg_color = Color(0.16, 0.12, 0.05, 0.96) if aff else Color(0.1, 0.1, 0.13, 0.9)
-		psb.set_corner_radius_all(13); psb.set_border_width_all(2)
-		psb.border_color = Color(1.0, 0.84, 0.4, 0.85 + 0.15 * sin(anim_t * 4.0)) if aff else Color(1, 1, 1, 0.18)
-		draw_style_box(psb, SEL_PACK_BTN)
-		var ec := SEL_PACK_BTN.position + Vector2(26.0, 30.0)   # a little golden egg glyph
-		draw_circle(ec, 13.0, Color(1.0, 0.86, 0.42) if aff else Color(0.5, 0.5, 0.55))
-		draw_circle(ec - Vector2(4, 5), 4.0, Color(1, 1, 1, 0.6))
-		draw_string(font, SEL_PACK_BTN.position + Vector2(46.0, 24.0), "DUCK SLOTS",
-			HORIZONTAL_ALIGNMENT_LEFT, 96.0, 15, Color(1, 0.95, 0.7) if aff else Color(1, 1, 1, 0.45))
-		draw_string(font, SEL_PACK_BTN.position + Vector2(46.0, 44.0), "%d / spin" % PACK_COST,
-			HORIZONTAL_ALIGNMENT_LEFT, 96.0, 12, Color(1, 0.86, 0.4, 0.9) if aff else Color(1, 1, 1, 0.4))
+	# (DUCK SLOTS removed — ducks are bought directly with feathers in the shop)
 
 	# the equipped LOFT SPECIAL — tap to swap among the ones you own (buy more in the shop)
 	var sname := equipped_special
@@ -12290,7 +12267,7 @@ func _draw_select() -> void:
 		else:
 			draw_arc(Vector2(sx, sc), 8.0, 0, TAU, 12, Color(1, 0.82, 0.45, 0.3), 1.5)   # empty slot
 		sx += 30.0
-	draw_string(font, SEL_WEAR_BTN.position + Vector2(74, 21), "WARDROBE  >",
+	draw_string(font, SEL_WEAR_BTN.position + Vector2(74, 21), "SADIE'S WARDROBE >",
 		HORIZONTAL_ALIGNMENT_LEFT, SEL_WEAR_BTN.size.x - 80, 14, Color(1.0, 0.92, 0.7))
 
 	# ASCENSION tier selector — only once you've eaten the loaf at least once
@@ -12343,7 +12320,6 @@ func _draw_select() -> void:
 		_draw_special_picker()
 	if in_wardrobe:
 		_draw_wardrobe()
-	_draw_slot()                                   # DUCK SLOTS overlay (when spinning / showing a result)
 
 # the WARDROBE: one tidy grid that BOTH buys and equips head cosmetics (no shop clutter)
 func _wardrobe_tile(i: int) -> Rect2:
@@ -12401,7 +12377,7 @@ func _draw_tier_stars(center: Vector2, tier: int, mx: int, r: float) -> void:
 
 func _draw_wardrobe() -> void:
 	_warm_stall_bg(Vector2(VIEW.x * 0.5, 130.0))   # same cozy stall as the shop
-	_fancy_title("WARDROBE", 118.0, 28, Color(1, 0.86, 0.45), Color(1, 0.6, 0.25), 4.0)
+	_fancy_title("SADIE'S WARDROBE", 118.0, 17, Color(1, 0.86, 0.45), Color(1, 0.6, 0.25), 4.0)
 	_feather_text(Vector2(VIEW.x - 20, 118), "%d" % feathers, 22, Color(1, 0.92, 0.45), "right")
 	# the OUTFIT bar: your two equipped slots, side by side. tap a filled slot to doff it.
 	_draw_outfit_slot(WD_HEAD_SLOT, "head", equipped_wear)

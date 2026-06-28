@@ -328,3 +328,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Scott: boss test had inconsistencies (Barry showed GERALD lines). Holistic pass: revive + enrage now per-kind (Barry no longer borrows Gerald's outbursts); dead var + comments cleaned; verified the rest of the Gerald refs are legit.
 - Shadow Drake unlock -> ASCENSION-gated (>=1, i.e. beaten the river once); trait+lore text updated. (threshold tunable)
 - BARRY: now SPINS + tail-smacks -> in his ENTRANCE (surfaces from the water, no more Gerald sky-dive) AND a battle attack (spin wind-up -> smack). **NEEDS PLAYTEST** (the spin feel + entrance).
+
+
+## 2026-06-28 — UI: Sadie's Wardrobe + removed DUCK SLOTS (v1.12.2)
+- Wardrobe renamed to SADIE'S WARDROBE (title + nav buttons) to match Sadie the greeter.
+- Removed the DUCK SLOTS slot-machine (feather gacha) from duck-select — redundant since ducks are already bought with feathers (select a locked duck -> unlock). Dead _draw_slot/_start_slot_spin left parked. (Open space where the button was; can rebalance the select layout if wanted.)
