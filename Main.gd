@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.12.0"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.12.1"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -302,7 +302,7 @@ const ROSTER := [
 	{"name": "The Golden Mallard", "species": "golden", "hop": 1.0, "steer": 1.0, "pace": 1.0, "size": 1.0, "trait": "not a myth after all", "cost": 6500},
 	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
 	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "size": 0.98, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
-	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "best a Gerald to summon him", "cost": 0, "secret": true},
+	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "ascend the river to summon him", "cost": 0, "secret": true},
 ]
 # each duck has its OWN voice — roughly by size (big = deep honk, small = squeaky),
 # hand-tuned for character. rubber ducky is the exception: it squeaks.
@@ -945,7 +945,7 @@ const DUCK_LORE := {
 	"rubberduck": "Not technically a duck. Technically the best one. It does not flap, it does not migrate, it does not feel cold or fear — it just bobs there being perfect, and when it lands it SQUEAKS. The endgame flex. Whoever bought this has nothing left to prove and would like everyone to know it.",
 	"golden": "They said it was a myth. They were wrong, and now it's hopping. Maxed in every stat — hop, steer, pace, the lot — the Golden Mallard is what the river dreams about when it dreams about ducks. There's no number bigger than this one. There's just the gold.",
 	"disco": "Earned, not bought: reach hop #100 and the river drops the beat. Disco Duck arrives mid-boogie and never stops, trailing glitter and a confidence no normal mallard can legally hold. Fast, slick, and constitutionally incapable of standing still. The party found a body and the body is a duck.",
-	"shadow": "The drake from beyond. You don't buy the Shadow Drake — you SUMMON him, by besting Gerald himself, and something crosses back over with you when you do. Nearly maxed across the board, dark as a moonless pond, honking in a register that makes the reeds go quiet. He remembers the river from the other side.",
+	"shadow": "The drake from beyond. You don't buy the Shadow Drake — you SUMMON him, by ASCENDING the river (beat it, then dare the loop), and something crosses back over with you when you do. Nearly maxed across the board, dark as a moonless pond, honking in a register that makes the reeds go quiet. He remembers the river from the other side.",
 	"teal": "The river's getaway driver. Green-winged teal are among the smallest, fastest dabblers alive — they burst off the water nearly vertically and corner like a swallow, which is why this one is a blur of chestnut and green before you've finished blinking. Tiny hitbox, huge hurry. Catch him if you can.",
 	"merganser": "Built like a torpedo with a serrated red bill made for catching fish underwater. Common mergansers are low, long, and FAST — they patrol the river like they're late for something important, glossy green head slicing the current. He doesn't float so much as cruise. Pure forward momentum in a duck-shaped hull.",
 	"goldeneye": "Those eyes are real, and yes, they're gold. Goldeneyes are powerhouse divers whose wings whistle so loudly in flight that birders call them 'whistlers.' This one is all crisp black-and-white precision and a stare that misses nothing — a deep-diving athlete who treats the river like a training pool.",
@@ -5928,9 +5928,8 @@ func _boss_leave() -> void:
 	boss.t = 0.0
 	boss_globs.clear()                              # he's beaten — no in-flight spit may still kill you
 	boss_waves.clear()
-	var who: String = "SNAPZ" if boss.kind == "snapz" else "GERALD"
 	_sfx("quack", 0.5, 2.0)
-	# the spoils: a feather shower scaling with which Gerald you bested
+	# the spoils: a feather shower scaling with which boss you bested
 	var reward: int = 15 + 10 * int(boss.idx)
 	run_feathers += reward
 	shield_charges += 1                             # BOSS HEAL: a hard-won patch-up — +1 shield for the road
@@ -6022,7 +6021,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			boss_flash = 0.6
 			duck_shake = maxf(duck_shake, 0.5)
 			_flash("IT WON'T STAY DOWN", 1.8)
-			_gerald_say("death is for LESSER birds.")
+			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else "death is for\nLESSER birds."))
 			_sfx("laugh", 0.9); _sfx("mega", 0.5)
 			_spawn_parts(boss.x, boss.y, 28, Color(1.0, 0.4, 0.42), 280.0)
 			return
@@ -6034,7 +6033,8 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		if next_boss_idx > bosses_cleared:
 			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
 			_save()
-		_unlock_secret("shadow", "Shadow Drake")   # SECRET: best a Gerald -> the midnight duck
+		if ascension >= 1:                          # SECRET: best a boss while ASCENDING (you have beaten the river) -> the midnight duck
+			_unlock_secret("shadow", "Shadow Drake")
 		if next_boss_idx >= BOSS_MARKS.size():      # the ETERNAL is vanquished — summon the MAGIC BREAD
 			bread_pending = true
 			bread_delay = 2.0
@@ -6049,6 +6049,10 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			_gerald_say("RRRAAGH. SNAP SNAP.")
 			_sfx("laugh", 0.85)
 			boss.ult = true                         # queue his TIDAL SLAM ultimate
+		elif boss.kind == "beaver":
+			_flash("BARRY IS FURIOUS", 1.6)
+			_gerald_say("DAM you to\nSPLINTERS!")
+			_sfx("laugh", 0.85)
 		else:
 			_flash("GERALD IS FURIOUS", 1.6)
 			_gerald_say("NOW you've done it.")
@@ -6085,6 +6089,17 @@ func _update_boss(delta: float) -> void:
 			if boss.kind == "snapz":
 				boss.sub = 1.0          # rises from the deep, not the sky
 				boss.y = lerpf(BASE_Y + 200.0, BASE_Y + 46.0, clampf(boss.t / 1.6, 0.0, 1.0))
+			elif boss.kind == "beaver":          # BARRY surfaces with a SPIN + tail-smack, not a sky-dive
+				boss.x = VIEW.x * 0.5
+				boss.y = lerpf(BASE_Y + 200.0, 150.0, clampf(boss.t / 1.9, 0.0, 1.0))
+				boss.spin = clampf(boss.t / 1.6, 0.0, 1.0) * TAU * 2.0   # two full twirls on the way up
+				if boss.t >= 1.6:
+					boss.spin = 0.0
+				if not boss.get("entry_smack", false) and boss.t >= 1.7:
+					boss.entry_smack = true
+					ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 170.0})
+					_sfx("splash_big", 1.0); duck_shake = maxf(duck_shake, 0.6)
+					_spawn_parts(boss.x, BASE_Y, 24, Color(0.72, 0.86, 0.92), 290.0)
 			else:
 				# CINEMATIC SWOOP: GERALD rockets in from a random side, dives LOW across the
 				# player (shadow racing on the water beneath him), then rises to settle into the hover.
@@ -6104,12 +6119,12 @@ func _update_boss(delta: float) -> void:
 					var f: float = 1.0 - pow(1.0 - clampf((et - 3.0) / 2.0, 0.0, 1.0), 2.2)
 					boss.x = lerpf(VIEW.x * 0.5 - side * 150.0, VIEW.x * 0.5, f)
 					boss.y = lerpf(BASE_Y - 58.0, 150.0, f)
-			if not boss.get("introspoke", false) and boss.t >= (3.8 if boss.kind != "snapz" else 1.8):   # speaks once settled
+			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver"] else 3.8):   # speaks once settled
 				boss.introspoke = true
 				var tpool: Array = BOSS_INTRO_TAUNTS.get(boss.get("intro_pool", "gerald"), [])
 				if not tpool.is_empty():
 					_gerald_say(tpool[randi() % tpool.size()], true)
-			if boss.t >= (5.6 if boss.kind != "snapz" else 3.3):    # a longer, more menacing cinematic intro
+			if boss.t >= (3.3 if boss.kind in ["snapz", "beaver"] else 5.6):    # a longer, more menacing cinematic intro
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
 		"fight":
 			if boss.kind == "snapz":
@@ -6361,6 +6376,7 @@ func _beaver_fight(delta: float) -> void:
 	if st == "":                                       # up top, picking an attack, facing the duck
 		boss.x = lerpf(boss.x, VIEW.x * 0.5 + sin(anim_t * 0.6) * 110.0, clampf(delta * 1.2, 0.0, 1.0))
 		boss.y = 150.0
+		boss.spin = 0.0
 		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.8
 		boss.dive_t -= delta
 		if boss.dive_t <= 0.0:
@@ -6376,8 +6392,10 @@ func _beaver_fight(delta: float) -> void:
 	elif st == "throw":
 		if boss.t >= 0.45:
 			_beaver_recover()
-	elif st == "slapwarn":                             # TAIL-SLAP wind-up
-		if boss.t >= 0.6:
+	elif st == "slapwarn":                             # SPIN wind-up — Barry twirls, then SMACKS
+		boss.spin = clampf(boss.t / 0.7, 0.0, 1.0) * TAU * 1.5
+		if boss.t >= 0.7:
+			boss.spin = 0.0
 			boss.dive_stage = "slam"; boss.t = 0.0
 			boss_tides.append({"y": boss.y + 50.0, "hit": false})
 			_sfx("splash_big", 0.95); duck_shake = maxf(duck_shake, 0.5)
@@ -10921,10 +10939,10 @@ func _draw_boss_beaver() -> void:
 	if boss_flash > 0.0:
 		mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)
 	var face: float = -1.0 if duck_x < boss.x - 20.0 else 1.0     # turn to FACE the duck (looks left when you are left)
-	draw_set_transform(gpos, lean, Vector2(face, 1.0))
+	draw_set_transform(gpos, lean + float(boss.get("spin", 0.0)), Vector2(face, 1.0))
 	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if st == "slapwarn" or st == "slam":                 # TAIL-SLAP: the big paddle rears up, then SLAMS the water
+	if st == "slam":                                     # TAIL-SMACK: the paddle SLAMS the water after the spin
 		var tp2: float; var tyy: float; var tang: float
 		if st == "slapwarn":
 			tp2 = clampf(boss.t / 0.6, 0.0, 1.0)

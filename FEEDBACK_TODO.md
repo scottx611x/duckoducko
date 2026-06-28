@@ -318,3 +318,13 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Gerald picks up & hurls trash as a boss attack (ties the theme together)
 - Codex JUNKYARD stats page: trash grabbed by type (extends the flotsam codex)
 - A "trash crown" / raccoon-mask wearable cosmetic
+
+
+## 2026-06-27 — UNDERWATER STRETCH shipped (v1.12.0)
+- Scott: 'logs get monotonous' + wanted a fresh layer-shift (dive underwater / clouds). Built a WHIRLPOOL-triggered UNDERWATER DIVE: steer into the vortex -> swim a continuous stretch (same steer + hop=kick) hopping sunken logs, dodging darting fish, grabbing pearls (+feathers), then surface. CLOUD fly-over NUKED (Scott: 'it is bad'). Per-species kicking feet. Bot-sim fairness-passed (bot dives + survives, no fish death-spike, a WON run). DONE + LIVE.
+
+
+## 2026-06-28 — boss consistency pass + Barry spin + shadow unlock (v1.12.1)
+- Scott: boss test had inconsistencies (Barry showed GERALD lines). Holistic pass: revive + enrage now per-kind (Barry no longer borrows Gerald's outbursts); dead var + comments cleaned; verified the rest of the Gerald refs are legit.
+- Shadow Drake unlock -> ASCENSION-gated (>=1, i.e. beaten the river once); trait+lore text updated. (threshold tunable)
+- BARRY: now SPINS + tail-smacks -> in his ENTRANCE (surfaces from the water, no more Gerald sky-dive) AND a battle attack (spin wind-up -> smack). **NEEDS PLAYTEST** (the spin feel + entrance).
