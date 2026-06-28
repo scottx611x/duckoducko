@@ -333,3 +333,10 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-28 — UI: Sadie's Wardrobe + removed DUCK SLOTS (v1.12.2)
 - Wardrobe renamed to SADIE'S WARDROBE (title + nav buttons) to match Sadie the greeter.
 - Removed the DUCK SLOTS slot-machine (feather gacha) from duck-select — redundant since ducks are already bought with feathers (select a locked duck -> unlock). Dead _draw_slot/_start_slot_spin left parked. (Open space where the button was; can rebalance the select layout if wanted.)
+
+
+## 2026-06-28 — REMOVED underwater stretch + web-font icon fixes (v1.12.3)
+- Scott on the underwater: 'absolutely horrible, no whimsy no pizzazz, 3d nature of the mode isn't used in movement, trash, get rid of it.' FULLY REMOVED (all funcs/vars/hooks/bot logic/capture flag; game verified runs clean).
+- LESSON (important): the underwater was the RIVER RESKINNED below the surface (hop sunken logs, dodge fish) — it never used the depth/3D in HOW YOU MOVE, so it felt identical to the surface with a coat of paint. A real layer-shift mechanic must change the MOVEMENT/verb, not just the visuals + obstacle skins. Don't rebuild this without a genuinely different movement model.
+- Fixed web-bundle missing icons (web font lacks the glyphs): the menu settings (⚙ -> procedural gear), SKIP ✕ -> SKIP, logbook nav ‹› -> < >, trend ▬ -> -.
+- STILL TODO (Scott, same review): logbook run-detail SPACING ("the Mallard" subtitle overlaps; THE TALLY bleeds into SNACK MENU); death-screen menu/logbook buttons need PADDING.
