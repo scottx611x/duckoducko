@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.12.3"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.0"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -7118,8 +7118,7 @@ func _draw_haz_turtle() -> void:
 func _draw_logs() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.04, 0.06, 1.0))
 	_fancy_title("APP LOGS", 92.0, 28, Color(0.7, 0.95, 0.8), Color(0.4, 0.7, 0.5), 3.0)
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	var lh := 20.0
 	var y0 := 140.0
 	var maxlines: int = int((VIEW.y - y0 - 40.0) / lh)
@@ -7627,10 +7626,8 @@ func _draw_pause() -> void:
 			draw_style_box(psb, pr)
 			_otext(Vector2(pr.position.x, pr.position.y + 24.0), info.name, 19, Color(1, 0.92, 0.45), pr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 			_mtext(Vector2(pr.position.x + 12.0, pr.position.y + 32.0 + font.get_ascent(16)), info.desc, 16, Color(1, 1, 1, 0.85), pr.size.x - 24.0)
-	draw_style_box(_btn_sb(), PAUSE_RESUME_BTN)
-	_btn_label(PAUSE_RESUME_BTN, "RESUME", 30, Color(1, 1, 1, 0.95))
-	draw_style_box(_btn_sb(), PAUSE_MENU_BTN)
-	_btn_label(PAUSE_MENU_BTN, "quit to menu", 22, Color(1, 1, 1, 0.8))
+	_draw_button(PAUSE_RESUME_BTN, "RESUME", 30, true)
+	_draw_button(PAUSE_MENU_BTN, "quit to menu", 22)
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
@@ -7658,7 +7655,7 @@ func _draw_death() -> void:
 		var dwl := _worn_list(); dwl.reverse()
 		for wid in dwl:
 			_blit_centered(_wear3d_spin(wid, 0.35 + sin(anim_t * 0.7) * 0.18), dpos, 4.2)
-	var panel := Rect2(56.0, 240.0, VIEW.x - 112.0, 440.0)
+	var panel := Rect2(56.0, 240.0, VIEW.x - 112.0, 462.0)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.06, 0.11, 0.17, 0.93)
 	sb.set_corner_radius_all(22)
@@ -7718,23 +7715,11 @@ func _draw_death() -> void:
 			bottom = maxf(bottom, rr.rect.end.y)
 		ny = bottom + 14.0
 	if run_won:                                    # the bread triumph: a big PADDLE ON -> endless invite
-		var eb := StyleBoxFlat.new()
-		eb.bg_color = Color(0.16, 0.12, 0.05, 0.96); eb.set_corner_radius_all(14)
-		eb.set_border_width_all(2); eb.border_color = Color(1.0, 0.82, 0.35, 0.9)
-		draw_style_box(eb, DEATH_ENDLESS_BTN)
-		var ep := 0.6 + 0.4 * sin(anim_t * 4.0)
-		_btn_label(DEATH_ENDLESS_BTN, "PADDLE ON  >  endless waters", 20, Color(1.0, 0.92, 0.55, 0.7 + 0.3 * ep))
+		_draw_button(DEATH_ENDLESS_BTN, "PADDLE ON  >  endless waters", 20, true)
 	elif death_power_sel < 0 or death_power_sel >= rrects.size():
 		_otext(Vector2(0, 614.0), "tap empty space to retry", 22, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)))
-	var mb := StyleBoxFlat.new()
-	mb.bg_color = Color(0.10, 0.17, 0.24, 0.9)
-	mb.set_corner_radius_all(12)
-	mb.set_border_width_all(1)
-	mb.border_color = Color(1, 1, 1, 0.35)
-	draw_style_box(mb, DEATH_MENU_BTN)
-	_btn_label(DEATH_MENU_BTN, "menu", 18, Color(1, 1, 1, 0.8))
-	draw_style_box(mb, DEATH_STATS_BTN)
-	_btn_label(DEATH_STATS_BTN, "logbook", 18, Color(0.7, 0.9, 1.0))
+	_draw_button(DEATH_MENU_BTN, "menu", 18)
+	_draw_button(DEATH_STATS_BTN, "logbook", 18)
 	# inspected power's explanation — drawn LAST so it floats ON TOP of the buttons,
 	# and clamped to sit ABOVE them so it never buries the menu/logbook taps
 	if death_power_sel >= 0 and death_power_sel < rrects.size():
@@ -7898,8 +7883,7 @@ func _fmt_date(ts: int) -> String:
 func _draw_stats() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.06, 0.10, 1.0))
 	_fancy_title("LOGBOOK", 92.0, 36, Color(0.7, 0.92, 1.0), Color(0.4, 0.7, 1.0), 4.0)
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	var L := lifetime
 	var runs := int(L.get("runs", 0))
 	var tot := int(L.get("total_ft", 0))
@@ -8847,8 +8831,7 @@ func _draw_jukebox_screen() -> void:
 		draw_string(font, Vector2(nx, lerpf(VIEW.y + 20.0, 90.0, np)), sym, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 22, Color.from_hsv(fposmod(i * 0.1 + anim_t * 0.2, 1.0), 0.4, 1.0, 0.32 * sin(np * PI)))
 	_fancy_title("LUCIEN'S JUKEBOX", 104.0, 30, Color(0.72, 0.9, 1.0), Color(0.4, 0.6, 1.0), 4.0)
 	_feather_text(Vector2(VIEW.x - 20, 56), "%d" % feathers, 24, Color(1, 0.92, 0.45), "right")
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	_draw_lucien_booth(Vector2(102.0, 430.0))
 	# a dancing DUCKLING crowd bopping along the bottom + a glowing EQUALIZER they're grooving to
 	if not tex_duckling.is_empty():
@@ -8985,8 +8968,7 @@ func _settings_toggle(y: float, label: String, on: bool, act: String) -> void:
 func _draw_settings() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.04, 0.06, 0.11, 1.0))
 	_fancy_title("SETTINGS", 110.0, 40, Color(0.7, 0.92, 1.0), Color(0.4, 0.7, 1.0), 4.0)
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	settings_hits = []
 	_settings_slider(276.0, "MUSIC", music_vol, -40.0, 0.0, "music")
 	_settings_slider(338.0, "SFX", sfx_vol, -40.0, 6.0, "sfx")
@@ -9338,15 +9320,13 @@ func _draw_codex() -> void:
 	# mask the header zone so scrolled rows vanish cleanly behind the title
 	draw_rect(Rect2(0, 0, VIEW.x, CODEX_VY0 - 6.0), Color(0.04, 0.05, 0.09, 1.0))
 	_fancy_title("CODEX", 92.0, 36, Color(0.95, 0.8, 0.5), Color(0.8, 0.5, 0.3), 4.0)
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	_otext(Vector2(0, 124), "%d of %d catalogued  ·  swipe/scroll · tap to study" % [seen_n, items.size()],
 		13, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 # the detail page: a big portrait (turntable where it exists) + full lore
 func _draw_codex_detail(it: Dictionary) -> void:
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	_fancy_title(it.name, 116.0, 26, Color(1, 0.92, 0.55), Color(0.9, 0.6, 0.3), 3.0)
 	_otext(Vector2(0, 148), it.sub, 15, Color(0.7, 0.85, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	var cx := VIEW.x * 0.5
@@ -11399,23 +11379,14 @@ func _draw_menu() -> void:
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
 	_otext(Vector2(0, 692), "-  tap to play  -", 36, Color(1, 1, 1, pulse), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
 	# DUCKS + SHOP buttons (plain text: emoji glyph widths wreck centering on Android)
-	var lsb := StyleBoxFlat.new()
-	lsb.bg_color = Color(0.07, 0.12, 0.18, 0.92); lsb.set_corner_radius_all(12)
-	lsb.set_border_width_all(2); lsb.border_color = Color(0.5, 0.8, 1.0, 0.6)
-	draw_style_box(lsb, MENU_STATS_BTN)
-	_btn_label(MENU_STATS_BTN, "LOGBOOK", 19, Color(0.75, 0.9, 1.0))
-	draw_style_box(lsb, MENU_CODEX_BTN)
-	_btn_label(MENU_CODEX_BTN, "CODEX", 19, Color(0.75, 0.9, 1.0))
-	var gsb := StyleBoxFlat.new()
-	gsb.bg_color = Color(0.06, 0.10, 0.16, 0.85); gsb.set_corner_radius_all(11)
-	gsb.set_border_width_all(1); gsb.border_color = Color(0.6, 0.8, 1.0, 0.4)
-	draw_style_box(gsb, MENU_SETTINGS_BTN)
-	_btn_label(MENU_SETTINGS_BTN, "SETTINGS", 16, Color(0.7, 0.85, 1.0, 0.9))
+	_draw_button(MENU_STATS_BTN, "LOGBOOK", 19)
+	_draw_button(MENU_CODEX_BTN, "CODEX", 19)
+	_draw_button(MENU_SETTINGS_BTN, "SETTINGS", 16)
 	var _gc := MENU_SETTINGS_BTN.position + Vector2(52.0, 15.0)   # a procedural GEAR (web font lacks the emoji)
 	for _gt in 8:
 		var _ga: float = _gt * TAU / 8.0
-		draw_line(_gc + Vector2(cos(_ga), sin(_ga)) * 4.0, _gc + Vector2(cos(_ga), sin(_ga)) * 8.5, Color(0.7, 0.85, 1.0, 0.9), 2.5)
-	draw_circle(_gc, 5.5, Color(0.7, 0.85, 1.0, 0.9))
+		draw_line(_gc + Vector2(cos(_ga), sin(_ga)) * 4.0, _gc + Vector2(cos(_ga), sin(_ga)) * 8.5, Color(1.0, 0.94, 0.8, 0.95), 2.5)
+	draw_circle(_gc, 5.5, Color(1.0, 0.94, 0.8, 0.95))
 	draw_circle(_gc, 2.3, Color(0.09, 0.12, 0.17))
 	# a "NEW!" badge on the codex button when undiscovered entries await
 	var newc := _codex_new_count()
@@ -11424,15 +11395,49 @@ func _draw_menu() -> void:
 		var npulse := 0.6 + 0.4 * sin(anim_t * 5.0)
 		draw_circle(bp, 13.0, Color(1.0, 0.32, 0.3, npulse))
 		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
-	draw_style_box(_btn_sb(), MENU_DUCKS_BTN)
-	_btn_label(MENU_DUCKS_BTN, "DUCKS", 24, Color(1, 1, 1, 0.95))
-	draw_style_box(_btn_sb(), MENU_SHOP_BTN)
-	_btn_label(MENU_SHOP_BTN, "SHOP", 24, Color(1, 1, 1, 0.95))
+	_draw_button(MENU_DUCKS_BTN, "DUCKS", 24, true)
+	_draw_button(MENU_SHOP_BTN, "SHOP", 24, true)
 	_otext(Vector2(0, 944), "DUCKODUCKO beta · made by scott", 12, Color(1, 1, 1, 0.32),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 # exact vertical centering (baseline math) — draw_string y is a BASELINE, and
 # guessed offsets drift across platforms/fonts
+func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> void:
+	var rad := int(minf(rect.size.y * 0.5, 18.0))
+	var base := Color(0.64, 0.45, 0.22) if primary else Color(0.43, 0.30, 0.19)   # golden OAK / WALNUT (all wood)
+	var sh := StyleBoxFlat.new(); sh.bg_color = Color(0.02, 0.03, 0.04, 0.5); sh.set_corner_radius_all(rad)
+	draw_style_box(sh, Rect2(rect.position + Vector2(0.0, 5.0), rect.size))     # drop shadow
+	var bb := StyleBoxFlat.new(); bb.bg_color = base; bb.set_corner_radius_all(rad)
+	bb.set_border_width_all(3); bb.border_color = base.darkened(0.5)
+	draw_style_box(bb, rect)                                                    # plank body + dark edge
+	var cap := StyleBoxFlat.new(); cap.bg_color = base.lightened(0.16)          # sun-lit top bevel
+	cap.corner_radius_top_left = rad; cap.corner_radius_top_right = rad
+	cap.corner_radius_bottom_left = 2; cap.corner_radius_bottom_right = 2
+	draw_style_box(cap, Rect2(rect.position + Vector2(3.0, 3.0), Vector2(rect.size.x - 6.0, rect.size.y * 0.32)))
+	var gx0 := rect.position.x + rad * 0.7
+	var gx1 := rect.end.x - rad * 0.7
+	for gi in 5:                                                                # WOOD GRAIN streaks
+		var gy := rect.position.y + rect.size.y * (0.30 + gi * 0.10)
+		var gc := base.darkened(0.22) if gi % 2 == 0 else base.lightened(0.12)
+		var pv := PackedVector2Array()
+		for sgi in 13:
+			var t := sgi / 12.0
+			pv.append(Vector2(lerpf(gx0, gx1, t), gy + sin(t * 6.0 + gi * 1.7) * 1.5))
+		for sgi in 12:
+			draw_line(pv[sgi], pv[sgi + 1], Color(gc.r, gc.g, gc.b, 0.25), 1.5)
+	var kc := Vector2(rect.position.x + rect.size.x * 0.15, rect.position.y + rect.size.y * 0.66)   # a KNOT
+	_fill_ellipse(kc, 4.6, 3.2, base.darkened(0.34))
+	_fill_ellipse(kc, 2.4, 1.6, base.darkened(0.14))
+	for _px in [rect.position.x + 12.0, rect.end.x - 12.0]:                     # iron NAIL heads
+		draw_circle(Vector2(_px, rect.position.y + 10.0), 2.7, Color(0.15, 0.12, 0.10))
+		draw_circle(Vector2(_px - 0.8, rect.position.y + 9.2), 1.0, Color(0.75, 0.75, 0.78, 0.6))
+	var s2 := size                                                             # CARVED / painted letters
+	while s2 > 12 and font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, s2).x > rect.size.x - 30.0:
+		s2 -= 1
+	var ly := rect.position.y + (rect.size.y - font.get_height(s2)) * 0.5 + font.get_ascent(s2)
+	draw_string(font, Vector2(rect.position.x + 1.5, ly + 1.6), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, s2, Color(0.14, 0.09, 0.04, 0.75))
+	draw_string(font, Vector2(rect.position.x, ly), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, s2, Color(1.0, 0.95, 0.82))
+
 func _btn_label(rect: Rect2, txt: String, size: int, col := Color.WHITE) -> void:
 	# autoshrink: long labels ("UNLOCK · 90 feathers") shrink to FIT instead of
 	# clipping to "fea" — draw_string with a width just truncates
@@ -11605,8 +11610,7 @@ func _draw_shop() -> void:
 			_otext(Vector2(VIEW.x - 176.0, 190.0), "tap me!", 12, Color(0.85, 0.7, 0.5, 0.5), 90, HORIZONTAL_ALIGNMENT_RIGHT, 2)
 	_fancy_title("RUSTY'S FEATHER SHOP", 96.0, 30, Color(1, 0.9, 0.35), Color(1, 0.58, 0.2), 4.0)
 	_feather_text(Vector2(VIEW.x - 20, 60), "%d" % feathers, 26, Color(1, 0.92, 0.45), "right")
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	_otext(Vector2(0, 174), "tap any item for the full story", 12, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# section headers frame the two bands
 	_shop_header(204.0, "PERKS   ·   permanent upgrades", Color(1.0, 0.86, 0.4))
@@ -11744,9 +11748,7 @@ func _draw_shop_modal(i: int) -> void:
 		label = "EQUIP" if special else "OWNED"; lcol = Color(0.55, 0.9, 0.6)
 	else:
 		label = "BUY · %d *" % int(it.cost); lcol = accent if aff else Color(1, 1, 1, 0.35)
-	var bsb := StyleBoxFlat.new(); bsb.bg_color = Color(0.1, 0.14, 0.2, 0.97); bsb.set_corner_radius_all(12)
-	bsb.set_border_width_all(2); bsb.border_color = lcol; draw_style_box(bsb, bb)
-	_btn_label(bb, label, 18, lcol)
+	_draw_button(bb, label, 18, aff)
 
 # one shop card — icon, name, wrapped blurb, and a price / OWNED / EQUIPPED tag
 func _shop_card(rc: Rect2, id: String, nm: String, desc: String, cost: int, owned: bool, special: bool, equipped: bool) -> void:
@@ -11917,8 +11919,7 @@ func _draw_select() -> void:
 		name_edit.visible = false
 	_otext(Vector2(0, 110), "CHOOSE YOUR DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 9)
 
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 
 	# feather wallet
 	_feather_text(Vector2(VIEW.x - 20, 60), "%d" % feathers, 26, Color(1, 0.92, 0.45), "right")
@@ -11979,11 +11980,7 @@ func _draw_select() -> void:
 	# the ♀ SEX toggle — run any drake as his hen (♀ glyph since the font lacks the symbol)
 	if not is_secret and sp != "hen":
 		var hb := SEL_HEN_BTN
-		var hsb := StyleBoxFlat.new()
-		hsb.bg_color = Color(0.26, 0.12, 0.19, 0.96) if is_hen else Color(0.11, 0.13, 0.18, 0.92)
-		hsb.set_corner_radius_all(17); hsb.set_border_width_all(2)
-		hsb.border_color = Color(1.0, 0.6, 0.82, 0.95) if is_hen else Color(0.55, 0.62, 0.76, 0.55)
-		draw_style_box(hsb, hb)
+		_draw_button(hb, "", 16)
 		var gc := Vector2(hb.position.x + 28.0, hb.position.y + 16.0)
 		var gcol := Color(1.0, 0.64, 0.85) if is_hen else Color(0.72, 0.78, 0.9)
 		if is_hen:                                             #女 circle + cross below (the HEN)
@@ -11999,10 +11996,7 @@ func _draw_select() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, hb.size.x - 54.0, 16, gcol)
 	# RANDOM — surprise me: a random unlocked duck in a random outfit (a little die icon)
 	var rb := SEL_RANDOM_BTN
-	var rsb := StyleBoxFlat.new()
-	rsb.bg_color = Color(0.1, 0.15, 0.22, 0.95); rsb.set_corner_radius_all(17); rsb.set_border_width_all(2)
-	rsb.border_color = Color(0.55, 0.85, 1.0, 0.6 + 0.28 * sin(anim_t * 3.5))
-	draw_style_box(rsb, rb)
+	_draw_button(rb, "", 16)
 	var dc := Vector2(rb.position.x + 28.0, rb.position.y + 16.0)
 	var dcol := Color(0.78, 0.92, 1.0)
 	draw_rect(Rect2(dc - Vector2(8, 8), Vector2(16, 16)), dcol, false, 2.0)   # a die
@@ -12022,14 +12016,12 @@ func _draw_select() -> void:
 		_stat_bar("SIZE", clampf((duck.get("size", 1.0) * hsz - 0.6) / 0.62, 0.06, 1.0), 518.0, 344.0, 116.0, Color(0.74, 0.58, 1.0))
 
 	if unlocked:
-		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
-		_btn_label(SEL_PLAY_BTN, "PLAY  >", 28)
+		_draw_button(SEL_PLAY_BTN, "PLAY  >", 28, true)
 	elif is_secret:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "a hidden duck. you'll know when.",
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	elif feathers >= duck.cost:
-		draw_style_box(_btn_sb(), SEL_PLAY_BTN)
-		_btn_label(SEL_PLAY_BTN, "UNLOCK · %d feathers" % duck.cost, 24, Color(1, 0.92, 0.45))
+		_draw_button(SEL_PLAY_BTN, "UNLOCK · %d feathers" % duck.cost, 24, true)
 	else:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "%d feathers to unlock — you have %d" % [duck.cost, feathers],
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
@@ -12041,22 +12033,12 @@ func _draw_select() -> void:
 	for spc in SPECIALS:
 		if spc.id == equipped_special:
 			sname = spc.name
-	var ssb := StyleBoxFlat.new()
-	ssb.bg_color = Color(0.05, 0.13, 0.18, 0.92)
-	ssb.set_corner_radius_all(15)
-	ssb.set_border_width_all(2)
-	ssb.border_color = Color(0.5, 0.92, 1.0, 0.85)
-	draw_style_box(ssb, SEL_SPECIAL_BTN)
+	_draw_button(SEL_SPECIAL_BTN, "", 15)
 	_relic_glyph(equipped_special, SEL_SPECIAL_BTN.position + Vector2(20, 16), 9.0, Color(0.6, 0.92, 1.0))
 	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(38, 21), "%s  >" % sname,
 		HORIZONTAL_ALIGNMENT_LEFT, SEL_SPECIAL_BTN.size.x - 44, 15, Color(0.85, 0.96, 1.0))
 	# WARDROBE chip — shows BOTH slots (head + body) so it's body-aware at a glance
-	var wsb := StyleBoxFlat.new()
-	wsb.bg_color = Color(0.13, 0.10, 0.16, 0.92)
-	wsb.set_corner_radius_all(15)
-	wsb.set_border_width_all(2)
-	wsb.border_color = Color(1.0, 0.82, 0.45, 0.85)
-	draw_style_box(wsb, SEL_WEAR_BTN)
+	_draw_button(SEL_WEAR_BTN, "", 14)
 	var sx := SEL_WEAR_BTN.position.x + 20.0
 	for slot_id in [equipped_wear, equipped_body]:                 # head icon, then body icon
 		var sc := SEL_WEAR_BTN.position.y + 16.0

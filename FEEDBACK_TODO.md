@@ -340,3 +340,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - LESSON (important): the underwater was the RIVER RESKINNED below the surface (hop sunken logs, dodge fish) — it never used the depth/3D in HOW YOU MOVE, so it felt identical to the surface with a coat of paint. A real layer-shift mechanic must change the MOVEMENT/verb, not just the visuals + obstacle skins. Don't rebuild this without a genuinely different movement model.
 - Fixed web-bundle missing icons (web font lacks the glyphs): the menu settings (⚙ -> procedural gear), SKIP ✕ -> SKIP, logbook nav ‹› -> < >, trend ▬ -> -.
 - STILL TODO (Scott, same review): logbook run-detail SPACING ("the Mallard" subtitle overlaps; THE TALLY bleeds into SNACK MENU); death-screen menu/logbook buttons need PADDING.
+
+
+## 2026-06-28 — wooden button redesign (v1.13.0)
+- Scott: redesign all in-game buttons with whimsy/ducks, more custom + 'more wood'. Built central _draw_button() = crafted WOODEN SIGN (oak primary/walnut secondary, grain, knot, nail-heads, carved letters). Rolled across MENU, DEATH (+padding fix), DUCK-SELECT (PLAY/DRAKE/RANDOM/MEGA-HOP/WARDROBE), PAUSE, SHOP, shared back, gear->cream.
+- STILL TODO: settings sub-buttons (PLAY TUTORIAL/VIEW LOGS/RESET), TUT_SKIP, stats-expand toggle; then logbook run-detail spacing overlaps.
