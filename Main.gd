@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.2"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.3"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1326,12 +1326,20 @@ func _ready() -> void:
 			load("res://art/hawk_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
-	for cid in ["gerald", "snapz", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "turtle_open", "donni", "bread"]:   # COMPENDIUM turntables (+ open-mouth react sets)
+	for cid in ["gerald", "snapz", "beaver", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "turtle_open", "donni", "bread"]:   # COMPENDIUM turntables (+ open-mouth react sets)
 		if ResourceLoader.exists("res://art/%s_spin_00.png" % cid):
 			var frames: Array = []
 			for i in 16:
 				frames.append(load("res://art/%s_spin_%02d.png" % [cid, i]))
 			tex_codex_spin[cid] = frames
+	var _ctmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread"}   # GUARD against the recurring missing-codex-icon bug
+	for _ce in CODEX:
+		if _ce.get("cat", "") in ["boss", "enemy", "friend"]:
+			var _cid: String = str(_ce.get("id", ""))
+			if not ((_ctmap.has(_cid) and tex_codex_spin.has(_ctmap[_cid])) or _codex_tex(_cid) != null):
+				_log("CODEX-ICON MISSING: '%s' (%s) -- add it to _codex_tex" % [_cid, str(_ce.get("name", ""))])
+			if _ce.get("cat", "") == "boss" and not tex_codex_spin.has("gerald" if _cid == "eternal" else _cid):
+				_log("CODEX-DETAIL MISSING: boss '%s' has no turntable" % _cid)
 	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
 		var fp := "res://art/fire_duck_%d.png" % fi
 		if ResourceLoader.exists(fp):
@@ -4106,7 +4114,7 @@ func reset_game() -> void:
 	boss = null
 	boss_waves.clear()
 	next_boss_idx = 0
-	boss_kinds = ["gerald", "snapz", "beaver"]; boss_kinds.shuffle(); boss_kinds = boss_kinds.slice(0, 2)   # 2 of {Gerald,Snapz,Barry} for the first two slots
+	boss_kinds = ["gerald", ["snapz", "beaver"][randi() % 2]]   # boss 1 = GERALD, boss 2 = random SNAPZ/BARRY, boss 3 = Eternal
 	boss_hp_bonus = 0
 	asc_pace = 1.0
 	bread_pending = false; bread_active = false; bread_delay = 0.0; bread_t = 0.0
@@ -9178,6 +9186,8 @@ func _codex_tex(id: String):
 			return tex_gerald[0] if tex_gerald.size() > 0 else null
 		"snapz":
 			return tex_snapz[0] if tex_snapz.size() > 0 else null
+		"beaver":
+			return tex_beaver[0] if tex_beaver.size() > 0 else null
 		"turtle":
 			return tex_turtle[0] if tex_turtle.size() > 0 else (tex_snapz[0] if tex_snapz.size() > 0 else null)
 		"heron":
@@ -12031,7 +12041,7 @@ func _draw_select() -> void:
 		else:
 			draw_arc(Vector2(sx, sc), 8.0, 0, TAU, 12, Color(1, 0.82, 0.45, 0.3), 1.5)   # empty slot
 		sx += 30.0
-	draw_string(font, SEL_WEAR_BTN.position + Vector2(74, 21), "SADIE'S WARDROBE >",
+	draw_string(font, SEL_WEAR_BTN.position + Vector2(74, 21), "WARDROBE >",
 		HORIZONTAL_ALIGNMENT_LEFT, SEL_WEAR_BTN.size.x - 80, 14, Color(1.0, 0.92, 0.7))
 
 	# ASCENSION tier selector — only once you've eaten the loaf at least once

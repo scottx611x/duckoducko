@@ -351,3 +351,10 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Per-button RANDOMIZED knot placement (Scott: knots were all in the same spot) — 1-2 knots at hashed positions/sizes + varied grain, stable per button.
 - Logbook RUN-DETAIL spacing fixed: de-cramped the header (subtitle/paddling/bested/killer no longer collide), pushed POWERS/relics/TALLY down, widened TALLY->SNACK gap, moved the date off the hint. Verified via --dbg gallery.
 - Button redesign + logbook polish COMPLETE.
+
+
+## 2026-06-28 — boss select + Barry codex icon (v1.13.3)
+- Scott: Barry rarely/never showed. Boss selection now: boss1=GERALD, boss2=random(SNAPZ/BARRY), boss3=Eternal (per Scott).
+- Barry had NO codex icon (recurring bug): _codex_tex had no 'beaver' case (list icon) AND beaver wasn't in the tex_codex_spin load (detail turntable). Added BOTH. Plus a boot GUARD that logs any boss/enemy/friend codex entry missing an icon or turntable -- so this stops recurring.
+- Duck-select wear button label -> 'WARDROBE' (wardrobe screen title stays SADIE'S WARDROBE).
+- STILL PENDING: press-feedback + act-on-release for buttons (Scott asked; investigated _input/_on_press, not yet implemented).
