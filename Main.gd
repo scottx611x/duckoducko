@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.11.114"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.12.0"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -583,7 +583,6 @@ var sim_append := false
 const DEV_BOSS_BTNS := [
 	{"name": "GERALD", "idx": 0}, {"name": "SNAPZ", "idx": 1}, {"name": "G-III", "idx": 2},
 	{"name": "BREAD", "idx": -1},   # -1 = summon the MAGIC BREAD straight away (ascension test)
-	{"name": "CLOUD", "idx": -2},   # -2 = spawn the cloud-launch geyser to test the skip mini-game
 	{"name": "BARRY", "idx": -4},  # -4 = summon Barry the beaver
 ]
 # GERALD has opinions. he shares them mid-fight (pompous, petty, faintly British).
@@ -786,6 +785,23 @@ var cloud = null                # RARE CLOUD GEYSER: ride it up to skip a boss -
 var cloud_timer := 60.0
 const SKY_GOAL := 7.0           # seconds to climb to the bread
 var in_sky := false             # CLOUD-LAUNCH sky sequence active
+const FOOT_COL := {   # accurate per-species webbed-foot colors (dabblers orange, divers blue-grey, etc.)
+	"mallard": Color(0.95, 0.52, 0.12), "wood": Color(0.85, 0.62, 0.28),
+	"bufflehead": Color(0.80, 0.67, 0.67), "shoveler": Color(0.96, 0.55, 0.14),
+	"teal": Color(0.52, 0.50, 0.44), "pintail": Color(0.50, 0.55, 0.62),
+	"hoodie": Color(0.74, 0.63, 0.36), "ruddy": Color(0.46, 0.54, 0.62),
+	"merganser": Color(0.90, 0.40, 0.26), "canvasback": Color(0.54, 0.58, 0.64),
+	"harlequin": Color(0.56, 0.58, 0.64), "goldeneye": Color(0.93, 0.66, 0.22),
+	"eider": Color(0.55, 0.58, 0.50), "rubberduck": Color(0.97, 0.76, 0.14),
+	"golden": Color(0.93, 0.79, 0.34), "disco": Color(0.92, 0.34, 0.72),
+	"shadow": Color(0.24, 0.24, 0.30),
+}
+var in_water := false           # UNDERWATER stretch active
+var whirl = null                # the WHIRLPOOL vortex: steer into it to DIVE -> {x,y,t}
+var whirl_t := 22.0
+var water_end := 0.0            # distance at which the underwater stretch surfaces
+var water_fish: Array = []      # darting fish to dodge underwater -> {x,y,vx,wob}
+var fish_timer := 1.6
 var sky_t := 0.0
 var sky_alt := 0.0
 var sky_duck_x := 270.0
@@ -1577,6 +1593,16 @@ func _ready() -> void:
 			boss.dive_stage = "pleap"; boss.t = 0.31; boss.x = VIEW.x * 0.5; boss.dive_x = VIEW.x * 0.5; boss.y = BASE_Y - 200.0; boss.sub = 0.0
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_pike.png")
+		get_tree().quit()
+	elif "--watershot" in OS.get_cmdline_user_args():
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		in_water = true
+		water_end = distance + 999999.0   # stay under for the capture
+		water_fish.append({"x": VIEW.x * 0.42, "y": BASE_Y - 130.0, "vx": 70.0, "wob": 0.0})
+		await get_tree().create_timer(1.8).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_water.png")
 		get_tree().quit()
 	elif "--skyshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -3550,6 +3576,162 @@ func _draw_cloud_puff(c: Vector2, s2: float, col := Color(1, 1, 1, 0.93)) -> voi
 	draw_circle(c + Vector2(2.0 * s2, -9.0 * s2), 14.0 * s2, col)
 	draw_circle(c + Vector2(9.0 * s2, 7.0 * s2), 13.0 * s2, col)
 
+func _update_whirl(delta: float) -> void:
+	if in_water or boss != null or tut_mode:
+		return
+	if whirl == null:
+		whirl_t -= delta
+		if whirl_t <= 0.0 and distance > 1500.0:
+			whirl = {"x": clampf(duck_x, BANK_W + 80.0, VIEW.x - BANK_W - 80.0), "y": -120.0, "t": 0.0}
+			whirl_t = randf_range(70.0, 140.0)   # RARE — not every run
+		return
+	whirl.t = float(whirl.t) + delta
+	whirl.y = float(whirl.y) + speed * delta * 0.85
+	if absf(float(whirl.x) - duck_x) < 48.0 and absf(float(whirl.y) - BASE_Y) < 58.0 and state == St.GROUNDED:
+		_dive()
+		return
+	if float(whirl.y) > BASE_Y + 140.0:
+		whirl = null
+
+func _dive() -> void:
+	whirl = null
+	in_water = true
+	water_end = distance + 12000.0
+	logs.clear(); items.clear(); water_fish.clear()   # the surface obstacles vanish as we plunge under
+	_flash("DIVE!", 1.2)
+	_sfx("fwoosh", 0.95); _sfx("mega", 0.5)
+	_spawn_parts(duck_x, BASE_Y, 26, Color(0.62, 0.86, 0.92), 300.0)
+
+func _draw_whirl() -> void:
+	if whirl == null:
+		return
+	var c := Vector2(float(whirl.x), float(whirl.y))
+	var spin := float(whirl.t) * 3.0
+	for ri in 5:                                      # swirling concentric rings
+		var rad := 40.0 - ri * 7.0
+		var off := Vector2(cos(spin + ri * 1.2), sin(spin + ri * 1.2)) * (ri * 3.0)
+		draw_arc(c + off, rad, 0.0, TAU, 24, Color(0.45, 0.72, 0.82, 0.55 - ri * 0.07), 3.0)
+	_fill_ellipse(c, 14.0, 9.0, Color(0.05, 0.18, 0.28, 0.72))   # the dark throat
+	for fi in 8:                                      # foam flecks spinning
+		var a := spin * 1.5 + fi * TAU / 8.0
+		draw_circle(c + Vector2(cos(a), sin(a)) * 34.0, 2.5, Color(0.86, 0.95, 0.98, 0.6))
+	var ay := c.y - 58.0 + sin(float(whirl.t) * 4.0) * 4.0   # a bobbing DIVE arrow -> 'steer in'
+	draw_colored_polygon(PackedVector2Array([Vector2(c.x - 11.0, ay), Vector2(c.x + 11.0, ay), Vector2(c.x, ay + 13.0)]), Color(0.72, 0.93, 1.0, 0.9))
+
+func _spawn_water(delta: float) -> void:
+	log_timer -= delta
+	if log_timer <= 0.0:                              # SUNKEN LOGS to hop (reuse the logs array)
+		var w := randf_range(105.0, 195.0)
+		logs.append({
+			"x": randf_range(w * 0.5 + BANK_W, VIEW.x - w * 0.5 - BANK_W), "y": -70.0, "w": w, "h": 44.0,
+			"missed": false, "spring": false, "vx": randf_range(-1.0, 1.0) * 28.0, "home": false, "phase": randf() * TAU,
+			"frog": false, "frog_gone": false, "thwomp": false, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": 0.0, "uw": true,
+		})
+		log_timer = randf_range(1.0, 1.6) * (BASE_SPEED / speed)
+	item_timer -= delta
+	if item_timer <= 0.0:                             # PEARLS to grab (reuse the items array)
+		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind(), "pearl": true})
+		item_timer = randf_range(0.85, 1.4)
+	fish_timer -= delta
+	if fish_timer <= 0.0:                             # a FISH darts across (dodge it)
+		var fl := randf() < 0.5
+		water_fish.append({"x": -40.0 if fl else VIEW.x + 40.0, "y": randf_range(BASE_Y - 230.0, BASE_Y + 10.0), "vx": (1.0 if fl else -1.0) * randf_range(150.0, 235.0), "wob": randf() * TAU})
+		fish_timer = randf_range(1.5, 2.7)
+
+func _update_water_fish(delta: float) -> void:
+	var dy := BASE_Y - hop_height() * 160.0
+	for f in water_fish:
+		f.x = float(f.x) + float(f.vx) * delta
+		if not is_invincible() and absf(float(f.x) - duck_x) < 30.0 and absf(float(f.y) - dy) < 36.0:
+			f.x = 99999.0   # consumed on the hit
+			if boss != null:
+				_boss_hits_player()
+			else:
+				_water_hits_player()
+	water_fish = water_fish.filter(func(f): return float(f.x) > -70.0 and float(f.x) < VIEW.x + 70.0)
+
+func _water_hits_player() -> void:
+	if shield_charges > 0:
+		shield_charges -= 1
+		_flash("POOF.")
+		_sfx("bonk", 1.3, -6.0)
+	elif ducklings_n > 0:
+		_lose_duckling()
+	else:
+		die("a fish struck you from the murk.", "fish")
+
+func _draw_underwater() -> void:
+	var n := 16
+	for i in n:                                       # deep teal -> navy gradient
+		var f: float = i / float(n)
+		draw_rect(Rect2(0, f * VIEW.y, VIEW.x, VIEW.y / n + 1.0), Color(0.16, 0.46, 0.52).lerp(Color(0.02, 0.08, 0.20), f))
+	draw_rect(Rect2(0, 0, VIEW.x, 10.0), Color(0.70, 0.92, 0.90, 0.55))   # the bright surface, far above
+	for r in 5:                                       # god-rays shafting down from the surface
+		var rx: float = fposmod(r * 137.0 + 50.0, VIEW.x)
+		draw_colored_polygon(PackedVector2Array([Vector2(rx - 12, 0), Vector2(rx + 28, 0), Vector2(rx + 80, VIEW.y), Vector2(rx - 50, VIEW.y)]), Color(0.70, 0.95, 0.88, 0.05))
+	for c in 6:                                       # caustic shimmer
+		var cx: float = fposmod(c * 113.0 + sin(anim_t * 0.5 + c) * 30.0, VIEW.x)
+		var cy: float = fposmod(c * 150.0 + anim_t * 8.0, VIEW.y)
+		_fill_ellipse(Vector2(cx, cy), 40.0, 14.0, Color(0.5, 0.85, 0.85, 0.05))
+	for fi in 4:                                      # drifting fish silhouettes
+		var dir: float = 1.0 if fi % 2 == 0 else -1.0
+		var fx: float = fposmod(fi * 160.0 + anim_t * 26.0 * dir, VIEW.x + 100.0) - 50.0
+		var fy: float = 140.0 + fi * 175.0 + sin(anim_t + fi) * 18.0
+		_fill_ellipse(Vector2(fx, fy), 15.0, 7.0, Color(0.08, 0.22, 0.28, 0.55))
+		draw_colored_polygon(PackedVector2Array([Vector2(fx - 12 * dir, fy), Vector2(fx - 24 * dir, fy - 7), Vector2(fx - 24 * dir, fy + 7)]), Color(0.08, 0.22, 0.28, 0.55))
+	for b in 20:                                      # rising bubbles
+		var bx: float = fposmod(b * 89.0 + sin(anim_t * 1.3 + b) * 16.0, VIEW.x)
+		var by: float = VIEW.y - fposmod(b * 110.0 + anim_t * 45.0, VIEW.y + 40.0)
+		draw_circle(Vector2(bx, by), 1.5 + float(b % 3), Color(0.75, 0.92, 0.96, 0.35))
+	for k in 8:                                       # swaying kelp fronds (parallax depths)
+		var kx: float = k * 72.0 + 24.0
+		var depth: float = 0.6 + float(k % 3) * 0.25
+		var prev := Vector2(kx, VIEW.y + 10.0)
+		for seg in range(1, 10):
+			var sy: float = VIEW.y - seg * 42.0
+			var sx: float = kx + sin(anim_t * 1.1 + k + seg * 0.45) * (seg * 2.6 * depth)
+			draw_line(prev, Vector2(sx, sy), Color(0.16, 0.42 * depth + 0.16, 0.26, 0.92), (9.0 - seg * 0.6) * depth)
+			prev = Vector2(sx, sy)
+	for l in logs:                                    # SUNKEN LOGS (hop them)
+		var lp := Vector2(float(l.x), float(l.y))
+		_fill_ellipse(lp, float(l.w) * 0.5, float(l.h) * 0.5, Color(0.17, 0.22, 0.21))
+		_fill_ellipse(lp + Vector2(0.0, -3.0), float(l.w) * 0.43, float(l.h) * 0.34, Color(0.26, 0.40, 0.30))   # mossy top
+		_fill_ellipse(lp + Vector2(-float(l.w) * 0.2, -2.0), 5.0, 4.0, Color(0.34, 0.5, 0.36))
+	for it in items:                                  # PEARLS (grab them)
+		if it.get("got", false):
+			continue
+		var ip := Vector2(float(it.x), float(it.y))
+		draw_circle(ip, 9.5, Color(0.55, 0.78, 0.85, 0.55))
+		draw_circle(ip, 7.0, Color(0.92, 0.97, 1.0))
+		draw_circle(ip + Vector2(-2.4, -2.4), 2.6, Color(1.0, 1.0, 1.0))   # shine
+	for f in water_fish:                              # darting FISH (dodge them)
+		var fp := Vector2(float(f.x), float(f.y) + sin(anim_t * 4.0 + float(f.wob)) * 6.0)
+		var fdir := signf(float(f.vx))
+		draw_colored_polygon(PackedVector2Array([fp + Vector2(-15.0 * fdir, 0.0), fp + Vector2(-27.0 * fdir, -9.0), fp + Vector2(-27.0 * fdir, 9.0)]), Color(0.33, 0.30, 0.22))   # tail fin
+		_fill_ellipse(fp, 17.0, 8.5, Color(0.42, 0.39, 0.30))      # body
+		_fill_ellipse(fp + Vector2(0.0, 3.0), 12.0, 4.0, Color(0.56, 0.54, 0.44))   # pale belly
+		draw_circle(fp + Vector2(11.0 * fdir, -2.0), 2.2, Color(0.96, 0.96, 0.9))   # eye
+		draw_circle(fp + Vector2(11.5 * fdir, -2.0), 1.0, Color(0.1, 0.1, 0.12))
+	var dpos := Vector2(duck_x, BASE_Y - hop_height() * 160.0)   # the duck on the gameplay row (steers + kicks)
+	for t in 5:
+		draw_circle(dpos + Vector2(-10.0 - t * 9.0, 6.0 + sin(anim_t * 3.0 + t) * 3.0), 3.0 - t * 0.4, Color(0.8, 0.94, 0.97, 0.5 - t * 0.08))
+	var fc: Color = FOOT_COL.get(species, Color(0.95, 0.52, 0.12))   # accurate per-species foot color
+	for fs in [-1.0, 1.0]:                            # webbed feet kicking behind it (back-view swim, alternating)
+		var kick: float = sin(anim_t * 9.0 + (0.0 if fs < 0.0 else PI))
+		var hip := dpos + Vector2(fs * 10.0, 20.0)
+		var foot := hip + Vector2(fs * 3.0 + kick * 5.0, 26.0 + kick * 9.0)
+		draw_line(hip, foot, fc.darkened(0.22), 4.0)
+		var fdir := (foot - hip).normalized()
+		var fperp := Vector2(-fdir.y, fdir.x)
+		draw_colored_polygon(PackedVector2Array([foot - fdir * 2.0, foot + fdir * 8.0 + fperp * 6.0, foot + fdir * 11.0, foot + fdir * 8.0 - fperp * 6.0]), fc)
+	var sp: Dictionary = ducks.get(species, {})
+	var fr: Texture2D = sp["idle"][0] if (sp.has("idle") and sp["idle"].size() > 0) else null
+	if fr != null:
+		var sz: Vector2 = fr.get_size() * 3.4
+		draw_texture_rect(fr, Rect2(dpos - sz * 0.5, sz), false, Color(0.85, 0.95, 1.0))
+	else:
+		draw_circle(dpos, 24.0, Color(1.0, 0.85, 0.3))
+
 func _draw_sky() -> void:
 	var n := 18
 	for i in n:                                       # dreamy golden-hour gradient
@@ -4420,10 +4602,7 @@ func _on_press(pos: Vector2) -> void:
 		for i in DEV_BOSS_BTNS.size():
 			if _dev_boss_rect(i).has_point(pos):
 				var _bi: int = DEV_BOSS_BTNS[i].idx
-				if _bi == -2:                       # CLOUD: drop the launch geyser above the duck to ride
-					cloud = {"x": duck_x, "y": BASE_Y - 110.0, "t": 0.0}
-					_sfx("click")
-				elif _bi == -4:                     # BEAVER
+				if _bi == -4:                       # BEAVER
 					_force_boss(0, "beaver")
 				else:
 					_force_boss(_bi)
@@ -5117,7 +5296,17 @@ func _update_play(delta: float) -> void:
 	_update_sadie(delta)
 	_update_hawk(delta)
 	_update_donny(delta)
-	_update_cloud(delta)
+	_update_whirl(delta)
+	if in_water and distance > water_end:
+		in_water = false
+		logs.clear(); items.clear(); water_fish.clear()
+		run_feathers += 8
+		_flash("SURFACED!  +8", 1.4)
+		_sfx("fwoosh", 1.0); _sfx("collect", 1.2)
+		_spawn_parts(duck_x, BASE_Y, 26, Color(0.72, 0.9, 0.95), 320.0)
+	if in_water:
+		_spawn_water(delta)
+		_update_water_fish(delta)
 	_update_turtle(delta * sm)
 
 	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
@@ -6475,6 +6664,8 @@ func _spawn_log_jam() -> void:
 	_sfx("fwoosh", 0.6, -3.0)
 
 func _spawn(delta: float) -> void:
+	if in_water:
+		return   # underwater stretch: river logs/items paused
 	# during the boss — or while RUSTY delivers his tip — the river clears; only snacks fall
 	if boss != null or hawk != null:
 		item_timer -= delta
@@ -6840,6 +7031,12 @@ func _collide() -> void:
 
 func _collect(it: Dictionary) -> void:
 	it.got = true
+	if it.get("pearl", false):                       # PEARL: a generous feather payoff for braving the dive
+		run_feathers += 5
+		_float_text(it.x, it.y - 26.0, "+5", Color(0.9, 0.97, 1.0))
+		_spawn_parts(it.x, it.y, 9, Color(0.9, 0.97, 1.0), 170.0)
+		_sfx("collect", 1.6)
+		return
 	tut_got_snack = true                             # tutorial: the SNACK beat is satisfied
 	_st("snacks")
 	_st("snack_" + ITEM_DEFS[it.kind].name)          # per-flavour tally (berry/donut/...)
@@ -9878,6 +10075,9 @@ func _draw() -> void:
 	if in_logs:
 		_draw_logs()
 		return
+	if in_water:
+		_draw_underwater()
+		return
 	if in_sky:
 		_draw_sky()
 		return
@@ -11312,7 +11512,7 @@ func _draw_duck() -> void:
 	# RUSTY the hawk soars over the whole scene; his bubble reads above everything
 	_draw_hawk()
 	_draw_donny()                       # DONNY roars across the Sand Pond on top of the water
-	_draw_cloud()                       # the rare CLOUD GEYSER (ride up to skip a boss)
+	_draw_whirl()                       # the rare WHIRLPOOL (steer into it to dive)
 
 func _duck_frame(h: float) -> Texture2D:
 	var cur = ducks[_eff_species()]
@@ -12785,6 +12985,9 @@ func _bot_danger_at(cx: float) -> float:
 		if float(l.y) > BASE_Y - 72.0 and float(l.y) < BASE_Y + 30.0:
 			if absf(float(l.x) - cx) < float(l.w) * 0.5 + 18.0:
 				d += 30.0
+	for f in water_fish:              # darting fish underwater — steer out of their lane
+		if absf(float(f.y) - BASE_Y) < 72.0 and absf(float(f.x) - cx) < 40.0:
+			d += 58.0
 	if sadie != null and float(sadie.get("t", 0.0)) > 0.0:   # SADIE zooms across — dodge her lane near the waterline
 		if absf(float(sadie.y) - BASE_Y) < 95.0 and absf(float(sadie.x) - cx) < 58.0:
 			d += 72.0
@@ -12810,6 +13013,11 @@ func _bot_control(delta: float) -> void:
 		if sim_hop_cd <= 0.0 and not is_airborne() and absf(float(boss.x) - duck_x) < 80.0:
 			hop(); sim_hop_cd = 0.22
 		return
+	if whirl != null and not in_water and float(whirl.y) > BASE_Y - 280.0:   # ride the whirlpool down into the DIVE
+		target_x = clampf(float(whirl.x), lo, hi)
+		if sim_hop_cd <= 0.0 and not is_airborne() and _bot_should_hop():
+			hop(); sim_hop_cd = 0.22
+		return
 	var best_x := duck_x
 	var best_score := -1.0e9
 	for i in 13:
@@ -12828,6 +13036,9 @@ func _bot_should_hop() -> bool:
 			var dy: float = BASE_Y - float(l.y)
 			if dy > -6.0 and dy < 66.0:
 				return true
+	for f in water_fish:              # kick up over a fish darting at our row
+		if absf(float(f.x) - duck_x) < 28.0 and absf(float(f.y) - BASE_Y) < 40.0:
+			return true
 	for t in boss_tides:              # hop the foam waves
 		if not t.get("hit", false) and absf(float(t.y) - BASE_Y) < 64.0:
 			return true
