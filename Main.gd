@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.3"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.4"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1119,6 +1119,7 @@ var press_pos := Vector2.ZERO
 var steer_anchor_x := 0.0       # duck_x at touch-down; drags steer relative to this
 var press_time := 0.0
 var moved := false
+var held_pos := Vector2(-1000.0, -1000.0)   # active button-press point (press-feedback; UI acts on release)
 
 # ---- nodes -------------------------------------------------------------------
 var cam: Camera2D
@@ -4226,8 +4227,13 @@ func _input(event: InputEvent) -> void:
 		if event.pressed:
 			if touches.size() >= 2:                        # a second finger = pinch gesture, not a tap
 				return
-			_on_press(event.position)
+			held_pos = event.position                       # light up the pressed button
+			if not _is_button_ui():
+				_on_press(event.position)                   # gameplay / drag-graphs act on press as before
 		else:
+			if _is_button_ui() and held_pos.x > -900.0 and event.position.distance_to(held_pos) < 42.0:
+				_on_press(event.position)                   # buttons fire on RELEASE (slide off to cancel)
+			held_pos = Vector2(-1000.0, -1000.0)
 			_on_release()
 	elif event is InputEventScreenDrag:
 		touches[event.index] = event.position
@@ -4268,6 +4274,10 @@ func _input(event: InputEvent) -> void:
 				_enter_menu()
 			else:
 				paused = not paused                # Esc/back pauses mid-run, not quit
+
+func _is_button_ui() -> bool:
+	# screens where a tap is a BUTTON press (feedback + act on RELEASE), not a gameplay hop or a drag-graph
+	return (in_menu or in_select or in_shop or in_settings or in_shrine or in_jukebox or in_logs or paused or not alive) and not in_stats and not in_codex
 
 func _on_press(pos: Vector2) -> void:
 	if booting:                                # tap to skip the launch screen
@@ -11390,11 +11400,17 @@ func _draw_menu() -> void:
 # exact vertical centering (baseline math) — draw_string y is a BASELINE, and
 # guessed offsets drift across platforms/fonts
 func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> void:
-	var rad := int(minf(rect.size.y * 0.5, 18.0))
-	var base := Color(0.64, 0.45, 0.22) if primary else Color(0.43, 0.30, 0.19)   # golden OAK / WALNUT (all wood)
 	var wseed := hash(rect.position)   # stable per-button -> grain + knots vary, never jitter
-	var sh := StyleBoxFlat.new(); sh.bg_color = Color(0.02, 0.03, 0.04, 0.5); sh.set_corner_radius_all(rad)
-	draw_style_box(sh, Rect2(rect.position + Vector2(0.0, 5.0), rect.size))     # drop shadow
+	var down: bool = held_pos.x > -900.0 and rect.has_point(held_pos)   # PRESSED feedback
+	if down:
+		rect = Rect2(rect.position + Vector2(0.0, 3.0), rect.size)        # depress into the shadow
+	var rad := int(minf(rect.size.y * 0.5, 18.0))
+	var base := Color(0.64, 0.45, 0.22) if primary else Color(0.43, 0.30, 0.19)   # golden OAK / WALNUT
+	if down:
+		base = base.darkened(0.10)
+	if not down:
+		var sh := StyleBoxFlat.new(); sh.bg_color = Color(0.02, 0.03, 0.04, 0.5); sh.set_corner_radius_all(rad)
+		draw_style_box(sh, Rect2(rect.position + Vector2(0.0, 5.0), rect.size))     # drop shadow
 	var bb := StyleBoxFlat.new(); bb.bg_color = base; bb.set_corner_radius_all(rad)
 	bb.set_border_width_all(3); bb.border_color = base.darkened(0.5)
 	draw_style_box(bb, rect)                                                    # plank body + dark edge

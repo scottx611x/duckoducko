@@ -358,3 +358,7 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Barry had NO codex icon (recurring bug): _codex_tex had no 'beaver' case (list icon) AND beaver wasn't in the tex_codex_spin load (detail turntable). Added BOTH. Plus a boot GUARD that logs any boss/enemy/friend codex entry missing an icon or turntable -- so this stops recurring.
 - Duck-select wear button label -> 'WARDROBE' (wardrobe screen title stays SADIE'S WARDROBE).
 - STILL PENDING: press-feedback + act-on-release for buttons (Scott asked; investigated _input/_on_press, not yet implemented).
+
+
+## 2026-06-28 — press-feedback + act-on-release (v1.13.4) — DONE
+- Scott: buttons should show a pressed indicator + only act on release. UI button-screens (menu/select/shop/settings/shrine/jukebox/logs/pause/death) now: PRESS depresses the wooden button (down 3px, darker, no shadow) + defers; RELEASE fires the action (slide >42px off to cancel). Gameplay hops + drag-based stats/codex screens unchanged. Verified press-visual via capture + smoke test passes.
