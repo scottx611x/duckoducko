@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.0"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.1"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -7519,8 +7519,7 @@ func _mtext(pos: Vector2, txt: String, size: int, col: Color, width: float,
 func _draw_shrine() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.03, 0.05, 0.10, 0.55))
 	var ot := anim_t - shrine_open_t
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)             # bail back to the menu
-	_btn_label(SEL_BACK_BTN, "< back", 22)
+	_draw_button(SEL_BACK_BTN, "< back", 22)
 	_otext(Vector2(0, 122), "THE ANCIENT DUCK", 40, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 10)
 	# boon power tier reflects LAST run's bosses — do better to earn richer blessings
 	var tier_txt := "BLESSINGS · TIER %d/3 — from last run (beat bosses for more)" % prev_run_bosses if prev_run_bosses < 3 \
@@ -7935,11 +7934,7 @@ func _draw_stats() -> void:
 		draw_string(font, stats_smoothtog_rect.position + Vector2(0, 20), "~ SMOOTH" if stats_smooth else "~ RAW",
 			HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(0.6, 0.96, 0.74, 0.98) if stats_smooth else Color(1, 1, 1, 0.6))
 	stats_expand_rect = Rect2(VIEW.x * 0.5 - 84.0, ty, 168.0, 30.0)
-	var esb := StyleBoxFlat.new()
-	esb.bg_color = Color(0.08, 0.13, 0.19, 0.92); esb.set_corner_radius_all(11)
-	esb.set_border_width_all(1); esb.border_color = Color(1, 1, 1, 0.18)
-	draw_style_box(esb, stats_expand_rect)
-	_btn_label(stats_expand_rect, "v stats" if stats_expanded else "> stats", 16, Color(0.8, 0.9, 1.0, 0.9))
+	_draw_button(stats_expand_rect, "v stats" if stats_expanded else "> stats", 16)
 	# SORT toggle (far right) — recent vs best-first — only where ranking runs makes sense
 	stats_sort_rect = Rect2()
 	var k0: String = STAT_METRICS[stats_metric].get("kind", "series")
@@ -8977,28 +8972,16 @@ func _draw_settings() -> void:
 	_settings_toggle(500.0, "SCREEN SHAKE", setting_shake, "shake")
 	_settings_toggle(550.0, "REDUCED FLASHING", setting_reduce_flash, "reduceflash")
 	var rtb := Rect2(40.0, 602.0, VIEW.x - 80.0, 40.0)   # replay RUSTY's tutorial
-	var rsb := StyleBoxFlat.new()
-	rsb.bg_color = Color(0.1, 0.18, 0.26, 0.95); rsb.set_corner_radius_all(12)
-	rsb.set_border_width_all(2); rsb.border_color = Color(0.82, 0.46, 0.18, 0.8)
-	draw_style_box(rsb, rtb)
-	_btn_label(rtb, "> PLAY TUTORIAL", 18, Color(1, 0.92, 0.8))
+	_draw_button(rtb, "> PLAY TUTORIAL", 18, true)
 	settings_hits.append({"rect": rtb, "act": "replaytut"})
 	# DEV (scootybooty only): wipe the save back to a fresh install
 	if cheat_unlock:
 		var lvb := Rect2(40.0, 652.0, VIEW.x - 80.0, 38.0)   # scootybooty: VIEW the in-app diagnostic log
-		var lsb := StyleBoxFlat.new()
-		lsb.bg_color = Color(0.08, 0.16, 0.12, 0.95); lsb.set_corner_radius_all(12)
-		lsb.set_border_width_all(2); lsb.border_color = Color(0.5, 0.9, 0.65, 0.8)
-		draw_style_box(lsb, lvb)
-		_btn_label(lvb, "> VIEW APP LOGS (%d lines)" % app_log.size(), 16, Color(0.7, 0.96, 0.8))
+		_draw_button(lvb, "> VIEW APP LOGS (%d lines)" % app_log.size(), 16)
 		settings_hits.append({"rect": lvb, "act": "viewlogs"})
 		var dvb := Rect2(40.0, 698.0, VIEW.x - 80.0, 38.0)
-		var dsb := StyleBoxFlat.new()
-		dsb.bg_color = Color(0.28, 0.08, 0.10, 0.95); dsb.set_corner_radius_all(12)
-		dsb.set_border_width_all(2); dsb.border_color = Color(1.0, 0.4, 0.4, 0.85)
-		draw_style_box(dsb, dvb)
 		var armed: bool = anim_t - devreset_arm < 3.0
-		_btn_label(dvb, "! TAP AGAIN TO CONFIRM WIPE" if armed else "~ RESET ALL DATA (dev)", 17, Color(1.0, 0.85, 0.85))
+		_draw_button(dvb, "! TAP AGAIN TO CONFIRM WIPE" if armed else "~ RESET ALL DATA (dev)", 17)
 		settings_hits.append({"rect": dvb, "act": "devreset"})
 	# a li'l preview duck you can poke for a quack at the current SFX level
 	if has_art:
@@ -9633,13 +9616,7 @@ func _draw_tut() -> void:
 		_otext(Vector2(0, below + 8.0), "%d / %d" % [tut_reps, goal], 16, Color(1, 0.92, 0.7, 0.92),
 			VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	# SKIP — always available, top-right
-	var sbb := StyleBoxFlat.new()
-	sbb.bg_color = Color(0.10, 0.14, 0.20, 0.92)
-	sbb.set_corner_radius_all(10)
-	sbb.set_border_width_all(1)
-	sbb.border_color = Color(1, 1, 1, 0.35)
-	draw_style_box(sbb, TUT_SKIP_BTN)
-	_btn_label(TUT_SKIP_BTN, "SKIP", 16, Color(1, 0.92, 0.8))
+	_draw_button(TUT_SKIP_BTN, "SKIP", 16)
 
 # a small, understated bubble above the duck — deliberately unobtrusive
 func _say_bubble(anchor: Vector2, txt: String, a: float) -> void:
@@ -12206,8 +12183,7 @@ func _draw_wardrobe() -> void:
 			_otext(Vector2(rc.position.x, rc.position.y + rc.size.y - 20.0), "%d *" % w.cost, 13,
 				Color(1, 0.9, 0.45) if feathers >= w.cost else Color(1, 1, 1, 0.4), rc.size.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	# back / done
-	draw_style_box(_btn_sb(), SEL_BACK_BTN)
-	_btn_label(SEL_BACK_BTN, "< done", 22)
+	_draw_button(SEL_BACK_BTN, "< done", 22)
 	# SADIE tends the wardrobe — ALIVE: idle she bobs + glances around; tap (or now & then) she plays FETCH with her chuckit
 	if tex_sadie_anim.size() >= 5:
 		var spos := Vector2(82.0, 826.0)
@@ -12301,26 +12277,18 @@ func _draw_wear_modal(idx: int) -> void:
 		var ebb := Rect2(cx - 196.0, by, 188.0, 48.0)
 		var is_on: bool = _worn(w.id)
 		var ecol := Color(0.5, 0.92, 1.0) if is_on else Color(0.55, 0.9, 0.6)
-		var esb := StyleBoxFlat.new(); esb.bg_color = Color(0.1, 0.14, 0.2, 0.97); esb.set_corner_radius_all(12)
-		esb.set_border_width_all(2); esb.border_color = ecol; draw_style_box(esb, ebb)
-		_btn_label(ebb, "UNEQUIP" if is_on else "EQUIP", 18, ecol)
+		_draw_button(ebb, "UNEQUIP" if is_on else "EQUIP", 18, not is_on)
 		var ubb := Rect2(cx + 8.0, by, 188.0, 48.0)
 		if tier >= WEAR_TIER_MAX:
-			var msb := StyleBoxFlat.new(); msb.bg_color = Color(0.12, 0.11, 0.06, 0.97); msb.set_corner_radius_all(12)
-			msb.set_border_width_all(2); msb.border_color = Color(1.0, 0.84, 0.32, 0.7); draw_style_box(msb, ubb)
-			_btn_label(ubb, "MAX TIER", 16, Color(1.0, 0.86, 0.4))
+			_draw_button(ubb, "MAX TIER", 16)
 		else:
 			var ucost := _wear_upgrade_cost(w.id)
 			var ucol := Color(1, 0.9, 0.45) if feathers >= ucost else Color(1, 1, 1, 0.4)
-			var usb := StyleBoxFlat.new(); usb.bg_color = Color(0.16, 0.12, 0.06, 0.97); usb.set_corner_radius_all(12)
-			usb.set_border_width_all(2); usb.border_color = ucol; draw_style_box(usb, ubb)
-			_btn_label(ubb, "UPGRADE · %d*" % ucost, 16, ucol)
+			_draw_button(ubb, "UPGRADE · %d*" % ucost, 16, feathers >= ucost)
 	else:
 		var bb := Rect2(cx - 110.0, by, 220.0, 48.0)
 		var bcol := Color(1, 0.9, 0.45) if feathers >= w.cost else Color(1, 1, 1, 0.35)
-		var bsb := StyleBoxFlat.new(); bsb.bg_color = Color(0.1, 0.14, 0.2, 0.97); bsb.set_corner_radius_all(12)
-		bsb.set_border_width_all(2); bsb.border_color = bcol; draw_style_box(bsb, bb)
-		_btn_label(bb, "BUY · %d *" % w.cost, 18, bcol)
+		_draw_button(bb, "BUY · %d *" % w.cost, 18, feathers >= w.cost)
 
 func _wardrobe_press(pos: Vector2) -> void:
 	if wear_modal < 0 and wardrobe_sadie_rect.has_point(pos):   # tap SADIE -> she plays FETCH with her chuckit + barks
