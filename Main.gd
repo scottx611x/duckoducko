@@ -11382,6 +11382,7 @@ func _draw_menu() -> void:
 func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> void:
 	var rad := int(minf(rect.size.y * 0.5, 18.0))
 	var base := Color(0.64, 0.45, 0.22) if primary else Color(0.43, 0.30, 0.19)   # golden OAK / WALNUT (all wood)
+	var wseed := hash(rect.position)   # stable per-button -> grain + knots vary, never jitter
 	var sh := StyleBoxFlat.new(); sh.bg_color = Color(0.02, 0.03, 0.04, 0.5); sh.set_corner_radius_all(rad)
 	draw_style_box(sh, Rect2(rect.position + Vector2(0.0, 5.0), rect.size))     # drop shadow
 	var bb := StyleBoxFlat.new(); bb.bg_color = base; bb.set_corner_radius_all(rad)
@@ -11399,12 +11400,16 @@ func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> vo
 		var pv := PackedVector2Array()
 		for sgi in 13:
 			var t := sgi / 12.0
-			pv.append(Vector2(lerpf(gx0, gx1, t), gy + sin(t * 6.0 + gi * 1.7) * 1.5))
+			pv.append(Vector2(lerpf(gx0, gx1, t), gy + sin(t * 6.0 + gi * 1.7 + float(wseed % 100) * 0.13) * 1.5))
 		for sgi in 12:
 			draw_line(pv[sgi], pv[sgi + 1], Color(gc.r, gc.g, gc.b, 0.25), 1.5)
-	var kc := Vector2(rect.position.x + rect.size.x * 0.15, rect.position.y + rect.size.y * 0.66)   # a KNOT
-	_fill_ellipse(kc, 4.6, 3.2, base.darkened(0.34))
-	_fill_ellipse(kc, 2.4, 1.6, base.darkened(0.14))
+	for ki in 1 + (wseed & 1):                                                  # 1-2 KNOTS placed per-button (real wood is never uniform)
+		var kh := hash(Vector2(rect.position.x + ki * 53.0, rect.position.y + ki * 11.0))
+		var kx := rect.position.x + rect.size.x * (0.12 + float(kh & 1023) / 1024.0 * 0.74)
+		var ky := rect.position.y + rect.size.y * (0.5 + float((kh >> 10) & 511) / 512.0 * 0.3)
+		var kr := 3.4 + float((kh >> 19) & 255) / 256.0 * 2.6
+		_fill_ellipse(Vector2(kx, ky), kr, kr * 0.7, base.darkened(0.34))
+		_fill_ellipse(Vector2(kx, ky), kr * 0.5, kr * 0.34, base.darkened(0.14))
 	for _px in [rect.position.x + 12.0, rect.end.x - 12.0]:                     # iron NAIL heads
 		draw_circle(Vector2(_px, rect.position.y + 10.0), 2.7, Color(0.15, 0.12, 0.10))
 		draw_circle(Vector2(_px - 0.8, rect.position.y + 9.2), 1.0, Color(0.75, 0.75, 0.78, 0.6))
