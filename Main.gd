@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.1"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.2"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -7985,7 +7985,7 @@ func _draw_run_detail(rec: Dictionary) -> void:
 	draw_style_box(sb, panel)
 	var dts := _fmt_date(int(rec.get("ts", 0)))    # when this run happened (local time)
 	if dts != "":                                  # a clean stamp centered along the panel's foot — never crowds the top
-		_otext(Vector2(panel.position.x, panel.end.y - 18.0), dts, 11, Color(0.68, 0.8, 0.95, 0.55), panel.size.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+		_otext(Vector2(panel.position.x, panel.end.y - 32.0), dts, 11, Color(0.68, 0.8, 0.95, 0.55), panel.size.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	var sp: String = rec.get("sp", "mallard")
 	var dname := sp
 	for d in ROSTER:
@@ -7997,11 +7997,11 @@ func _draw_run_detail(rec: Dictionary) -> void:
 	var pet: String = str(rec.get("name", "")).strip_edges()
 	if pet != "":
 		_otext(Vector2(0, 184), "%s  ·  %s ft" % [pet, _commas(int(rec.get("ft", 0)))], 26, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
-		_otext(Vector2(0, 208), "the %s" % dname, 13, Color(0.8, 0.9, 1.0, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		_otext(Vector2(0, 214), "the %s" % dname, 13, Color(0.8, 0.9, 1.0, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	else:
 		_otext(Vector2(0, 200), "%s  ·  %s ft" % [dname, _commas(int(rec.get("ft", 0)))], 26, Color(1, 0.92, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
 	var bn: int = int(rec.get("bosses", 0))
-	_otext(Vector2(0, 218), "%s paddling  ·  +%d feathers" %
+	_otext(Vector2(0, 238), "%s paddling  ·  +%d feathers" %
 		[_fmt_time(int(rec.get("secs", 0))), int(rec.get("feathers", 0))],
 		14, Color(0.8, 0.9, 1.0, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# the bosses you bested, shown as their mugshots (like the in-game map markers), not a number
@@ -8011,17 +8011,17 @@ func _draw_run_detail(rec: Dictionary) -> void:
 		var bgap := 5.0
 		var btot: float = beaten * bisz + (beaten - 1) * bgap + 78.0
 		var bx0 := VIEW.x * 0.5 - btot * 0.5
-		_otext(Vector2(bx0, 230.0), "bested:", 12, Color(0.5, 0.95, 0.6, 0.85), 76.0, HORIZONTAL_ALIGNMENT_LEFT, 2)
+		_otext(Vector2(bx0, 258.0), "bested:", 12, Color(0.5, 0.95, 0.6, 0.85), 76.0, HORIZONTAL_ALIGNMENT_LEFT, 2)
 		for bi in beaten:
 			var is_snapz: bool = bi == 1
 			var is_final: bool = bi >= 2
 			var bt: Texture2D = tex_snapz[0] if (is_snapz and not tex_snapz.is_empty()) else tex_gerald[0]
 			var bcol := Color(1.5, 0.3, 0.32) if is_final else Color(1, 1, 1)
 			var bsz: Vector2 = bisz / float(bt.get_size().x) * bt.get_size()
-			var bc := Vector2(bx0 + 80.0 + bi * (bisz + bgap) + bisz * 0.5, 238.0)
+			var bc := Vector2(bx0 + 80.0 + bi * (bisz + bgap) + bisz * 0.5, 266.0)
 			draw_texture_rect(bt, Rect2(bc - bsz * 0.5, bsz), false, bcol)
 	# the KILLER, named plainly — or a triumph banner if this run ATE THE MAGIC BREAD
-	var killy := 254.0 if beaten > 0 else 244.0         # drop below the boss-mugshot row when present
+	var killy := 286.0 if beaten > 0 else 270.0         # drop below the boss-mugshot row when present
 	if str(rec.get("cat", "other")) == "ascend":
 		_otext(Vector2(0, killy), "* ATE THE MAGIC BREAD *", 14, Color(1, 0.86, 0.4, 0.9), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	else:
@@ -8048,7 +8048,7 @@ func _draw_run_detail(rec: Dictionary) -> void:
 	var rwear := str(rec.get("wear", ""))           # the hat this run wore, shown with its star tier
 	if rwear != "":
 		relics.append({"id": rwear, "rarity": 3, "n": 1, "glow": false, "wear": true, "tier": int(rec.get("weartier", 1))})
-	_otext(Vector2(0, 296), "POWERS · tap for info", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	_otext(Vector2(0, 348), "POWERS · tap for info", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	var dbs := 36.0
 	var per := int((panel.size.x - 24.0) / (dbs + 8.0))
 	detail_relic_rects = []
@@ -8057,12 +8057,12 @@ func _draw_run_detail(rec: Dictionary) -> void:
 		var rw := i / per
 		var rown: int = mini(per, relics.size() - rw * per)
 		var sx: float = VIEW.x * 0.5 - (rown * dbs + (rown - 1) * 8.0) * 0.5
-		var rrect := Rect2(sx + rr * (dbs + 8.0), 312.0 + rw * 44.0, dbs, dbs)
+		var rrect := Rect2(sx + rr * (dbs + 8.0), 364.0 + rw * 44.0, dbs, dbs)
 		_draw_relic(rrect, relics[i])
 		detail_relic_rects.append({"rect": rrect, "relic": relics[i]})
 	# THE TALLY — this run's silly deeds
 	var st: Dictionary = rec.get("stats", {})
-	var ty := 312.0 + (ceili(float(relics.size()) / float(per))) * 44.0 + 18.0
+	var ty := 364.0 + (ceili(float(relics.size()) / float(per))) * 44.0 + 18.0
 	_otext(Vector2(0, ty), "THE TALLY", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	ty += 18.0
 	var trows := [["hops", "hops"], ["snacks eaten", "snacks"], ["herons stomped", "herons"],
@@ -8085,7 +8085,7 @@ func _draw_run_detail(rec: Dictionary) -> void:
 			val = _commas(int(st.get(trows[i][1], 0)))
 		draw_string(font, rc.position + Vector2(0, 22), val, HORIZONTAL_ALIGNMENT_RIGHT, gw - 12, 15, Color(0.85, 0.95, 1.0))
 	# SNACK MENU — exactly what this duck nibbled, by flavour
-	var smy := ty + 6.0 * 38.0 + 6.0
+	var smy := ty + 6.0 * 38.0 + 22.0
 	_otext(Vector2(0, smy), "SNACK MENU", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	smy += 20.0
 	var sw := (panel.size.x - 24.0) / float(ITEM_DEFS.size())

@@ -345,3 +345,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-28 — wooden button redesign (v1.13.0)
 - Scott: redesign all in-game buttons with whimsy/ducks, more custom + 'more wood'. Built central _draw_button() = crafted WOODEN SIGN (oak primary/walnut secondary, grain, knot, nail-heads, carved letters). Rolled across MENU, DEATH (+padding fix), DUCK-SELECT (PLAY/DRAKE/RANDOM/MEGA-HOP/WARDROBE), PAUSE, SHOP, shared back, gear->cream.
 - STILL TODO: settings sub-buttons (PLAY TUTORIAL/VIEW LOGS/RESET), TUT_SKIP, stats-expand toggle; then logbook run-detail spacing overlaps.
+
+
+## 2026-06-28 — button polish + logbook spacing (v1.13.2) — DONE
+- Per-button RANDOMIZED knot placement (Scott: knots were all in the same spot) — 1-2 knots at hashed positions/sizes + varied grain, stable per button.
+- Logbook RUN-DETAIL spacing fixed: de-cramped the header (subtitle/paddling/bested/killer no longer collide), pushed POWERS/relics/TALLY down, widened TALLY->SNACK gap, moved the date off the hint. Verified via --dbg gallery.
+- Button redesign + logbook polish COMPLETE.
