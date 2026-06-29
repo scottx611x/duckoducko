@@ -362,3 +362,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-28 — press-feedback + act-on-release (v1.13.4) — DONE
 - Scott: buttons should show a pressed indicator + only act on release. UI button-screens (menu/select/shop/settings/shrine/jukebox/logs/pause/death) now: PRESS depresses the wooden button (down 3px, darker, no shadow) + defers; RELEASE fires the action (slide >42px off to cancel). Gameplay hops + drag-based stats/codex screens unchanged. Verified press-visual via capture + smoke test passes.
+
+
+## 2026-06-28 — knot/ascension/special polish (v1.13.5)
+- Knot pattern now STABLE when a button is pressed (was re-hashing off the shifted rect.position; now hashes the original pos).
+- ASCENSION menu deeper explanation: tap the MIDDLE of the ascension bar -> a panel listing every active (stacking) modifier w/ a plain-English description (ASC_MOD_DESCS). < > still dial the tier.
+- SPECIAL button now reads 'SPECIAL · <equipped>' to mirror the WARDROBE button (category-first).

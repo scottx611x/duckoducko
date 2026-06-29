@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.4"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.5"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -561,6 +561,12 @@ const ASC_MOD_NAMES := [
 	"", "TOUGHER GERALDS", "QUICKER CURRENT", "KEENER HERONS", "LEANER PICKINGS",
 	"FURIOUS DIVES", "RELENTLESS FLOCK", "RAGING RIVER", "STARVATION", "UNDYING BOSSES",
 	"TEMPEST", "FAMINE TIDE", "THE RECKONING"]
+const ASC_MOD_DESCS := [
+	"", "Bosses take more hits to stomp.", "The current runs faster — less reaction time.",
+	"Bosses chain a second slam strike.", "Fewer snacks drift down the river.", "Bosses dive faster and combo harder.",
+	"Herons hunt in packs; log-jam walls appear.", "Logs actively drift toward your lane.", "Snacks give far less LOFT charge.",
+	"Every boss cheats death once — twice the fight.", "Crosswind gusts shove you off your line.", "Snacks become painfully scarce.",
+	"The river's final, merciless test — everything at once."]
 var cheat_unlock := false   # scootybooty ACTIVE: name-gated full unlock + dev boss buttons
 var boss_kinds: Array = ["gerald", "snapz"]   # first two boss slots, shuffled per run for variety
 # --- SCOOTYBOOTY BOT SIM: an AI duck plays headless; we tally metrics to flag broken/unfair runs ---
@@ -1120,6 +1126,7 @@ var steer_anchor_x := 0.0       # duck_x at touch-down; drags steer relative to 
 var press_time := 0.0
 var moved := false
 var held_pos := Vector2(-1000.0, -1000.0)   # active button-press point (press-feedback; UI acts on release)
+var asc_info := false           # the ascension "what's different" panel is open
 
 # ---- nodes -------------------------------------------------------------------
 var cam: Camera2D
@@ -4497,6 +4504,9 @@ func _on_drag(pos: Vector2) -> void:
 		BANK_W + DUCK_R, VIEW.x - BANK_W - DUCK_R)
 
 func _select_press(pos: Vector2) -> void:
+	if asc_info:
+		asc_info = false; _sfx("click")
+		return
 	if slot_t > 0.0:
 		return                                   # reels still spinning — wait
 	if anim_t - slot_msg_t < 2.6:
@@ -4530,6 +4540,8 @@ func _select_press(pos: Vector2) -> void:
 			ascension = clampi(ascension - 1, 0, asc_unlocked)
 		elif pos.x > SEL_ASC_BTN.end.x - 90.0:
 			ascension = clampi(ascension + 1, 0, asc_unlocked)
+		else:
+			asc_info = true                            # tap the MIDDLE -> what's-different panel
 		_sfx("click"); _save()
 		return
 	if SEL_HEN_BTN.has_point(pos) and ROSTER[sel_index].species != "hen" and not ROSTER[sel_index].get("secret", false):
@@ -11401,6 +11413,7 @@ func _draw_menu() -> void:
 # guessed offsets drift across platforms/fonts
 func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> void:
 	var wseed := hash(rect.position)   # stable per-button -> grain + knots vary, never jitter
+	var opos := rect.position          # pre-press position -> knot hash stays stable when pressed
 	var down: bool = held_pos.x > -900.0 and rect.has_point(held_pos)   # PRESSED feedback
 	if down:
 		rect = Rect2(rect.position + Vector2(0.0, 3.0), rect.size)        # depress into the shadow
@@ -11430,7 +11443,7 @@ func _draw_button(rect: Rect2, label: String, size: int, primary := false) -> vo
 		for sgi in 12:
 			draw_line(pv[sgi], pv[sgi + 1], Color(gc.r, gc.g, gc.b, 0.25), 1.5)
 	for ki in 1 + (wseed & 1):                                                  # 1-2 KNOTS placed per-button (real wood is never uniform)
-		var kh := hash(Vector2(rect.position.x + ki * 53.0, rect.position.y + ki * 11.0))
+		var kh := hash(Vector2(opos.x + ki * 53.0, opos.y + ki * 11.0))
 		var kx := rect.position.x + rect.size.x * (0.12 + float(kh & 1023) / 1024.0 * 0.74)
 		var ky := rect.position.y + rect.size.y * (0.5 + float((kh >> 10) & 511) / 512.0 * 0.3)
 		var kr := 3.4 + float((kh >> 19) & 255) / 256.0 * 2.6
@@ -11920,6 +11933,26 @@ func _draw_slot() -> void:
 	else:
 		_otext(Vector2(0, panel.position.y + 198.0), "spinning...", 15, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 
+func _draw_asc_info() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.04, 0.08, 0.72))
+	var n := clampi(ascension, 0, ASC_MOD_NAMES.size() - 1)
+	var ph := 92.0 + maxi(1, n) * 46.0
+	var py := clampf((VIEW.y - ph) * 0.5, 90.0, 220.0)
+	var panel := Rect2(40.0, py, VIEW.x - 80.0, ph)
+	var sb := StyleBoxFlat.new(); sb.bg_color = Color(0.12, 0.09, 0.05, 0.99); sb.set_corner_radius_all(16)
+	sb.set_border_width_all(2); sb.border_color = Color(1.0, 0.7, 0.3, 0.85)
+	draw_style_box(sb, panel)
+	_otext(Vector2(0, py + 34.0), "ASCENSION %d — what's different" % n, 20, Color(1.0, 0.86, 0.4), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	if n <= 0:
+		_otext(Vector2(0, py + 74.0), "the normal river — no modifiers yet.", 15, Color(1, 1, 1, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	else:
+		_otext(Vector2(0, py + 56.0), "modifiers STACK — all of these are active:", 12, Color(1, 1, 1, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+		for i in range(1, n + 1):
+			var ry := py + 72.0 + (i - 1) * 46.0
+			_otext(Vector2(panel.position.x + 18.0, ry + 14.0), "%d · %s" % [i, ASC_MOD_NAMES[i]], 15, Color(1.0, 0.8, 0.5), panel.size.x - 36.0, HORIZONTAL_ALIGNMENT_LEFT, 2)
+			_otext(Vector2(panel.position.x + 18.0, ry + 32.0), ASC_MOD_DESCS[i], 13, Color(0.92, 0.92, 0.96, 0.85), panel.size.x - 36.0, HORIZONTAL_ALIGNMENT_LEFT, 2)
+	_otext(Vector2(0, panel.end.y - 18.0), "tap to close", 14, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
 func _draw_select() -> void:
 	var cx := VIEW.x * 0.5
 	# the name field is a MAIN-MENU thing — never show it on the duck-select screen
@@ -12043,7 +12076,7 @@ func _draw_select() -> void:
 			sname = spc.name
 	_draw_button(SEL_SPECIAL_BTN, "", 15)
 	_relic_glyph(equipped_special, SEL_SPECIAL_BTN.position + Vector2(20, 16), 9.0, Color(0.6, 0.92, 1.0))
-	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(38, 21), "%s  >" % sname,
+	draw_string(font, SEL_SPECIAL_BTN.position + Vector2(38, 21), "SPECIAL · %s" % sname,
 		HORIZONTAL_ALIGNMENT_LEFT, SEL_SPECIAL_BTN.size.x - 44, 15, Color(0.85, 0.96, 1.0))
 	# WARDROBE chip — shows BOTH slots (head + body) so it's body-aware at a glance
 	_draw_button(SEL_WEAR_BTN, "", 14)
@@ -12110,6 +12143,8 @@ func _draw_select() -> void:
 		_draw_special_picker()
 	if in_wardrobe:
 		_draw_wardrobe()
+	if asc_info:
+		_draw_asc_info()
 
 # the WARDROBE: one tidy grid that BOTH buys and equips head cosmetics (no shop clutter)
 func _wardrobe_tile(i: int) -> Rect2:
