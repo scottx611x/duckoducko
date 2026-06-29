@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.5"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.13.6"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -7391,12 +7391,16 @@ func _draw_run_timeline() -> void:
 	for i in BOSS_MARKS.size():
 		var bx: float = fx.call(float(BOSS_MARKS[i]))
 		var beaten: bool = i < next_boss_idx
-		var is_snapz: bool = i == 1
+		var bkind: String = boss_kinds[i] if i < boss_kinds.size() else "gerald"   # the ACTUAL boss in this slot this run
+		var is_snapz: bool = bkind == "snapz"
+		var is_beaver: bool = bkind == "beaver"
 		var is_final: bool = i >= 2          # GERALD THE ETERNAL: massive + bloody on the timeline too
-		var btex: Texture2D = (tex_snapz[0] if is_snapz else tex_gerald[0]) if (not tex_gerald.is_empty()) else null
+		var btex: Texture2D = null
+		if not tex_gerald.is_empty():
+			btex = tex_beaver[0] if (is_beaver and not tex_beaver.is_empty()) else (tex_snapz[0] if is_snapz else tex_gerald[0])
 		var bob: float = 0.0 if beaten else absf(sin(anim_t * 2.0 + i)) * 2.0
 		if btex != null:
-			var px: float = 48.0 if is_final else (44.0 if is_snapz else 30.0)   # SNAPZ is a big bruiser — show it
+			var px: float = 48.0 if is_final else (44.0 if is_snapz else (38.0 if is_beaver else 30.0))   # SNAPZ big; BARRY medium
 			var bs := px / float(btex.get_size().x) * btex.get_size()
 			var ctr := Vector2(bx, y - 16 - bob)
 			if is_final and not beaten:       # a pulsing blood halo of dread

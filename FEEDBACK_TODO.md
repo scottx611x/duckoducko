@@ -368,3 +368,7 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Knot pattern now STABLE when a button is pressed (was re-hashing off the shifted rect.position; now hashes the original pos).
 - ASCENSION menu deeper explanation: tap the MIDDLE of the ascension bar -> a panel listing every active (stacking) modifier w/ a plain-English description (ASC_MOD_DESCS). < > still dial the tier.
 - SPECIAL button now reads 'SPECIAL · <equipped>' to mirror the WARDROBE button (category-first).
+
+
+## 2026-06-28 — Barry on the minimap (v1.13.6)
+- Minimap boss markers used hardcoded is_snapz=(i==1) -> boss slot 2 ALWAYS drew Snapz. Now uses the real boss_kinds[i], so BARRY's mugshot shows when he's the 2nd boss. (Same bug still in the run-detail mugshots ~8046, but past records don't store the kinds — would need saving them.)
