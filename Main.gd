@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.15.1"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.0"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -243,6 +243,8 @@ const WEARABLES := [
 	{"id": "crown",   "name": "ROYAL CROWN",  "cost": 600, "desc": "royalty taxes the river: +25% feathers banked"},
 	{"id": "pirate",  "name": "PIRATE HAT",   "cost": 500, "desc": "plunder! every snack carries you +35% further downriver"},
 	{"id": "party",   "name": "PARTY HAT",    "cost": 450, "desc": "the party never stops: LOFT fills +20% faster"},
+	{"id": "lilypad", "name": "LILY PAD HAT",  "cost": 500, "desc": "a passenger rides the pad: +1 duckling joins your brood each run"},
+	{"id": "souwester","name": "SOU'WESTER",   "cost": 450, "desc": "the squall at your back: a steady +8% pace, rain or shine"},
 	{"id": "prop",    "name": "PROP BEANIE",  "cost": 450, "desc": "that propeller gives +12% hop height & hang"},
 	{"id": "chef",    "name": "CHEF TOQUE",   "cost": 400, "desc": "fresh outta the kitchen: snacks fall +20% more"},
 	{"id": "bandana", "name": "BANDIT BANDANA", "cost": 500, "desc": "live dangerously: near-misses charge your special harder"},
@@ -2106,6 +2108,8 @@ func _wear_perk_label(id: String) -> String:
 		"crown": return "feathers banked"
 		"pirate": return "snack distance"
 		"party": return "LOFT fill speed"
+		"lilypad": return "brood size"
+		"souwester": return "river pace"
 		"prop": return "hop height & hang"
 		"chef": return "snack drop rate"
 		"bandana": return "near-miss charge"
@@ -2128,6 +2132,8 @@ func _wear_perk_val(id: String, t: int) -> String:
 		"crown":   return "+%d%%" % roundi(25.0 * f)
 		"pirate":  return "+%d%%" % roundi(35.0 * f)
 		"party":   return "+%d%%" % roundi(20.0 * f)
+		"lilypad": return "+%d" % t
+		"souwester": return "+%d%%" % roundi(8.0 * f)
 		"prop":    return "+%d%%" % roundi(12.0 * f)
 		"chef":    return "+%d%%" % roundi(20.0 * f)
 		"bandana": return "+%d%%" % roundi(40.0 * f)
@@ -2152,6 +2158,7 @@ func _wear_pace() -> float:                          # BOOMBOX: steady pace bump
 	var m := 1.0
 	if _wear("boombox"): m *= 1.0 + 0.05 * _wf("boombox")
 	if _wear("cape"):    m *= 1.0 + 0.06 * _wf("cape")    # HERO CAPE (body) — stacks with the BOOMBOX
+	if _wear("souwester"): m *= 1.0 + 0.08 * _wf("souwester")   # SOU'WESTER: steady all-weather pace
 	return m
 
 # ducks you could still roll from a MYSTERY EGG (locked, but not the earn-only secrets)
@@ -2858,6 +2865,8 @@ func start_game() -> void:
 		loft = 0.4
 	if _wear("halo"):
 		shield_charges += _wtier("halo")           # HALO: a guardian shield each run (+1 per star)
+	if _wear("lilypad"):
+		_add_ducklings(_wtier("lilypad"))           # LILY PAD HAT: a duckling passenger each run (+1 per star)
 	name_edit.visible = false
 	# the ancient shrine greets you before the river does (boon power scales with bosses)
 	_open_shrine()
@@ -13061,7 +13070,7 @@ func _sim_start_run() -> void:
 		tries += 1
 	start_game()
 	in_shrine = false; shrine_boons = []          # skip the pre-run shrine
-	var _heads := ["crown", "pirate", "party", "chef", "bandana", "goggles", "raccoon", "scarf", "halo", "boombox"]
+	var _heads := ["crown", "pirate", "party", "lilypad", "souwester", "chef", "bandana", "goggles", "raccoon", "scarf", "halo", "boombox"]
 	var _bodies := ["turtle", "cape", "vest", "jetpack", "satchel"]
 	equipped_wear = _heads[randi() % _heads.size()] if randf() < 0.9 else ""    # scootybooty owns everything
 	equipped_body = _bodies[randi() % _bodies.size()] if randf() < 0.6 else ""

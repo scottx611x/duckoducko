@@ -403,3 +403,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-30 — BONGO froggy kit SHIPPED (v1.15.1)
 - Bot-sim (8 skilled): no crash, 5 boss clears, mean 10275m. BONGO appears (~50/50) + beatable; still no bot deaths to him (leans slightly easier than Gerald who killed 4/8). Tightened telegraphs (tongue 0.5->0.42, gulp 0.55->0.46, hop 0.46->0.42) for a bit more bite. STILL slightly soft for a skilled bot — WATCH Scott playtest; can add a phase2 (faster when low HP) or harder hit windows if he wants more threat.
+
+
+## 2026-06-30 — 2 new WEARABLES SHIPPED (v1.16.0)
+- LILY PAD HAT (cost 500): +1 duckling joins your brood each run (NEW axis — no wearable boosted ducklings before; fills the empty ducklings-category wear slot). SOU'WESTER (cost 450): +8% all-weather pace.
+- Both authored across all 3 layers (flat icon gen_wearables.py, 3D worn + MEGA-meld voxel_duck.py build_hat + _WEAR3D_IDS). Scott approved both; asked to PUNCH UP THE LILY PAD (was green-on-green on the mallard) -> brightened pad + dark rim ring + bigger pink bloom, raised y11-13 domed. Now pops. MEGA-meld verified consistent.

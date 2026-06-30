@@ -2378,6 +2378,8 @@ WC = dict(
     yellow=(242, 208, 74), blue=(74, 116, 204), grey=(112, 116, 126), greyd=(68, 72, 82),
     orange=(242, 132, 84), brown=(150, 100, 56), teal=(70, 196, 214), skull=(236, 236, 228),
     pomp=(248, 248, 252), whited=(206, 206, 200), tealr=(40, 150, 170),
+    pad=(122, 196, 88), padh=(168, 224, 120), padd=(44, 96, 44), lflow=(246, 142, 186),
+    oil=(240, 200, 72), oilh=(252, 224, 120), oild=(196, 158, 44),
 )
 
 
@@ -2427,6 +2429,41 @@ def build_hat(hid):
             _disc(d, y, rad, cols[i % 3], cz)
         for yy in (19, 20):                                  # pom-pom
             d[(0, yy, cz)] = WC["pomp"]
+    elif hid == "lilypad":
+        for y in (11, 12, 13):                              # a domed round pad sitting clearly ON TOP of the head
+            _disc(d, y, 3.8, WC["pad"], cz)
+        _ring(d, 11, 3.6, WC["padd"], cz, 0.9)              # DARK rim at the base so it pops off a green head
+        _ring(d, 12, 3.4, WC["padd"], cz, 0.7)
+        for x in range(-4, 5):                              # bright sun-lit crown
+            for z in range(cz - 4, cz + 5):
+                if (x, 13, z) in d:
+                    d[(x, 13, z)] = WC["padh"]
+        for z in range(cz + 1, cz + 5):                     # the signature wedge notch out the front
+            for yy in (11, 12, 13):
+                d.pop((0, yy, z), None); d.pop((1, yy, z), None); d.pop((-1, yy, z), None)
+        for (vx, vz) in [(3, 0), (-3, 0), (0, -3), (2, 2), (-2, 2)]:  # darker radial veins
+            d[(vx, 13, cz + vz)] = WC["padd"]
+        for a in range(6):                                  # a pink bloom perched on top
+            ang = a * (math.tau / 6)
+            d[(int(round(math.cos(ang) * 1.7)), 14, cz + int(round(math.sin(ang) * 1.7)))] = WC["lflow"]
+            d[(int(round(math.cos(ang) * 1.0)), 15, cz + int(round(math.sin(ang) * 1.0)))] = WC["lflow"]
+        d[(0, 15, cz)] = WC["yellow"]; d[(0, 16, cz)] = WC["yellow"]   # golden flower center
+    elif hid == "souwester":
+        for y, r in {9: 2.4, 10: 2.8, 11: 2.6, 12: 1.9, 13: 1.1}.items():   # domed yellow crown
+            _disc(d, y, r, WC["oil"], cz)
+        for x in range(-3, 4):                              # crown sheen up front
+            d[(x, 12, cz + 2)] = WC["oilh"]
+        for y in (8, 9):                                    # the brim — short front, long flared BACK
+            for x in range(-4, 5):
+                for z in range(cz - 6, cz + 5):
+                    back = 1.0 if z < cz else 0.55          # brim extends much further behind
+                    if (x / 4.0) ** 2 + ((z - cz) / (6.0 * back)) ** 2 <= 1.0:
+                        d[(x, y, z)] = WC["oil"] if y == 9 else WC["oild"]
+        for x in range(-4, 5):                              # back brim tips up + a darker band
+            d[(x, 8, cz - 6)] = WC["oild"]
+        for a in range(8):
+            ang = a * (math.tau / 8)
+            d[(int(round(math.cos(ang) * 2.5)), 8, cz + int(round(math.sin(ang) * 2.5)))] = WC["oild"]
     elif hid == "prop":
         for i, y in enumerate((9, 10, 11)):                 # taller two-tone beanie dome
             _disc(d, y, 3.2 - i * 0.55, [WC["red"], WC["blue"], WC["red"]][i], cz)
@@ -2674,7 +2711,7 @@ def generate_wearables3d(art_dir):
     def occ(Vhat, yaw, pitch, **kw):
         return render_wear(mallard_sh, Vhat, yaw, pitch, **kw)
 
-    _WEAR3D_IDS = ("crown", "pirate", "party", "prop", "chef", "bandana", "halo", "boombox", "scarf", "goggles", "heron", "turtle", "cape", "vest", "jetpack", "satchel", "raccoon")
+    _WEAR3D_IDS = ("crown", "pirate", "party", "lilypad", "souwester", "prop", "chef", "bandana", "halo", "boombox", "scarf", "goggles", "heron", "turtle", "cape", "vest", "jetpack", "satchel", "raccoon")
     for hid in _WEAR3D_IDS:                              # SINGLE SOURCE — the MEGA-hop meld below reuses this exact list so they can never drift
         V = build_hat(hid)
         if not V:

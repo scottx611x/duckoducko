@@ -57,6 +57,13 @@ BLKD = (28, 26, 34, 255)
 ORG = (224, 96, 56, 255)
 ORGL = (242, 132, 84, 255)
 ORGD = (180, 68, 40, 255)
+LPAD = (122, 196, 88, 255)
+LPADH = (168, 224, 120, 255)
+LPADD = (44, 96, 44, 255)
+LFLOW = (244, 150, 188, 255)
+OIL = (240, 200, 72, 255)
+OILH = (250, 224, 120, 255)
+OILD = (198, 158, 44, 255)
 # halo glow
 GLOWA = (255, 232, 150, 90)
 GLOWB = (255, 244, 200, 150)
@@ -525,6 +532,49 @@ def make_satchel():
     return render(28, 26, build)
 
 
+def make_lilypad():
+    """A round green lily pad with the signature wedge-notch + a little pink bloom.  28x22."""
+    def build(g):
+        # the flat pad, an oval seen at a slight tilt — dark rim first so it pops
+        g.ellipse([1, 7, 26, 21], LPADD)
+        g.ellipse([3, 8, 24, 20], LPAD)
+        g.ellipse([4, 9, 23, 18], LPADH)        # sun-lit top
+        g.ellipse([5, 14, 22, 21], LPADD)        # shaded front lip
+        # the classic wedge notch cut from the front
+        g.polygon([(13, 15), (10, 21), (16, 21)], (0, 0, 0, 0))
+        # faint radial vein lines
+        g.line([(14, 11), (6, 16)], LPADD)
+        g.line([(14, 11), (22, 16)], LPADD)
+        g.line([(14, 11), (14, 19)], LPADD)
+        # a tiny lily bloom perched on top
+        for ang in range(0, 360, 60):
+            import math as _m
+            px = int(round(14 + _m.cos(_m.radians(ang)) * 3))
+            py = int(round(8 + _m.sin(_m.radians(ang)) * 2))
+            g.ellipse([px - 1, py - 1, px + 1, py + 1], LFLOW)
+        g.ellipse([13, 7, 15, 9], YEL)           # golden center
+    return render(28, 22, build)
+
+
+def make_souwester():
+    """Classic yellow fisherman's rain hat: domed crown, short front brim, long flared back.  30x24."""
+    def build(g):
+        # the long flared back brim (rises behind), drawn first
+        g.polygon([(3, 18), (15, 10), (27, 18), (24, 22), (6, 22)], OIL)
+        g.ellipse([4, 16, 26, 23], OILD)         # brim underside shade
+        g.polygon([(3, 18), (15, 11), (27, 18), (24, 20), (6, 20)], OIL)   # brim top
+        # the domed crown
+        g.ellipse([9, 3, 21, 17], OIL)
+        g.ellipse([10, 4, 19, 12], OILH)         # crown sheen
+        # the chin-strap band around the base of the crown
+        g.rectangle([9, 14, 21, 16], OILD)
+        g.px((14, 15), OILH)
+        # a couple of rain-bead glints
+        g.px((12, 6), (255, 255, 255, 220))
+        g.px((17, 9), (255, 255, 255, 180))
+    return render(30, 24, build)
+
+
 ASSETS = [
     (make_crown, "wear_crown.png"),
     (make_pirate, "wear_pirate.png"),
@@ -543,6 +593,8 @@ ASSETS = [
     (make_jetpack, "wear_jetpack.png"),
     (make_satchel, "wear_satchel.png"),
     (make_raccoon, "wear_raccoon.png"),
+    (make_lilypad, "wear_lilypad.png"),
+    (make_souwester, "wear_souwester.png"),
 ]
 
 if __name__ == "__main__":
