@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.13.6"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.14.0"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -502,13 +502,20 @@ const BOONS := [
 	{"id": "glasscannon","tier": 2, "name": "GLASS CANNON",  "desc": "begin with a LEGENDARY — but herons swarm +50%", "deal": true},
 	{"id": "secondwind", "tier": 2, "name": "SECOND WIND",   "desc": "cheat death once — but you pace 10% slower", "deal": true},
 	{"id": "migration",  "tier": 2, "name": "MIGRATION",     "desc": "15% slower start — but pace climbs +3% per 1000ft, forever", "deal": true},
+	{"id": "downpayment","tier": 1, "name": "DOWN PAYMENT", "desc": "your banked feathers fund your pace — +1% per 60 you bank (max +25%)", "deal": false},
+	{"id": "momentum",   "tier": 1, "name": "MOMENTUM",     "desc": "pace ramps the longer you go un-hit — a bonk resets it", "deal": true},
+	{"id": "dabbler",    "tier": 1, "name": "DABBLER",      "desc": "every snack you dabble up drops a feather + a sliver of LOFT", "deal": false},
+	{"id": "packleader", "tier": 2, "name": "PACK LEADER",  "desc": "every duckling in your wake adds +3% pace", "deal": false},
+	{"id": "showboat",   "tier": 2, "name": "SHOWBOAT",     "desc": "near-misses charge your special 2.5x — but you start with NO shields", "deal": true},
 	# TIER 3 — only for ducks who've bested ALL THREE bosses (Gerald, Snapz, the Eternal)
 	{"id": "apex",       "tier": 3, "name": "APEX PREDATOR", "desc": "begin with TWO legendaries — but every boss gains +2 HP", "deal": true},
 	{"id": "phoenix",    "tier": 3, "name": "PHOENIX",       "desc": "cheat death TWICE, reborn ablaze each time", "deal": false},
 	{"id": "warlord",    "tier": 3, "name": "WAR LORD",      "desc": "+35% pace AND triple feathers — but the whole flock hunts you", "deal": true},
+	{"id": "echo",       "tier": 3, "name": "ECHO",         "desc": "your LOFT special fires a second, weaker time", "deal": false},
 ]
 # per-run boon modifiers (reset each run)
 var boon_pace := 1.0
+var momentum_t := 0.0           # MOMENTUM boon: seconds since last hit (ramps pace; resets on bonk)
 var boon_migration := false      # MIGRATION boon: pace ramps with distance, no cap
 var migration_next := 10000.0    # next distance threshold for the +3% climb
 var boon_feather_mult := 1
@@ -689,6 +696,9 @@ var dash_t := 0.0               # AFTERBURNER: invincible double-pace dash remai
 var glide_t := 0.0              # TAKE WING: gliding flight remaining (soar + bank + hoover)
 const GLIDE_DUR := 3.6
 var tornado_t := 0.0            # TORNADO: the duck is a spinning waterspout, vacuuming snacks
+var echo_pending := -1.0        # ECHO boon: >=0 = countdown to a weaker encore of the last special
+var special_scale := 1.0        # ECHO: scales the encore's power/duration down
+var firing_echo := false        # ECHO: guard so the encore can't schedule another encore
 var draft_grace := 0.0          # brief invincible breather right after a draft so hazards slide past, not vanish
 var slowmo_t := 0.0             # ZEN MODE: bullet-time — the river crawls so you can thread it
 var specials_owned: Array = ["mega", "wild", "laser"]   # MEGA, WILD, LASER are free — the classic silly mix
@@ -2912,6 +2922,9 @@ func _pick_boon(b: Dictionary) -> void:
 			boon_pace = 1.35
 			boon_feather_mult = 3
 			boon_heron_mult = 1.6                  # the whole flock hunts you
+		"showboat":                                # SHOWBOAT: near-misses charge the special hard, but no safety net
+			boon_nearmiss_mult = 2.5
+			shield_charges = 0
 	# every blessing you take shows in the relic listing as a golden boon
 	if not run_boons.has(b.id):
 		run_boons.append(b.id)
@@ -2936,8 +2949,8 @@ func cur_hop_dur() -> float:
 
 func cur_mega_dur() -> float:
 	if hyper:
-		return 1.7                                  # spring-log arc: shorter, punchier
-	return MEGA_DUR * (0.9 + 0.2 * duck_hop_mul)
+		return 1.7 * special_scale                  # spring-log arc: shorter, punchier
+	return MEGA_DUR * (0.9 + 0.2 * duck_hop_mul) * special_scale
 
 # ---- roguelike upgrades ---------------------------------------------------------
 func _up(id: String) -> int:
@@ -3208,7 +3221,19 @@ func _add_ducklings(n: int) -> void:
 	_float_text(duck_x, BASE_Y + 44.0, "peep!", Color(0.97, 0.87, 0.45))
 	_spawn_parts(duck_x, BASE_Y + 40.0, 10, Color(0.97, 0.87, 0.45), 120.0)
 
+func _dyn_pace() -> float:
+	# pace that GROWS with what you've built this run: DOWN PAYMENT (feathers), PACK LEADER (ducklings), MOMENTUM (un-hit time)
+	var m := 1.0
+	if run_boons.has("downpayment"):
+		m *= 1.0 + clampf(float(run_feathers) / 60.0 * 0.01, 0.0, 0.25)
+	if run_boons.has("packleader"):
+		m *= 1.0 + ducklings_n * 0.03
+	if run_boons.has("momentum"):
+		m *= 1.0 + minf(0.30, momentum_t * 0.02)
+	return m
+
 func _lose_duckling() -> void:
+	momentum_t = 0.0                                # MOMENTUM: a duckling-loss bonk breaks the un-hit streak
 	if boon_gosling_guard and shield_charges > 0:   # GOSLING GUARD: a shield soaks the scatter
 		shield_charges -= 1
 		duck_shake = 0.2
@@ -4096,6 +4121,9 @@ func reset_game() -> void:
 	hop_t = 0.0
 	mega_t = 0.0
 	laser_t = 0.0
+	echo_pending = -1.0
+	special_scale = 1.0
+	firing_echo = false
 	dash_t = 0.0
 	glide_t = 0.0
 	draft_grace = 0.0
@@ -4130,6 +4158,7 @@ func reset_game() -> void:
 	ascending = false; ascend_t = 0.0; run_won = false; endless = false
 	run_boons.clear()
 	boon_pace = 1.0
+	momentum_t = 0.0
 	boon_migration = false; migration_next = 10000.0
 	boon_feather_mult = 1
 	boon_heron_mult = 1.0
@@ -4699,7 +4728,7 @@ func fire_laser() -> void:
 		return
 	loft = 0.0
 	loft_ready = false
-	laser_t = LASER_DUR
+	laser_t = LASER_DUR * special_scale
 	_sfx("laser")
 	if boss != null and boss.phase == "fight" and absf(boss.x - duck_x) < LASER_W * 0.85:
 		_hit_boss(1)                           # the beam catches him — line it up!
@@ -4759,6 +4788,8 @@ func _fire_special() -> void:
 		_: mega_hop()
 	if _up("nova") > 0:                        # MEGA QUACK rides ON your special, whatever it is
 		_sonic_quack()
+	if run_boons.has("echo") and not firing_echo:   # ECHO: the special rings out a second, weaker time
+		echo_pending = 0.4
 
 # ZEN MODE: bullet-time — the whole river crawls so you can thread the chaos
 func fire_slowmo() -> void:                        # TORNADO (the slot formerly known as ZEN MODE)
@@ -4766,7 +4797,7 @@ func fire_slowmo() -> void:                        # TORNADO (the slot formerly 
 		return
 	loft = 0.0
 	loft_ready = false
-	tornado_t = 1.6                                # ~1.6s spinning waterspout: invincible + vacuuming
+	tornado_t = 1.6 * special_scale               # ~1.6s spinning waterspout (ECHO shortens it)
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 460.0, "col": Color(0.7, 0.9, 1.0)})
 	_sfx("fwoosh", 0.7)
 	_sfx("quack", 1.3, -2.0)
@@ -4817,7 +4848,7 @@ func fire_afterburner() -> void:
 		return
 	loft = 0.0
 	loft_ready = false
-	dash_t = 2.3
+	dash_t = 2.3 * special_scale
 	fire_t = maxf(fire_t, 2.5)                  # visibly lit (the burn loop handles trail + chip)
 	fire_max = maxf(fire_max, 2.5)
 	_sfx("mega", 0.7)
@@ -4832,7 +4863,7 @@ func fire_glide() -> void:
 		return
 	loft = 0.0
 	loft_ready = false
-	glide_t = GLIDE_DUR
+	glide_t = GLIDE_DUR * special_scale
 	air_hops = 0
 	_sfx("fwoosh", 1.0, 3.0); _sfx("mega", 0.45)
 	_spawn_parts(duck_x, BASE_Y, 22, Color(0.92, 0.96, 1.0), 250.0)
@@ -5079,8 +5110,10 @@ func _update_play(delta: float) -> void:
 		if slowmo_t <= 0.0:
 			_flash("time resumes.")
 	var thermal := 1.05 if _meta("thermal") else 1.0    # THERMAL VENT: a permanent nudge
+	if run_boons.has("momentum"):
+		momentum_t += delta                             # MOMENTUM: builds while un-hit (resets on a bonk)
 	if boss == null:                                    # distance freezes during a boss duel
-		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal * _wear_pace()  # conga + TAILWIND + BOOMBOX
+		distance += speed * delta * (1.0 + 0.08 * ducklings_n) * boon_pace * _dyn_pace() * thermal * _wear_pace()  # conga + TAILWIND + BOOMBOX + DOWN PAYMENT/PACK LEADER/MOMENTUM
 		biome_progress += BASE_SPEED * delta   # scenery advances at a STEADY rate -> consistent pond duration
 	if boon_migration and distance >= migration_next:    # MIGRATION: the flock finds its rhythm — pace climbs forever
 		boon_pace += 0.03
@@ -5386,6 +5419,13 @@ func _update_play(delta: float) -> void:
 	_move_world(delta)
 	if draft_grace > 0.0:
 		draft_grace -= delta                       # the post-draft breather winds down
+	if echo_pending >= 0.0:                         # ECHO: a weaker encore ~0.4s after the primary fire
+		echo_pending -= delta
+		if echo_pending < 0.0 and alive:
+			firing_echo = true; special_scale = 0.6
+			loft = 1.0; loft_ready = true              # refund LOFT for the single encore
+			_fire_special()
+			firing_echo = false; special_scale = 1.0
 	if dash_t > 0.0:
 		dash_t -= delta
 		distance += speed * delta                  # AFTERBURNER: a second helping of pace
@@ -6875,6 +6915,9 @@ func _collide() -> void:
 
 func _collect(it: Dictionary) -> void:
 	it.got = true
+	if run_boons.has("dabbler"):                     # DABBLER: each snack also drops a feather + a sliver of LOFT
+		run_feathers += 1
+		_add_loft(0.04)
 	tut_got_snack = true                             # tutorial: the SNACK beat is satisfied
 	_st("snacks")
 	_st("snack_" + ITEM_DEFS[it.kind].name)          # per-flavour tally (berry/donut/...)
@@ -9714,7 +9757,7 @@ func _refresh_hud() -> void:
 	# the ×multiplier now reflects your FULL distance rate vs base: the river's
 	# stepped ramp + your duck's pace + the duckling conga + boons all roll in
 	var thermal := 1.05 if _meta("thermal") else 1.0
-	var mult: float = (speed / BASE_SPEED) * (1.0 + 0.08 * ducklings_n) * boon_pace * thermal * _wear_pace()
+	var mult: float = (speed / BASE_SPEED) * (1.0 + 0.08 * ducklings_n) * boon_pace * _dyn_pace() * thermal * _wear_pace()
 	if alive and int(mult * 100.0) > int(run_stats.get("toppace", 100)):
 		run_stats["toppace"] = int(mult * 100.0)   # best pace multiplier this run (×100)
 	pace_mult = mult
@@ -11173,7 +11216,7 @@ func _draw_duck() -> void:
 		var sw := Vector2(ss.x * swf, ss.y * swf)
 		draw_texture_rect(tex_shadow, Rect2(Vector2(duck_x, BASE_Y + 8) - sw * 0.5, sw),
 			false, Color(1, 1, 1, 1.0 - 0.4 * h))
-		var st_slices = ducks[species]["stack"]   # hens reuse the drake stack for the brief MEGA tumble
+		var st_slices = ducks[_eff_species()].get("stack", [])   # drakes tumble as voxels; hen variants keep their OWN look (elif below)
 		if state == St.MEGA and not st_slices.is_empty():
 			# MEGA HOP: the duck becomes the 3D voxel — tumbling or flying
 			var p := mega_t / cur_mega_dur()
@@ -11202,6 +11245,18 @@ func _draw_duck() -> void:
 					draw_set_transform(ptop, roll, Vector2.ONE)
 					draw_texture_rect(pb, Rect2(-psz * 0.5, psz), false)
 					draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		elif state == St.MEGA:                              # HEN MEGA: she has no voxel stack -> spin her OWN sprite, still aura'd
+			var mhsc := 2.4 + 1.8 * h
+			var mhp := 0.5 + 0.5 * sin(anim_t * 14.0)
+			draw_circle(duck_pos, mhsc * 13.0 * (1.0 + 0.08 * mhp), Color(1.0, 0.82, 0.3, 0.10))
+			draw_circle(duck_pos, mhsc * 8.5, Color(1.0, 0.9, 0.5, 0.10))
+			draw_arc(duck_pos, mhsc * 13.0 * (1.0 + 0.09 * mhp), 0.0, TAU, 36, Color(1.0, 0.86, 0.4, 0.35 + 0.3 * mhp), 3.0)
+			var hfr := _duck_frame(0.5)                     # her wings-out pose
+			var hspin := (mega_t / cur_mega_dur()) * TAU * 2.0
+			var hsz := hfr.get_size() * DUCK_DRAW * mhsc * 0.45 * duck_size_mul
+			draw_set_transform(duck_pos, hspin, Vector2.ONE)
+			draw_texture_rect(hfr, Rect2(-hsz * 0.5, hsz), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			var fr := _duck_frame(h)
 			if glide_t > 0.0:                              # SOAR on the duck's OWN voxel wings (its wings-out flap pose, Rusty-slow beat)

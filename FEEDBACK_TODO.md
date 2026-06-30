@@ -372,3 +372,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-28 — Barry on the minimap (v1.13.6)
 - Minimap boss markers used hardcoded is_snapz=(i==1) -> boss slot 2 ALWAYS drew Snapz. Now uses the real boss_kinds[i], so BARRY's mugshot shows when he's the 2nd boss. (Same bug still in the run-detail mugshots ~8046, but past records don't store the kinds — would need saving them.)
+
+
+## 2026-06-29 — hen-mega fix + 6 boons (v1.14.0)
+- HUGE BUG (Scott): hen variants reverted to the DRAKE skin on MEGA HOP. Root: hen variants have NO voxel-stack art, so the mega tumble borrowed ducks[species][stack] (the drake). Fix: _eff_species() for the stack; hens now spin their OWN sprite + keep the golden aura (elif state==St.MEGA). Full 3D voxel TUMBLE for hens would need hen-stack art (follow-up).
+- 6 new run-boons shipped: DOWN PAYMENT/PACK LEADER/MOMENTUM/DABBLER/SHOWBOAT/ECHO. Bot-sim COVERAGE GAP — the skilled bot only hit 4 boss clears in 11 runs so the higher-tier new boons barely surfaced; shipped on conservative/capped numbers (pace boons clamped). WATCH playtest for the feather->pace + 3-pace-stack (~1.9x) combos.
+- NEXT: build MOODY (mega-frog boss, rotates with Gerald in slot 1). Art to be rendered + validated with Scott.
