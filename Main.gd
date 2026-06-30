@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.2"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.3"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -5116,7 +5116,7 @@ func _process(delta: float) -> void:
 			select_line_t = anim_t
 	if ascending:                                  # the bonkers feast cinematic owns the frame
 		_update_ascend(delta)
-	elif not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and not in_codex and not in_settings and alive and not drafting and not paused:
+	elif not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and not in_codex and not in_settings and alive and not drafting and not paused and not dev_menu:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -6711,14 +6711,17 @@ func _boss_hits_player(by_glob := false) -> void:
 	else:
 		var snz: bool = boss != null and boss.kind == "snapz"
 		var bvr: bool = boss != null and boss.kind == "beaver"
+		var bng: bool = boss != null and boss.kind == "bongo"
 		var msg: String
-		if bvr:                                      # squashed by the engineer or its lumber
+		if bng:                                      # the giant bullfrog — tongue, wave, or a belched fly
+			msg = "BONGO's splash washed you under." if by_glob else "BONGO's tongue snatched you clean off the river."
+		elif bvr:                                    # squashed by the engineer or its lumber
 			msg = "a BEAVER's hurled log bowled you over." if by_glob else "the BEAVER flattened you flat."
 		elif by_glob:                                # caught by a thrown muck-glob, not the beast itself
 			msg = "a SNAPZ muck-glob splattered you." if snz else "GERALD's muck-spit caught you mid-air."
 		else:                                        # the brute got you in person
 			msg = "SNAPZ chomped you clean off the river." if snz else "GERALD's beak ran you down."
-		die(msg, "beaver" if bvr else ("snapz_boss" if snz else "gerald"))
+		die(msg, "bongo" if bng else ("beaver" if bvr else ("snapz_boss" if snz else "gerald")))
 
 # A LOG JAM: a near-full-width WALL of logs you can't paddle through — but a BOOST LOG arrives
 # out front; nail the landing to VAULT the whole thing (or a big enough hop clears it).
@@ -8126,6 +8129,8 @@ func _killer_label(cat: String) -> String:
 		"turtle": return "a river turtle"
 		"snapz_boss": return "SNAPZ"
 		"gerald": return "GERALD"
+		"beaver": return "BARRY"
+		"bongo": return "BONGO"
 		"sadie": return "Sadie's zoomies"
 		"donny": return "CHRISSY's wake"
 	return "the river"
@@ -8855,6 +8860,8 @@ func _stats_deaths(area: Rect2) -> void:
 		"turtle": {"name": "river turtle", "ic": "turtle", "col": Color(0.5, 0.85, 0.6)},
 		"snapz_boss": {"name": "SNAPZ (boss)", "ic": "snapz", "col": Color(0.55, 0.42, 0.3)},
 		"gerald": {"name": "GERALD (boss)", "ic": "gerald", "col": Color(1.0, 0.5, 0.45)},
+		"beaver": {"name": "BARRY (boss)", "ic": "beaver", "col": Color(0.66, 0.46, 0.3)},
+		"bongo": {"name": "BONGO (boss)", "ic": "bongo", "col": Color(0.55, 0.8, 0.45)},
 		"sadie": {"name": "Sadie's zoomies", "ic": "sadie", "col": Color(0.85, 0.6, 0.38)},
 		"donny": {"name": "CHRISSY's wake", "ic": "", "col": Color(0.7, 0.5, 0.28)},
 	}
@@ -13268,6 +13275,8 @@ func _sim_death_icon_path(cat: String) -> String:
 	match cat:
 		"donny": f = "donni.png"
 		"gerald", "boss": f = "gerald_open.png"
+		"bongo": f = "bongo_0.png"
+		"beaver": f = "beaver_0.png"
 		"snapz", "snapz_boss", "turtle": f = "wear_turtle.png"
 		"sadie": f = "sadie_greet.png"
 		"heron": f = "heron.png"

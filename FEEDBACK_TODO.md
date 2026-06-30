@@ -418,3 +418,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-30 — BONGO face dot fix (v1.16.2)
 - Scott: weird dot on BONGO's face. Cause: the throat-breathing chin-pouch draw_circle ran EVERY frame (idle breathing) = a faint pale dot on his chin always. Fix: gated the pouch to only the gulpwarn/gulp stages (where the throat actually inflates). Idle face is clean now.
+
+
+## 2026-06-30 — granular BONGO deaths + dev-menu pause (v1.16.3)
+- Scott: still Gerald in BONGO death text; asked if bongo deaths are granular. They were NOT — bongo deaths used cause 'gerald' (so death msg + logbook said GERALD). Barry had the same latent gap (cause 'beaver' wasn't in any map -> showed as 'the river'). Fixed BOTH across 4 spots: death message (_boss_hits_player bng branch: 'BONGO's tongue snatched you' / 'BONGO's splash washed you under'), _killer_label, the logbook 'named' death-bucket dict (BONGO/BARRY (boss) + ic + col), and _sim_death_icon_path (bongo_0/beaver_0).
+- Scott: dev menu should PAUSE game progress. Added 'and not dev_menu' to the _update_play gate (~5119) so duck/hazards/distance/boss freeze while the playtest menu is open; picking an option closes it + resumes.
