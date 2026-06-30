@@ -2100,6 +2100,59 @@ def build_beaver(frame=0):
             put(round((5+c*0.5)*s),-2,7+c,CLAW)
     return V
 
+def build_bongo(frame=0):
+    """BONGO: a colossal, deadpan bullfrog, FRONT-facing. Wide squat green body, pale
+    throat, two big bulging eyes domed up on top, a broad downturned grumpy mouth that
+    gapes per frame, stubby front feet. He'd rather be napping. Faces +z (head-on)."""
+    SKIN=(96,162,74); SKINH=(126,190,98); SKIND=(66,120,52)
+    BELLY=(180,200,140); THROAT=(150,184,112)
+    SPOT=(58,104,46); EYE=(18,16,14); EYEW=(244,240,228)
+    LID=(80,134,60); NOSE=(40,60,34); MAW=(150,72,76); GOLD=(214,176,70)
+    V={}; put,ellip,box=_vox_helpers(V)
+    gape=[0,2,3][frame]
+    # wide squat BODY — low and broad, frog-fat
+    for x in range(-10,11):
+        for y in range(-2,9):
+            for z in range(-9,10):
+                if (x/9.5)**2+((y-2)/4.6)**2+((z-0.5)/7.0)**2<=1.0:
+                    put(x,y,z,SKIN)
+    # pale THROAT/BELLY underneath + front
+    for k in list(V.keys()):
+        x,y,z=k
+        if V[k]==SKIN and y<2 and z>-2: V[k]=BELLY if y<0 else THROAT
+    # darker mottled SPOTS along the back
+    for (sx,sz) in [(-5,-3),(5,-4),(0,-6),(-7,2),(7,1),(3,4),(-3,5)]:
+        ellip(sx,6.0,sz,1.8,0.8,1.8,SPOT,only_empty=True)
+    ellip(0,6.5,1,8.0,2.0,6.0,SKINH,only_empty=True)        # sun-lit dome on the back
+    # broad flat HEAD-front rises a touch toward the brow
+    for zi,z in enumerate(range(8,13)):
+        t=zi/4.0
+        ellip(0,3.0+t*1.5,z,7.5-2.0*t,3.2-0.6*t,1.3,SKIN)
+    # the big GRUMPY MOUTH — a wide downturned line across the front, gaping down per frame
+    for x in range(-7,8):
+        droop=int(abs(x)*0.32)                              # corners turn DOWN -> permanent frown
+        put(x,1+droop,12,SKIND); put(x,1+droop,13,SKIND)
+    if gape>0:
+        box(-6,6,1-gape,1,11,13,MAW)                        # open maw (dark) when he lashes / gulps
+        for x in range(-6,7,2):
+            put(x,1-gape,13,(120,54,58))
+    # two big bulging EYES domed up on TOP of the head (the bullfrog signature)
+    for s in (1,-1):
+        ellip(5*s,8.5,7,2.6,2.6,2.4,SKIN)                   # the bulging mound
+        ellip(5*s,9.6,8,1.9,1.9,1.7,EYEW)                   # white of the eye
+        ellip(5*s,9.8,9.2,1.0,1.0,0.9,GOLD)                 # gold iris (sleepy)
+        put(5*s,9.8,10,EYE); put(5*s+1*s,9.8,10,EYE)        # flat unimpressed pupil
+        ellip(5*s,11.0,7,2.4,0.7,2.2,LID,only_empty=True)   # heavy droopy LID over the top
+    # NOSTRILS up front
+    for nx in (-1,1):
+        put(nx,4.5,13,NOSE)
+    # stubby front FEET poking forward
+    for s in (1,-1):
+        ellip(6*s,-2,8,2.0,1.2,2.4,SKIND)
+        for c in range(3):
+            put(round((5+c)*s),-2,10+c,THROAT)
+    return V
+
 def make_chuckit():
     """Sadie's beloved ball: orange with the blue band (from the photo)."""
     from PIL import Image, ImageDraw
@@ -2179,6 +2232,18 @@ def generate_critters(art_dir):
     for f, im in enumerate(pike_imgs):
         save(im.crop(pbb), "pike_%d.png" % f)
     # BEAVER: a stout FRONT-facing bruiser (buck-teeth + paddle tail read head-on)
+    # BONGO the giant bullfrog: front-3/4, big enough that his domed eyes + grumpy maw read
+    bongo_imgs = [render(shade(build_bongo(f)), math.radians(10), math.radians(20), out=320, scale=5.0)
+                  for f in (0, 1, 2)]
+    bgb = None
+    for im in bongo_imgs:
+        b = im.getbbox()
+        if b:
+            bgb = b if bgb is None else (min(bgb[0], b[0]), min(bgb[1], b[1]), max(bgb[2], b[2]), max(bgb[3], b[3]))
+    bgb = (max(0, bgb[0] - 4), max(0, bgb[1] - 4), min(320, bgb[2] + 4), min(320, bgb[3] + 4))
+    for f, im in enumerate(bongo_imgs):
+        save(im.crop(bgb), "bongo_%d.png" % f)
+    save(render(shade(build_bongo(2)), math.radians(10), math.radians(20), out=320, scale=5.0).crop(bgb), "bongo_open.png")
     beaver_imgs = [render(shade(build_beaver(f)), math.radians(8), math.radians(18), out=320, scale=5.2)
                    for f in (0, 1, 2)]
     bvb = None
@@ -2277,6 +2342,8 @@ def generate_critters(art_dir):
     spin_set(shade(build_pike(2)), "pike_open", 12, 3.4, out=340)
     spin_set(shade(build_beaver(0)), "beaver", 20, 5.2, out=320)
     spin_set(shade(build_beaver(2)), "beaver_open", 20, 5.2, out=320)
+    spin_set(shade(build_bongo(0)), "bongo", 20, 5.0, out=320)
+    spin_set(shade(build_bongo(2)), "bongo_open", 20, 5.0, out=320)
     spin_set(shade(build_hawk(0)), "rusty", 24, 3.2, out=180)
     spin_set(shade(build_sadie(0)), "sadie", 34, 1.7, out=80)
     spin_set(shade(build_loon(0)), "loon", HERO_PITCH, 2.6, out=128)

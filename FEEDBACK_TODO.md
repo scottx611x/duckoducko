@@ -378,3 +378,14 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - HUGE BUG (Scott): hen variants reverted to the DRAKE skin on MEGA HOP. Root: hen variants have NO voxel-stack art, so the mega tumble borrowed ducks[species][stack] (the drake). Fix: _eff_species() for the stack; hens now spin their OWN sprite + keep the golden aura (elif state==St.MEGA). Full 3D voxel TUMBLE for hens would need hen-stack art (follow-up).
 - 6 new run-boons shipped: DOWN PAYMENT/PACK LEADER/MOMENTUM/DABBLER/SHOWBOAT/ECHO. Bot-sim COVERAGE GAP — the skilled bot only hit 4 boss clears in 11 runs so the higher-tier new boons barely surfaced; shipped on conservative/capped numbers (pace boons clamped). WATCH playtest for the feather->pace + 3-pace-stack (~1.9x) combos.
 - NEXT: build MOODY (mega-frog boss, rotates with Gerald in slot 1). Art to be rendered + validated with Scott.
+
+
+## 2026-06-30 — BONGO boss (mega-frog, slot-1 alt to Gerald) — IN PROGRESS
+- Scott: new boss = MEGA version of the harmless RIVER FROG, rotates with Gerald in slot 1. Name evolved MOODY -> BONGO. Deadpan/unimpressed-but-colossal.
+- BUILT: boss_kinds[0] = random gerald/bongo; _start_boss stats (hp+1, scale 1.3); entry SWELLS up from his log; _bongo_fight w/ 3 attacks — TONGUE LASH (lane snap glob), BELLY FLOP (tide wave + dazed stomp window), GULP (vacuum pulls duck_x toward maw); cloned Barry's fair dazed/recover structure. CODEX entry + taunts/stomp-lines/intros. Minimap marker.
+- ART (Scott chose hi-res + turntable): authored build_bongo() voxel bullfrog in voxel_duck.py; generates bongo_0/1/2 + bongo_open battle frames + bongo/bongo_open 16-frame codex turntables. Wired tex_bongo into draw/codex/minimap. Procedural maw/eye overlays gated to placeholder-only.
+- PENDING: bot-sim balance pass (running) -> then bump version + release.
+
+
+## 2026-06-30 — BONGO boss SHIPPED (v1.15.0)
+- Bot-sim (10 skilled runs): 5 boss clears, NO deaths to BONGO (beatable, not a wall), no crash. Rotation verified ~47% bongo / 53% gerald over 200 resets. BONGO hp=5 @ slot 0 (tankier than Gerald, fair for slot 1). Leans slightly easy — WATCH playtest; can harden hp/attack-gap if Scott finds him trivial.

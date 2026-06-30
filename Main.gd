@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.14.0"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.15.0"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -615,6 +615,8 @@ const SNAPZ_TAUNTS := ["snap.", "come closer...", "i have waited.", "SNAP SNAP."
 	"HEH HEH HEH.", "MWA HA HA HA.", "guh huh huh huh."]
 const SNAPZ_STOMP_LINES := ["HSSS!", "my shell!", "grrrk.", "you DARE?", "snap... ow."]
 const BEAVER_STOMP_LINES := ["my DAM!", "right on the TAIL.", "the TIMBER...", "you chipped a tooth!", "renovations CANCELLED."]
+const BONGO_STOMP_LINES := ["...rude.", "ribbit. (ow.)", "i felt that.", "was that\nNECESSARY?", "...fine. FINE.", "ugh."]
+const BONGO_TAUNTS := ["ribbit.", "i was NAPPING.", "you woke me\nfor THIS?", "...still here?", "unbelievable.", "*unimpressed croak*"]
 # BARRY is a gruff, work-obsessed engineer. everything is a construction site.
 const BEAVER_TAUNTS := ["DAM you.", "this is a\nCONSTRUCTION zone.", "you got a PERMIT?",
 	"i'll flood you OUT.", "load-bearing\nduck, eh?", "gnaw. gnaw. GNAW.",
@@ -659,6 +661,11 @@ const BOSS_INTROS := {
 		"a flat tail cracks the water like a rifle-shot. the engineer has clocked in.",
 		"logs drift into rank and file. something down here has been very, very busy.",
 		"the dam-builder surveyed your lane and found it... in need of renovations."],
+	"bongo": [
+		"the little frog on the log you've bopped all river finally opens one eye. then the other. then he SWELLS.",
+		"a small disappointed ribbit. then the log sinks under a weight that was not there a moment ago.",
+		"you have bopped one frog too many. this one was the WRONG one to bop. he is getting bigger.",
+		"profoundly, cosmically unimpressed, the bullfrog rises — and rises — and keeps on rising."],
 }
 # a first menacing word the boss SPEAKS partway through the cinematic, so the intro has a voice
 const BOSS_INTRO_TAUNTS := {
@@ -667,6 +674,7 @@ const BOSS_INTRO_TAUNTS := {
 	"snapz": ["snap.", "closer... CLOSER...", "i have waited SO long."],
 	"pike": ["from BELOW.", "snap. gulp. gone.", "i was always right here."],
 	"beaver": ["DAM you.", "TIMBER.", "this river is CONDEMNED.", "Barry builds. Barry BREAKS."],
+	"bongo": ["ribbit.", "you. AGAIN.", "i was COMFORTABLE.", "this had better\nbe WORTH it."],
 }
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
@@ -896,6 +904,8 @@ const CODEX := [
 		"lore": "An ancient snapping turtle the size of a small ROWBOAT: armoured, foul-tempered, and far quicker than anything that old has any right to be. Snappers can't pull into their shells, so they made peace with that by deciding to bite EVERYTHING instead. The shell laughs off your every hop — only those jammed, gaping jaws are soft enough to stomp. Aim for the attitude."},
 	{"id": "beaver", "cat": "boss", "name": "BARRY", "tag": "boss · the engineer",
 		"lore": "A river beaver the size of a hay bale and twice as opinionated about water management. It has surveyed your stretch of river, declared it structurally unsound, and begun immediate aggressive renovation. It hurls gnawed logs down your lane, cracks its great flat tail to roll a wave at you, and throws up walls of timber across the current — gnawing all the while, always gnawing. Dodge the lumber, hop the wake, weave the wall, then bonk it on the skull while it admires its own handiwork."},
+	{"id": "bongo", "cat": "boss", "name": "BONGO", "tag": "boss · the awakened",
+		"lore": "You know the little bullfrog who sits on a drifting log and ribbits at you, flatly, disappointed? This is what happens when you bop one too many. BONGO is that frog, grown to the size of a small island and twice as unbothered. He'd rather be napping. Since you insist, he'll lash his tongue across your lane, belly-flop a wave at you, and inhale hard enough to drag you into his maw — all with the weary air of a creature doing you a favour. Dodge it, then bonk him while he sulks. He will not forgive this, but he will not exactly remember it either."},
 	{"id": "eternal", "cat": "boss", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
 		"lore": "Gerald came back. Wrong. Bigger, bloodier, no longer strictly alive, he has clawed his way back across from somewhere colder to reclaim what was always HIS. Death apparently taught him a second slam and a taste for summoning spectral herons out of the fog. He is the river's final word — and he is very, very tired of you."},
 	{"id": "heron", "cat": "enemy", "name": "HERON", "tag": "enemy · aerial",
@@ -1191,6 +1201,9 @@ var tex_snapz_open := []        # OPEN-maw turntable — the BITE/stuck pose tur
 var tex_pike := []              # PIKE the Lurker boss frames (side profile, gapes per frame)
 var tex_pike_spin := []         # PIKE turntable (optional facing)
 var tex_pike_open := []         # PIKE open-maw turntable
+var tex_bongo := []             # BONGO boss frames (giant bullfrog: idle / mid / open-maw)
+var tex_bongo_spin := []        # BONGO codex turntable
+var tex_bongo_open := []        # BONGO open-maw turntable
 var tex_beaver := []            # BEAVER boss frames (front-facing bruiser)
 var tex_beaver_spin := []       # BEAVER turntable (faces the lane)
 var tex_beaver_open := []       # BEAVER gnaw/throw turntable
@@ -1314,6 +1327,18 @@ func _ready() -> void:
 				var _wp := "res://art/beaver_open_spin_%02d.png" % _wi
 				if ResourceLoader.exists(_wp):
 					tex_beaver_open.append(load(_wp))
+			if ResourceLoader.exists("res://art/bongo_0.png"):
+				tex_bongo = [load("res://art/bongo_0.png"), load("res://art/bongo_1.png"), load("res://art/bongo_2.png")]
+				tex_bongo_spin = []
+				for _gi in range(16):
+					var _gp := "res://art/bongo_spin_%02d.png" % _gi
+					if ResourceLoader.exists(_gp):
+						tex_bongo_spin.append(load(_gp))
+				tex_bongo_open = []
+				for _hi in range(16):
+					var _hp := "res://art/bongo_open_spin_%02d.png" % _hi
+					if ResourceLoader.exists(_hp):
+						tex_bongo_open.append(load(_hp))
 		tex_snapz_open = []                          # OPEN-maw turntable for the bite/stuck pose
 		for _oi in range(16):
 			var _op := "res://art/snapz_open_spin_%02d.png" % _oi
@@ -1344,7 +1369,7 @@ func _ready() -> void:
 			load("res://art/hawk_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
-	for cid in ["gerald", "snapz", "beaver", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "turtle_open", "donni", "bread"]:   # COMPENDIUM turntables (+ open-mouth react sets)
+	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread"]:   # COMPENDIUM turntables (+ open-mouth react sets)
 		if ResourceLoader.exists("res://art/%s_spin_00.png" % cid):
 			var frames: Array = []
 			for i in 16:
@@ -4150,7 +4175,7 @@ func reset_game() -> void:
 	boss = null
 	boss_waves.clear()
 	next_boss_idx = 0
-	boss_kinds = ["gerald", ["snapz", "beaver"][randi() % 2]]   # boss 1 = GERALD, boss 2 = random SNAPZ/BARRY, boss 3 = Eternal
+	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = Eternal
 	boss_hp_bonus = 0
 	asc_pace = 1.0
 	bread_pending = false; bread_active = false; bread_delay = 0.0; bread_t = 0.0
@@ -5717,7 +5742,7 @@ func _start_boss(force_kind := "") -> void:
 	boss_globs.clear()
 	var kind: String = force_kind if force_kind != "" else (boss_kinds[idx] if idx < boss_kinds.size() else "gerald")   # shuffled per run (slots 0/1); slot 2+ is always the Eternal
 	var final_gerald: bool = kind == "gerald" and idx >= 2
-	_codex_see("snapz" if kind == "snapz" else ("beaver" if kind == "beaver" else ("eternal" if final_gerald else "gerald")))
+	_codex_see("snapz" if kind == "snapz" else ("beaver" if kind == "beaver" else ("bongo" if kind == "bongo" else ("eternal" if final_gerald else "gerald"))))
 	var hp := 3 + 2 * idx + boss_hp_bonus + ascension   # stomp him this many times to win (ascension hardens every boss)
 	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
 	var bscale := 1.25                           # GERALD THE IMMENSE is a big bird
@@ -5743,6 +5768,13 @@ func _start_boss(force_kind := "") -> void:
 		bscale = 1.1
 		title = "BARRY"
 		intro_pool = "beaver"
+	elif kind == "bongo":                         # BONGO the giant bullfrog: a deadpan, hard-hitting SLOT-1 alt to Gerald
+		hp += 1
+		gap = 2.0
+		bscale = 1.3
+		title = "BONGO"
+		intro_pool = "bongo"
+		tint = Color(0.92, 1.0, 0.9)
 	elif final_gerald:                           # the FINAL heron: HUGE, undead, relentless
 		hp += 11
 		gap *= 0.46
@@ -5807,7 +5839,7 @@ func _boss_leave() -> void:
 	# the SPOILS OF WAR: a prominent PICK-YOUR-REWARD screen (high-tier powers)
 	var min_rar: int = 3 if int(boss.idx) >= 1 else 2
 	boss_draft_count = mini(3, int(boss.idx) + 1)  # ONE legendary for the first boss, two for the second, three for the Eternal
-	boss_draft_name = ("PIKE" if boss.kind == "pike" else "BARRY" if boss.kind == "beaver" else "GERALD THE ETERNAL" if boss.idx >= 2 else "SNAPZ" if boss.kind == "snapz" else "GERALD THE IMMENSE")
+	boss_draft_name = ("PIKE" if boss.kind == "pike" else "BONGO" if boss.kind == "bongo" else "BARRY" if boss.kind == "beaver" else "GERALD THE ETERNAL" if boss.idx >= 2 else "SNAPZ" if boss.kind == "snapz" else "GERALD THE IMMENSE")
 	boss_draft_feathers = reward
 	_open_boss_draft(min_rar)
 
@@ -5957,6 +5989,16 @@ func _update_boss(delta: float) -> void:
 			if boss.kind == "snapz":
 				boss.sub = 1.0          # rises from the deep, not the sky
 				boss.y = lerpf(BASE_Y + 200.0, BASE_Y + 46.0, clampf(boss.t / 1.6, 0.0, 1.0))
+			elif boss.kind == "bongo":           # the little frog SWELLS up from his log into a giant
+				boss.x = VIEW.x * 0.5
+				var bt: float = clampf(boss.t / 2.2, 0.0, 1.0)
+				boss.y = lerpf(BASE_Y + 120.0, 150.0, bt)
+				boss.swell = bt                                # 0..1 — draw scales him up as he rises
+				if not boss.get("entry_croak", false) and boss.t >= 1.4:
+					boss.entry_croak = true
+					ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
+					_sfx("ribbit", 0.7); _sfx("splash_big", 0.8); duck_shake = maxf(duck_shake, 0.55)
+					_spawn_parts(boss.x, BASE_Y, 22, Color(0.6, 0.85, 0.55), 270.0)
 			elif boss.kind == "beaver":          # BARRY surfaces with a SPIN + tail-smack, not a sky-dive
 				boss.x = VIEW.x * 0.5
 				boss.y = lerpf(BASE_Y + 200.0, 150.0, clampf(boss.t / 1.9, 0.0, 1.0))
@@ -5987,12 +6029,12 @@ func _update_boss(delta: float) -> void:
 					var f: float = 1.0 - pow(1.0 - clampf((et - 3.0) / 2.0, 0.0, 1.0), 2.2)
 					boss.x = lerpf(VIEW.x * 0.5 - side * 150.0, VIEW.x * 0.5, f)
 					boss.y = lerpf(BASE_Y - 58.0, 150.0, f)
-			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver"] else 3.8):   # speaks once settled
+			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver", "bongo"] else 3.8):   # speaks once settled
 				boss.introspoke = true
 				var tpool: Array = BOSS_INTRO_TAUNTS.get(boss.get("intro_pool", "gerald"), [])
 				if not tpool.is_empty():
 					_gerald_say(tpool[randi() % tpool.size()], true)
-			if boss.t >= (3.3 if boss.kind in ["snapz", "beaver"] else 5.6):    # a longer, more menacing cinematic intro
+			if boss.t >= (3.3 if boss.kind in ["snapz", "beaver", "bongo"] else 5.6):    # a longer, more menacing cinematic intro
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
 		"fight":
 			if boss.kind == "snapz":
@@ -6001,6 +6043,8 @@ func _update_boss(delta: float) -> void:
 				_pike_fight(delta)
 			elif boss.kind == "beaver":
 				_beaver_fight(delta)
+			elif boss.kind == "bongo":
+				_bongo_fight(delta)
 			else:
 				_boss_fight(delta)
 		"leave":
@@ -6308,6 +6352,71 @@ func _beaver_wall() -> void:
 		x += 58.0
 	_sfx("crunch", 0.85, -4.0); duck_shake = maxf(duck_shake, 0.3)
 
+# BONGO the giant bullfrog: deadpan, heavy. TONGUE LASH (lane snap) / BELLY FLOP (wave + daze) / GULP (vacuum).
+func _bongo_fight(delta: float) -> void:
+	var st: String = boss.dive_stage
+	if st == "":                                       # squats up top, eyeing the duck, picking an attack
+		boss.x = lerpf(boss.x, VIEW.x * 0.5 + sin(anim_t * 0.5) * 90.0, clampf(delta * 1.1, 0.0, 1.0))
+		boss.y = 150.0
+		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.7
+		boss.dive_t -= delta
+		if boss.dive_t <= 0.0:
+			boss.dive_x = clampf(duck_x, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
+			boss.t = 0.0
+			boss.dive_stage = ["tonguewarn", "flopwarn", "gulpwarn"][randi() % 3]
+			_gerald_say(BONGO_TAUNTS.pick_random())
+	elif st == "tonguewarn":                           # telegraph the lane the tongue will snap down
+		boss.yaw = clampf((boss.dive_x - boss.x) / 240.0, -1.0, 1.0) * 0.7
+		if boss.t >= (0.42 if boss.phase2 else 0.58):
+			boss.dive_stage = "tongue"; boss.t = 0.0
+			_bongo_tongue(boss.dive_x)
+	elif st == "tongue":
+		if boss.t >= 0.4:
+			_bongo_recover(1.0)
+	elif st == "flopwarn":                             # gathers, then leaps for a belly-flop
+		boss.y = lerpf(150.0, 96.0, clampf(boss.t / 0.6, 0.0, 1.0))   # crouch-rise
+		if boss.t >= 0.6:
+			boss.dive_stage = "flop"; boss.t = 0.0
+			boss.y = 150.0
+			boss_tides.append({"y": boss.y + 60.0, "hit": false})
+			_sfx("splash_big", 1.0); _sfx("thud", 0.9, -4.0); duck_shake = maxf(duck_shake, 0.6)
+			_spawn_parts(boss.x, BASE_Y, 20, Color(0.6, 0.85, 0.55), 280.0)
+	elif st == "flop":
+		if boss.t >= 0.45:
+			_bongo_recover(1.25)                       # a heavy flop leaves him winded a touch longer
+	elif st == "gulpwarn":                             # inhale telegraph — maw opens wide
+		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.5
+		if boss.t >= 0.55:
+			boss.dive_stage = "gulp"; boss.t = 0.0
+			_sfx("fwoosh", 0.85, -2.0)
+	elif st == "gulp":                                 # VACUUM — drags the duck toward his maw; steer away
+		var pull: float = clampf(delta * 2.1, 0.0, 1.0)
+		duck_x = lerpf(duck_x, boss.x, pull)
+		if boss.t >= 0.7:
+			_bongo_recover(0.9)
+	elif st == "dazed":                                # sulks low, winded — HOP ON to stomp
+		boss.y = lerpf(boss.y, BASE_Y + 16.0, clampf(boss.t / 0.3, 0.0, 1.0))
+		boss.daze_t -= delta
+		var descending: bool = (state == St.HOPPING and hop_t > cur_hop_dur() * 0.5) or state == St.MEGA
+		if not boss.stomped and is_airborne() and descending and hop_height() < 0.55 and absf(duck_x - boss.x) < 76.0:
+			_boss_stomped()
+		if boss.daze_t <= 0.0:
+			boss.dive_stage = "up"; boss.t = 0.0
+	elif st == "up":
+		boss.y = lerpf(BASE_Y + 16.0, 150.0, clampf(boss.t / 0.4, 0.0, 1.0))
+		if boss.t >= 0.4:
+			boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+
+func _bongo_recover(daze_mul: float) -> void:
+	boss.dive_stage = "dazed"; boss.t = 0.0
+	boss.daze_t = maxf(0.7, daze_mul * (1.5 - 0.12 * boss.idx) / (1.0 + 0.08 * ascension))
+	boss.stomped = false
+
+func _bongo_tongue(lx: float) -> void:
+	# a fast tongue-snap straight down the telegraphed lane
+	boss_globs.append({"x": lx, "y": boss.y + 36.0, "vx": 0.0, "vy": 520.0, "t": 0.0, "tongue": true})
+	_sfx("squeak", 1.1, 3.0); _sfx("fwoosh", 0.6)
+
 func _snapz_fight(delta: float) -> void:
 	# TURN TO FACE: he tracks your lane while lurking, locks onto the strike lane to wind up,
 	# and goes side-on for the tail sweep — a deliberate turn, never a free spin
@@ -6466,7 +6575,7 @@ func _boss_stomped() -> void:
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
 	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
-	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else (BEAVER_STOMP_LINES if boss.kind == "beaver" else GERALD_STOMP_LINES)
+	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else (BEAVER_STOMP_LINES if boss.kind == "beaver" else (BONGO_STOMP_LINES if boss.kind == "bongo" else GERALD_STOMP_LINES))
 	_gerald_say(lines[randi() % lines.size()], true)   # post-stomp pain: this one squirms
 	_hit_boss(1)
 
@@ -7437,13 +7546,14 @@ func _draw_run_timeline() -> void:
 		var bkind: String = boss_kinds[i] if i < boss_kinds.size() else "gerald"   # the ACTUAL boss in this slot this run
 		var is_snapz: bool = bkind == "snapz"
 		var is_beaver: bool = bkind == "beaver"
+		var is_bongo: bool = bkind == "bongo"
 		var is_final: bool = i >= 2          # GERALD THE ETERNAL: massive + bloody on the timeline too
 		var btex: Texture2D = null
 		if not tex_gerald.is_empty():
-			btex = tex_beaver[0] if (is_beaver and not tex_beaver.is_empty()) else (tex_snapz[0] if is_snapz else tex_gerald[0])
+			btex = (tex_bongo[0] if not tex_bongo.is_empty() else tex_frog) if is_bongo else (tex_beaver[0] if (is_beaver and not tex_beaver.is_empty()) else (tex_snapz[0] if is_snapz else tex_gerald[0]))
 		var bob: float = 0.0 if beaten else absf(sin(anim_t * 2.0 + i)) * 2.0
 		if btex != null:
-			var px: float = 48.0 if is_final else (44.0 if is_snapz else (38.0 if is_beaver else 30.0))   # SNAPZ big; BARRY medium
+			var px: float = 48.0 if is_final else (44.0 if is_snapz else (40.0 if is_bongo else (38.0 if is_beaver else 30.0)))   # SNAPZ big; BONGO big; BARRY medium
 			var bs := px / float(btex.get_size().x) * btex.get_size()
 			var ctr := Vector2(bx, y - 16 - bob)
 			if is_final and not beaten:       # a pulsing blood halo of dread
@@ -9250,6 +9360,8 @@ func _codex_tap_list(pos: Vector2) -> void:
 			return
 
 func _codex_tex(id: String):
+	if id == "bongo":
+		return tex_bongo[0] if tex_bongo.size() > 0 else tex_frog
 	match id:
 		"gerald", "eternal":
 			return tex_gerald[0] if tex_gerald.size() > 0 else null
@@ -10204,6 +10316,8 @@ func _draw() -> void:
 			_draw_boss_pike()        # the lurking fish, erupting nose-up
 		elif boss.kind == "beaver":
 			_draw_boss_beaver()      # the front-facing log-hurling bruiser
+		elif boss.kind == "bongo":
+			_draw_boss_bongo()       # the giant, deadpan bullfrog
 		elif boss.kind == "snapz":
 			_draw_boss_snapz()       # the turtle lunging up from the water
 		else:
@@ -10572,6 +10686,12 @@ func _draw_boss_ground() -> void:
 			else:
 				draw_circle(lc, 14.0, Color(0.46, 0.31, 0.18))
 			continue
+		if f.get("tongue", false):                                      # BONGO tongue-tip — a fleshy pink snap
+			var tc := Vector2(f.x, f.y)
+			draw_line(tc - Vector2(0, 22.0), tc, Color(0.85, 0.32, 0.40), 6.0)
+			draw_circle(tc, 9.0, Color(0.92, 0.42, 0.5))
+			draw_circle(tc - Vector2(2.5, 2.5), 3.0, Color(1.0, 0.7, 0.74, 0.9))
+			continue
 		var wob := sin((f.x + f.y) * 0.05) * 2.0
 		var gc := Vector2(f.x + wob, f.y)
 		var pul := 0.6 + 0.4 * sin(anim_t * 9.0 + f.x)
@@ -10791,6 +10911,70 @@ func _draw_boss_beaver() -> void:
 		_speech_bubble(Vector2(boss.x, s_by), boss.say,
 			Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true,
 			Color(0.62, 0.0, 0.02), Color(1.0, 0.16, 0.10), 0.0, boss.get("say_wiggle", false))
+	_draw_boss_pips()
+	_draw_boss_intro()
+
+func _draw_boss_bongo() -> void:
+	if tex_bongo.is_empty() and tex_frog == null:
+		_draw_boss_gerald()
+		return
+	var st: String = boss.dive_stage
+	var dazed: bool = st == "dazed" and not boss.stomped
+	var maw_open: bool = st in ["gulpwarn", "gulp", "tonguewarn", "tongue"]
+	var talking: bool = str(boss.get("say", "")) != "" and (anim_t - float(boss.get("say_t", -10.0))) < 1.8
+	var swell: float = float(boss.get("swell", 1.0)) if boss.phase == "enter" else 1.0
+	# TONGUE LASH telegraph: a pulsing ring on the doomed lane
+	if st == "tonguewarn":
+		var wt: float = clampf(boss.t / 0.58, 0.0, 1.0)
+		var wp: float = 0.5 + 0.5 * sin(anim_t * 16.0)
+		draw_circle(Vector2(boss.dive_x, BASE_Y), 14.0 + wt * 26.0, Color(0.7, 0.9, 0.4, 0.14 * (0.6 + 0.4 * wp)))
+		draw_arc(Vector2(boss.dive_x, BASE_Y), 14.0 + wt * 26.0, 0.0, TAU, 24, Color(0.8, 1.0, 0.45, 0.55 + 0.3 * wp), 3.0)
+	var fi: int = 0 if dazed else (2 if (maw_open or talking) else int(anim_t * 3.0) % 2)   # idle / mid / open-maw
+	var hires: bool = not tex_bongo.is_empty()
+	var gt: Texture2D = tex_bongo[fi] if hires else tex_frog
+	# belly-flop squash, gulp-inhale swell, gentle idle bob
+	var bob: float = sin(anim_t * 3.0) * 4.0
+	var sx := 1.0
+	var sy := 1.0
+	if st == "flop":
+		sx = 1.22; sy = 0.8
+	elif st == "flopwarn":
+		sy = 1.12
+	elif st in ["gulpwarn", "gulp"]:
+		sx = 1.08 + 0.04 * sin(anim_t * 22.0)
+	var base: float = boss.scale * (1.1 if hires else 3.0) * swell
+	var gsz := gt.get_size() * Vector2(base * sx, base * sy)
+	var gpos := Vector2(boss.x, boss.y + bob)
+	if tex_shadow != null:
+		var shs := tex_shadow.get_size() * 5.0 * swell
+		draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, boss.y + gsz.y * 0.42) - shs * 0.5, shs), false, Color(0, 0, 0, 0.2))
+	var mod: Color = boss.tint
+	if dazed:
+		mod = mod * Color(0.7, 0.8, 1.1)               # winded, woozy blue
+	elif boss.get("hit_flash", 0.0) > 0.0:
+		mod = Color(1.6, 1.4, 1.4)
+	draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+	# the open maw when he gulps / lashes — a dark hungry oval (placeholder only; hires sprite has its own)
+	if maw_open and not hires:
+		var mo: float = 0.55 + 0.45 * sin(anim_t * 18.0) if st in ["gulpwarn", "gulp"] else 1.0
+		draw_circle(gpos + Vector2(0, gsz.y * 0.06), gsz.x * 0.16 * mo, Color(0.12, 0.05, 0.08, 0.92))
+	# the tongue: a red line snapping down the lane while it strikes
+	if st == "tongue":
+		var tx: float = boss.dive_x
+		draw_line(gpos + Vector2(0, gsz.y * 0.08), Vector2(tx, min(BASE_Y, gpos.y + 60.0 + boss.t * 520.0)), Color(0.85, 0.25, 0.35), 7.0)
+	# two big sleepy eyes that go to X when dazed (placeholder only; hires sprite emotes via tint)
+	for sgn in ([-1.0, 1.0] if (dazed and not hires) else []):
+		var ep := gpos + Vector2(sgn * gsz.x * 0.17, -gsz.y * 0.16)
+		if dazed:
+			draw_line(ep + Vector2(-5, -5), ep + Vector2(5, 5), Color(0.2, 0.2, 0.3), 2.5)
+			draw_line(ep + Vector2(5, -5), ep + Vector2(-5, 5), Color(0.2, 0.2, 0.3), 2.5)
+	if boss.say != "" and anim_t - boss.say_t < 1.9:             # BONGO speaks: a flat, weary green bubble
+		var s_above: bool = boss.y > 320.0
+		var s_by: float = boss.y - gsz.y * 0.5 - 24.0 if s_above else boss.y + gsz.y * 0.44 + 24.0
+		s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
+		_speech_bubble(Vector2(boss.x, s_by), boss.say,
+			Color(0.05, 0.10, 0.04, 0.95), Color(0.30, 0.55, 0.22, 0.95), 19, 1.0 if s_above else -1.0, true,
+			Color(0.18, 0.34, 0.10), Color(0.55, 0.85, 0.4), 0.0, boss.get("say_wiggle", false))
 	_draw_boss_pips()
 	_draw_boss_intro()
 
