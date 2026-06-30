@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.3"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.4"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -700,6 +700,9 @@ var sel_index := 0
 var select_yaw := 0.0
 var select_drag_t := -10.0    # last time you dragged the duck turntable (eases back to front when idle)
 var lucien_scratch_t := -10.0   # LUCIEN drags the record with his wing on a tap
+var lucien_tap_i := 0           # cycles his 808 bassline note-by-note on each tap
+var party_t := 0.0              # LUCIEN's BEAT DROP: the brood goes feral for a few seconds
+var drop_t := 26.0              # countdown to the next periodic drop
 var select_flap_t := -10.0      # a happy WING FLAP on the select duck (fires every few taps)
 var select_tap_n := 0           # taps since the last flap
 var select_flap_at := 3         # ...flap after this many (re-rolled each time)
@@ -4553,8 +4556,8 @@ func _on_press(pos: Vector2) -> void:
 	if drafting:
 		if anim_t - draft_open_t < 0.45:
 			return                                 # grace: no hop-spam click-through
-		if Rect2(0.0, 766.0, 96.0, 74.0).has_point(pos):   # tap LUCIEN the boon sage -> a record scratch
-			_sfx("djdrop", randf_range(0.97, 1.05))
+		if Rect2(0.0, 766.0, 96.0, 74.0).has_point(pos):   # tap LUCIEN the boon sage -> the 808 bassline
+			_lucien_808()
 			return
 		for i in draft_choices.size():
 			if _draft_rect(i).has_point(pos):
@@ -5191,6 +5194,17 @@ func _update_play(delta: float) -> void:
 		boon_pace += 0.03
 		migration_next += 10000.0
 		_flash("MIGRATION +3%")
+	# LUCIEN's periodic BEAT DROP — the brood goes friggin crazy for a few seconds (pure whimsy)
+	if boss == null and not drafting and not tut_mode:
+		drop_t -= delta
+		if drop_t <= 0.0:
+			drop_t = randf_range(24.0, 34.0)
+			party_t = maxf(party_t, 3.0)
+			_sfx("djdrop", 0.62)
+			if ducklings_n > 0:
+				_flash("LUCIEN DROPS THE BEAT", 1.5)
+	if party_t > 0.0:
+		party_t = maxf(0.0, party_t - delta)
 	idle_timer += delta
 
 	trail.append({"t": anim_t, "x": duck_x})
@@ -8990,6 +9004,15 @@ func _apply_music_vol() -> void:
 
 # swap the ambient bed to match the current scenery theme (no-op if already playing it)
 # EGG JUKEBOX: in the menus, the base bed you chose plays (a run's theme system owns the music there)
+const LUCIEN_808 := [0.62, 0.62, 0.83, 0.62, 1.04, 0.93, 0.62, 0.78]   # a little sub-bass riff, stepped per tap
+func _lucien_808() -> void:
+	_sfx("djdrop", LUCIEN_808[lucien_tap_i % LUCIEN_808.size()])
+	lucien_tap_i += 1
+	lucien_scratch_t = anim_t
+	if lucien_tap_i % 8 == 0:                            # every full bar, he drops it + the brood goes feral
+		party_t = maxf(party_t, 2.6)
+		_flash("LUCIEN DROPS THE BEAT", 1.4)
+
 func _apply_jukebox() -> void:
 	if music_player == null or boss != null:
 		return
@@ -9165,8 +9188,8 @@ func _jukebox_screen_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.grow(6.0).has_point(pos):
 		in_jukebox = false; _sfx("click"); _apply_jukebox()   # restore your chosen bed on the way out
 		return
-	if pos.x < 180.0 and pos.y > 360.0 and pos.y < 600.0:     # tap LUCIEN at his decks -> a record scratch
-		_sfx("djdrop", randf_range(0.97, 1.05)); lucien_scratch_t = anim_t
+	if pos.x < 180.0 and pos.y > 360.0 and pos.y < 600.0:     # tap LUCIEN -> he drops the next note of an 808 bassline
+		_lucien_808()
 		return
 	for jh in jukebox_hits:
 		if jh.rect.grow(4.0).has_point(pos):
@@ -10631,6 +10654,10 @@ func _draw_ducklings() -> void:
 		var h := _duckling_h(i)
 		var dlift := 280.0 if state == St.MEGA else 115.0   # the vertical conga
 		var pos := Vector2(dx, dy - h * dlift)
+		if party_t > 0.0:                                   # LUCIEN's DROP: the wee ones go FERAL
+			pos.x += sin(anim_t * 22.0 + i * 1.7) * 9.0
+			pos.y -= absf(sin(anim_t * 18.0 + i * 2.3)) * 30.0
+			h = maxf(h, 0.4)
 		if glide_t > 0.0:                                   # TAKE WING: the WHOLE BROOD takes flight, soaring in a stepped V
 			var gso := minf(clampf((GLIDE_DUR - glide_t) / 0.5, 0.0, 1.0), clampf(glide_t / 0.5, 0.0, 1.0))
 			pos.y -= (118.0 + i * 7.0) * gso + sin(anim_t * 2.0 + i * 0.6) * 7.0 * gso   # they bob like real ducklings on the wing
@@ -10645,8 +10672,11 @@ func _draw_ducklings() -> void:
 		var sz := fr.get_size() * sc
 		# the wee ones BANK into the turn just like their parent does
 		var roll := clampf(duck_vx / 460.0, -0.5, 0.5)
+		if party_t > 0.0:
+			roll += sin(anim_t * 24.0 + i * 2.0) * 0.7      # head-banging wiggle
 		draw_set_transform(pos, roll, Vector2.ONE)
-		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false)
+		var pmod := Color.from_hsv(fmod(anim_t * 0.8 + i * 0.12, 1.0), 0.55, 1.0) if party_t > 0.0 else Color(1, 1, 1)
+		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false, pmod)
 		# the brood sports your hat too (cosmetic toggle) — skip the propeller, too busy at this size
 		if ducklings_wear and not _worn_list().is_empty():
 			var dwl := _worn_list(); dwl.reverse()     # BODY first, HEAD on top

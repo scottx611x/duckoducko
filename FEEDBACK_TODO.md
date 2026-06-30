@@ -423,3 +423,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-30 — granular BONGO deaths + dev-menu pause (v1.16.3)
 - Scott: still Gerald in BONGO death text; asked if bongo deaths are granular. They were NOT — bongo deaths used cause 'gerald' (so death msg + logbook said GERALD). Barry had the same latent gap (cause 'beaver' wasn't in any map -> showed as 'the river'). Fixed BOTH across 4 spots: death message (_boss_hits_player bng branch: 'BONGO's tongue snatched you' / 'BONGO's splash washed you under'), _killer_label, the logbook 'named' death-bucket dict (BONGO/BARRY (boss) + ic + col), and _sim_death_icon_path (bongo_0/beaver_0).
 - Scott: dev menu should PAUSE game progress. Added 'and not dev_menu' to the _update_play gate (~5119) so duck/hazards/distance/boss freeze while the playtest menu is open; picking an option closes it + resumes.
+
+
+## 2026-06-30 — Lucien 808 bassline + beat-drop (v1.16.4); airpods REVERTED
+- Scott reversed the pass-2 Lucien (airpods/taller/short-bill): 'this art is worse, go back, big DJ cans are fine.' Reverted voxel_duck.py via git checkout -> big-cans Lucien restored + regenerated. LESSON: cans were never the problem; the taller+slim+airpods combo read worse.
+- NEW: tapping Lucien (store + boon draft) plays an 808 BASSLINE stepped note-by-note (_lucien_808 cycles LUCIEN_808 pitches via the djdrop sfx) so repeated taps build a riff. Every full bar (8 taps) + a periodic in-run timer (drop_t ~24-34s, not during boss/tut/draft) triggers party_t -> a BEAT DROP: the duckling brood goes FERAL in _draw_ducklings (x-jitter + frantic bounce + head-bang roll wiggle + rainbow hsv tint) + 'LUCIEN DROPS THE BEAT' flash.
