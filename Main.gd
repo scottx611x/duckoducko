@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.1"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.2"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -11071,12 +11071,11 @@ func _draw_boss_bongo() -> void:
 	elif boss.get("hit_flash", 0.0) > 0.0:
 		mod = Color(1.6, 1.4, 1.4)
 	draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
-	# bullfrog THROAT: a subtle pale chin-pouch that breathes (idle) and puffs on a gulp wind-up
+	# bullfrog THROAT: a pale chin-pouch that ONLY inflates during a gulp wind-up (no idle dot on his face)
 	var bthroat: float = float(boss.get("throat", 0.0))
-	var bbreathe: float = 0.5 + 0.5 * sin(anim_t * 2.2)
-	var bchin := gpos + Vector2(0, gsz.y * 0.27)
-	draw_circle(bchin, gsz.x * (0.09 + 0.015 * bbreathe + 0.05 * bthroat), mod * Color(0.80, 0.9, 0.52, 0.45))
-	if st in ["gulpwarn", "gulp"]:                      # GULP VACUUM: air streaks rushing INTO his maw
+	if st in ["gulpwarn", "gulp"]:                      # GULP VACUUM: throat balloons + air streaks rush in
+		var bchin := gpos + Vector2(0, gsz.y * 0.27)
+		draw_circle(bchin, gsz.x * (0.10 + 0.16 * bthroat), mod * Color(0.80, 0.9, 0.52, 0.5))
 		var bmouth := gpos + Vector2(0, gsz.y * 0.06)
 		for bk in 7:
 			var bang := float(bk) / 7.0 * TAU

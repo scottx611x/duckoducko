@@ -414,3 +414,7 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - LUCIEN art reworked (Scott: not a proper zany loon DJ): orange headphone band + cyan cups, bold checkered back + necklace, big red eyes, slim dagger bill (was a pale club), crest. build_lucien_dj + build_loon in voxel_duck.py. Console kept.
 - BONGO bugs (Scott): (1) had GERALD text at half-HP (fell into gerald else -> 'GERALD IS FURIOUS' + gerald feather-storm ult) + ascension-revive line -> added bongo branches ('BONGO IS CRANKY' / 'ugh. STILL here.'), no feather-storm. (2) triple lily-hop waves too closely spaced (0.42s apart = unjumpable) -> added a 'hopland' settle (0.7s) between hops, ~1.1s apart now.
 - SCOOTYBOOTY dev buttons (Scott: too crowded): replaced the inline 5-boss row with ONE 'DEV' button -> a PLAYTEST menu overlay (6 bosses incl BONGO + 4 utilities: +5000ft/+500 feathers/fill loft/+3 shields). dev_menu state + DEV_MENU const + _dev_menu_rect/_dev_do/_draw_dev_menu.
+
+
+## 2026-06-30 — BONGO face dot fix (v1.16.2)
+- Scott: weird dot on BONGO's face. Cause: the throat-breathing chin-pouch draw_circle ran EVERY frame (idle breathing) = a faint pale dot on his chin always. Fix: gated the pouch to only the gulpwarn/gulp stages (where the throat actually inflates). Idle face is clean now.
