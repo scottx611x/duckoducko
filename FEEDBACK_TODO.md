@@ -389,3 +389,17 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-30 — BONGO boss SHIPPED (v1.15.0)
 - Bot-sim (10 skilled runs): 5 boss clears, NO deaths to BONGO (beatable, not a wall), no crash. Rotation verified ~47% bongo / 53% gerald over 200 resets. BONGO hp=5 @ slot 0 (tankier than Gerald, fair for slot 1). Leans slightly easy — WATCH playtest; can harden hp/attack-gap if Scott finds him trivial.
+
+
+## 2026-06-30 — BONGO de-cloned (his own froggy spunk) — Scott feedback
+- Scott: BONGO shouldnt just be a Barry clone, needs his own spunk. Redesigned his kit to be distinctly FROG:
+  - TONGUE LASH: a real extending pink tongue shoots from his maw at your tracked lane -> snaps -> retracts (lateral dodge). Replaces the falling-glob.
+  - LILY-HOP BARRAGE: he HOPS 3x across the arena (big arcs), each landing throws a hop-able shockwave wave + ring, then winded -> dazed stomp window. Replaces the belly-flop tide.
+  - GULP-N-BELCH: throat pouch inflates + inward air streaks (vacuum reads) pulling duck_x toward his maw, THEN belches a fan of 3 flies. 
+  - idle: subtle throat-breathing pulse.
+- BUG CAUGHT: an earlier sac edit targeted the first draw_texture_rect(gt...) in the file = _draw_haz_turtle, corrupting it; removed the orphan + placed throat code correctly in _draw_boss_bongo. (Lesson: anchor on UNIQUE text, not a line shared across draw fns.)
+- Verifying via bot-sim then re-ship.
+
+
+## 2026-06-30 — BONGO froggy kit SHIPPED (v1.15.1)
+- Bot-sim (8 skilled): no crash, 5 boss clears, mean 10275m. BONGO appears (~50/50) + beatable; still no bot deaths to him (leans slightly easier than Gerald who killed 4/8). Tightened telegraphs (tongue 0.5->0.42, gulp 0.55->0.46, hop 0.46->0.42) for a bit more bite. STILL slightly soft for a skilled bot — WATCH Scott playtest; can add a phase2 (faster when low HP) or harder hit windows if he wants more threat.

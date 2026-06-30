@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.15.0"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.15.1"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -6355,45 +6355,73 @@ func _beaver_wall() -> void:
 # BONGO the giant bullfrog: deadpan, heavy. TONGUE LASH (lane snap) / BELLY FLOP (wave + daze) / GULP (vacuum).
 func _bongo_fight(delta: float) -> void:
 	var st: String = boss.dive_stage
-	if st == "":                                       # squats up top, eyeing the duck, picking an attack
-		boss.x = lerpf(boss.x, VIEW.x * 0.5 + sin(anim_t * 0.5) * 90.0, clampf(delta * 1.1, 0.0, 1.0))
+	if st == "":                                       # squats up top, throat puffing, picking an attack
+		boss.x = lerpf(boss.x, clampf(duck_x, BANK_W + 70.0, VIEW.x - BANK_W - 70.0), clampf(delta * 0.9, 0.0, 1.0))
 		boss.y = 150.0
-		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.7
+		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.6
 		boss.dive_t -= delta
 		if boss.dive_t <= 0.0:
-			boss.dive_x = clampf(duck_x, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
 			boss.t = 0.0
-			boss.dive_stage = ["tonguewarn", "flopwarn", "gulpwarn"][randi() % 3]
+			boss.dive_stage = ["tonguewarn", "hopwarn", "gulpwarn"][randi() % 3]
 			_gerald_say(BONGO_TAUNTS.pick_random())
-	elif st == "tonguewarn":                           # telegraph the lane the tongue will snap down
-		boss.yaw = clampf((boss.dive_x - boss.x) / 240.0, -1.0, 1.0) * 0.7
-		if boss.t >= (0.42 if boss.phase2 else 0.58):
+	# --- TONGUE LASH: locks your lane, then a real tongue SHOOTS out and snaps. dodge sideways. ---
+	elif st == "tonguewarn":
+		boss.tongue_tx = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)   # tracks you until it commits
+		boss.yaw = clampf((boss.tongue_tx - boss.x) / 240.0, -1.0, 1.0) * 0.7
+		if boss.t >= (0.32 if boss.phase2 else 0.42):
 			boss.dive_stage = "tongue"; boss.t = 0.0
-			_bongo_tongue(boss.dive_x)
+			boss.tongue_len = 0.0
+			_sfx("squeak", 1.15, 4.0); _sfx("fwoosh", 0.6)
 	elif st == "tongue":
-		if boss.t >= 0.4:
-			_bongo_recover(1.0)
-	elif st == "flopwarn":                             # gathers, then leaps for a belly-flop
-		boss.y = lerpf(150.0, 96.0, clampf(boss.t / 0.6, 0.0, 1.0))   # crouch-rise
-		if boss.t >= 0.6:
-			boss.dive_stage = "flop"; boss.t = 0.0
-			boss.y = 150.0
-			boss_tides.append({"y": boss.y + 60.0, "hit": false})
-			_sfx("splash_big", 1.0); _sfx("thud", 0.9, -4.0); duck_shake = maxf(duck_shake, 0.6)
-			_spawn_parts(boss.x, BASE_Y, 20, Color(0.6, 0.85, 0.55), 280.0)
-	elif st == "flop":
+		boss.tongue_len = clampf(boss.t / 0.16, 0.0, 1.0) if boss.t < 0.16 else clampf(1.0 - (boss.t - 0.16) / 0.34, 0.0, 1.0)
+		if not boss.get("tongue_hit_done", false) and boss.t >= 0.14:   # snaps at full reach
+			boss.tongue_hit_done = true
+			if absf(duck_x - boss.tongue_tx) < 34.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				boss.hit_cool = 0.8; _boss_hits_player()
+		if boss.t >= 0.5:
+			boss.tongue_hit_done = false
+			_bongo_recover(0.8)
+	# --- LILY-HOP BARRAGE: he HOPS three times (frogs hop!), each landing throws a wave to leap. ---
+	elif st == "hopwarn":
+		boss.y = lerpf(150.0, 120.0, clampf(boss.t / 0.45, 0.0, 1.0))   # crouch
 		if boss.t >= 0.45:
-			_bongo_recover(1.25)                       # a heavy flop leaves him winded a touch longer
-	elif st == "gulpwarn":                             # inhale telegraph — maw opens wide
-		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.5
-		if boss.t >= 0.55:
+			boss.hopn = 0
+			boss.hop_from = boss.x; boss.hop_to = clampf(duck_x, BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
+			boss.dive_stage = "hop"; boss.t = 0.0
+	elif st == "hop":
+		var hp: float = clampf(boss.t / 0.42, 0.0, 1.0)
+		boss.x = lerpf(boss.hop_from, boss.hop_to, hp)
+		boss.y = 150.0 - sin(hp * PI) * 120.0                # big arc leap
+		if hp >= 1.0:                                        # LAND
+			boss.y = 150.0
+			boss_tides.append({"y": boss.y + 56.0, "hit": false})
+			boss_waves.append({"x": boss.x, "r": 16.0})
+			_sfx("splash_big", 0.95); _sfx("thud", 0.85, -3.0); duck_shake = maxf(duck_shake, 0.5)
+			_spawn_parts(boss.x, BASE_Y, 16, Color(0.6, 0.85, 0.55), 250.0)
+			boss.hopn = int(boss.get("hopn", 0)) + 1
+			if boss.hopn >= 3:
+				_bongo_recover(1.35)                         # three hops leaves him good and winded
+			else:
+				boss.hop_from = boss.x
+				boss.hop_to = clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
+				boss.t = 0.0
+	# --- GULP-N-BELCH: throat sac inflates, INHALES you toward his maw, then belches a fan of flies. ---
+	elif st == "gulpwarn":
+		boss.throat = clampf(boss.t / 0.55, 0.0, 1.0)         # the big bullfrog throat-sac balloons
+		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.4
+		if boss.t >= 0.46:
 			boss.dive_stage = "gulp"; boss.t = 0.0
-			_sfx("fwoosh", 0.85, -2.0)
-	elif st == "gulp":                                 # VACUUM — drags the duck toward his maw; steer away
-		var pull: float = clampf(delta * 2.1, 0.0, 1.0)
-		duck_x = lerpf(duck_x, boss.x, pull)
-		if boss.t >= 0.7:
-			_bongo_recover(0.9)
+			_sfx("fwoosh", 0.9, -3.0)
+	elif st == "gulp":                                        # VACUUM — drags you toward his maw; steer away
+		duck_x = lerpf(duck_x, boss.x, clampf(delta * 2.0, 0.0, 1.0))
+		boss.throat = 1.0
+		if boss.t >= 0.65:
+			boss.dive_stage = "belch"; boss.t = 0.0
+			boss.throat = 0.0
+			_bongo_belch()
+	elif st == "belch":
+		if boss.t >= 0.35:
+			_bongo_recover(0.95)
 	elif st == "dazed":                                # sulks low, winded — HOP ON to stomp
 		boss.y = lerpf(boss.y, BASE_Y + 16.0, clampf(boss.t / 0.3, 0.0, 1.0))
 		boss.daze_t -= delta
@@ -6411,11 +6439,13 @@ func _bongo_recover(daze_mul: float) -> void:
 	boss.dive_stage = "dazed"; boss.t = 0.0
 	boss.daze_t = maxf(0.7, daze_mul * (1.5 - 0.12 * boss.idx) / (1.0 + 0.08 * ascension))
 	boss.stomped = false
+	boss.throat = 0.0; boss.tongue_len = 0.0
 
-func _bongo_tongue(lx: float) -> void:
-	# a fast tongue-snap straight down the telegraphed lane
-	boss_globs.append({"x": lx, "y": boss.y + 36.0, "vx": 0.0, "vy": 520.0, "t": 0.0, "tongue": true})
-	_sfx("squeak", 1.1, 3.0); _sfx("fwoosh", 0.6)
+func _bongo_belch() -> void:
+	# a wet RIBBIT and a fan of three flies spat out at the duck
+	_sfx("ribbit", 0.9); _sfx("squeak", 0.8, -4.0)
+	for a in [-0.5, 0.0, 0.5]:
+		boss_globs.append({"x": boss.x, "y": boss.y + 30.0, "vx": a * 150.0, "vy": 320.0, "t": 0.0, "fly": true})
 
 func _snapz_fight(delta: float) -> void:
 	# TURN TO FACE: he tracks your lane while lurking, locks onto the strike lane to wind up,
@@ -10692,6 +10722,14 @@ func _draw_boss_ground() -> void:
 			draw_circle(tc, 9.0, Color(0.92, 0.42, 0.5))
 			draw_circle(tc - Vector2(2.5, 2.5), 3.0, Color(1.0, 0.7, 0.74, 0.9))
 			continue
+		if f.get("fly", false):                                         # BONGO belched FLY — a little buzzing pest
+			var fc := Vector2(f.x, f.y)
+			var bz := sin(anim_t * 40.0 + f.x) * 2.0
+			draw_circle(fc, 5.0, Color(0.18, 0.16, 0.12))
+			draw_circle(fc + Vector2(0, -1), 2.0, Color(0.4, 0.5, 0.3))
+			for wsgn in [-1.0, 1.0]:
+				draw_circle(fc + Vector2(wsgn * 5.0, -2.0 + bz), 3.0, Color(0.85, 0.9, 1.0, 0.35))
+			continue
 		var wob := sin((f.x + f.y) * 0.05) * 2.0
 		var gc := Vector2(f.x + wob, f.y)
 		var pul := 0.6 + 0.4 * sin(anim_t * 9.0 + f.x)
@@ -10920,15 +10958,16 @@ func _draw_boss_bongo() -> void:
 		return
 	var st: String = boss.dive_stage
 	var dazed: bool = st == "dazed" and not boss.stomped
-	var maw_open: bool = st in ["gulpwarn", "gulp", "tonguewarn", "tongue"]
+	var maw_open: bool = st in ["gulpwarn", "gulp", "belch", "tonguewarn", "tongue"]
 	var talking: bool = str(boss.get("say", "")) != "" and (anim_t - float(boss.get("say_t", -10.0))) < 1.8
 	var swell: float = float(boss.get("swell", 1.0)) if boss.phase == "enter" else 1.0
 	# TONGUE LASH telegraph: a pulsing ring on the doomed lane
 	if st == "tonguewarn":
-		var wt: float = clampf(boss.t / 0.58, 0.0, 1.0)
+		var wt: float = clampf(boss.t / 0.5, 0.0, 1.0)
 		var wp: float = 0.5 + 0.5 * sin(anim_t * 16.0)
-		draw_circle(Vector2(boss.dive_x, BASE_Y), 14.0 + wt * 26.0, Color(0.7, 0.9, 0.4, 0.14 * (0.6 + 0.4 * wp)))
-		draw_arc(Vector2(boss.dive_x, BASE_Y), 14.0 + wt * 26.0, 0.0, TAU, 24, Color(0.8, 1.0, 0.45, 0.55 + 0.3 * wp), 3.0)
+		var ttx: float = float(boss.get("tongue_tx", boss.x))
+		draw_circle(Vector2(ttx, BASE_Y), 13.0 + wt * 24.0, Color(0.7, 0.9, 0.4, 0.14 * (0.6 + 0.4 * wp)))
+		draw_arc(Vector2(ttx, BASE_Y), 13.0 + wt * 24.0, 0.0, TAU, 24, Color(0.85, 1.0, 0.45, 0.55 + 0.3 * wp), 3.0)
 	var fi: int = 0 if dazed else (2 if (maw_open or talking) else int(anim_t * 3.0) % 2)   # idle / mid / open-maw
 	var hires: bool = not tex_bongo.is_empty()
 	var gt: Texture2D = tex_bongo[fi] if hires else tex_frog
@@ -10936,12 +10975,15 @@ func _draw_boss_bongo() -> void:
 	var bob: float = sin(anim_t * 3.0) * 4.0
 	var sx := 1.0
 	var sy := 1.0
-	if st == "flop":
-		sx = 1.22; sy = 0.8
-	elif st == "flopwarn":
-		sy = 1.12
+	if st == "hop":
+		var _hp: float = clampf(boss.t / 0.46, 0.0, 1.0)
+		sx = 1.0 + 0.18 * sin(_hp * PI); sy = 1.0 - 0.14 * sin(_hp * PI)   # stretch up, squash on land
+	elif st == "hopwarn":
+		sy = 0.88; sx = 1.12                          # crouch before the leap
 	elif st in ["gulpwarn", "gulp"]:
-		sx = 1.08 + 0.04 * sin(anim_t * 22.0)
+		sx = 1.06 + 0.03 * sin(anim_t * 22.0)
+	elif st == "belch":
+		sx = 0.9; sy = 1.12                           # snaps thin as he spits
 	var base: float = boss.scale * (1.1 if hires else 3.0) * swell
 	var gsz := gt.get_size() * Vector2(base * sx, base * sy)
 	var gpos := Vector2(boss.x, boss.y + bob)
@@ -10954,14 +10996,33 @@ func _draw_boss_bongo() -> void:
 	elif boss.get("hit_flash", 0.0) > 0.0:
 		mod = Color(1.6, 1.4, 1.4)
 	draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+	# bullfrog THROAT: a subtle pale chin-pouch that breathes (idle) and puffs on a gulp wind-up
+	var bthroat: float = float(boss.get("throat", 0.0))
+	var bbreathe: float = 0.5 + 0.5 * sin(anim_t * 2.2)
+	var bchin := gpos + Vector2(0, gsz.y * 0.27)
+	draw_circle(bchin, gsz.x * (0.09 + 0.015 * bbreathe + 0.05 * bthroat), mod * Color(0.80, 0.9, 0.52, 0.45))
+	if st in ["gulpwarn", "gulp"]:                      # GULP VACUUM: air streaks rushing INTO his maw
+		var bmouth := gpos + Vector2(0, gsz.y * 0.06)
+		for bk in 7:
+			var bang := float(bk) / 7.0 * TAU
+			var bph := fmod(anim_t * 2.2 + float(bk) * 0.37, 1.0)
+			var bfar := gsz.x * (0.95 - 0.6 * bph)
+			var bp0 := bmouth + Vector2(cos(bang), sin(bang) * 0.7) * bfar
+			var bp1 := bmouth + Vector2(cos(bang), sin(bang) * 0.7) * (bfar - 18.0)
+			draw_line(bp0, bp1, Color(0.8, 0.95, 1.0, 0.5 * (1.0 - bph)), 2.5)
 	# the open maw when he gulps / lashes — a dark hungry oval (placeholder only; hires sprite has its own)
 	if maw_open and not hires:
 		var mo: float = 0.55 + 0.45 * sin(anim_t * 18.0) if st in ["gulpwarn", "gulp"] else 1.0
 		draw_circle(gpos + Vector2(0, gsz.y * 0.06), gsz.x * 0.16 * mo, Color(0.12, 0.05, 0.08, 0.92))
-	# the tongue: a red line snapping down the lane while it strikes
+	# the TONGUE: a thick pink tongue SHOOTS from his mouth toward the lane, then retracts
 	if st == "tongue":
-		var tx: float = boss.dive_x
-		draw_line(gpos + Vector2(0, gsz.y * 0.08), Vector2(tx, min(BASE_Y, gpos.y + 60.0 + boss.t * 520.0)), Color(0.85, 0.25, 0.35), 7.0)
+		var tlen: float = float(boss.get("tongue_len", 0.0))
+		var mouth := gpos + Vector2(0, gsz.y * 0.06)
+		var tip := mouth.lerp(Vector2(float(boss.get("tongue_tx", boss.x)), BASE_Y), tlen)
+		draw_line(mouth, tip, Color(0.80, 0.30, 0.38), 9.0)
+		draw_line(mouth, tip, Color(0.92, 0.45, 0.52), 5.0)
+		draw_circle(tip, 8.0, Color(0.95, 0.5, 0.56))
+		draw_circle(tip - Vector2(2, 2), 3.0, Color(1.0, 0.75, 0.78, 0.9))
 	# two big sleepy eyes that go to X when dazed (placeholder only; hires sprite emotes via tint)
 	for sgn in ([-1.0, 1.0] if (dazed and not hires) else []):
 		var ep := gpos + Vector2(sgn * gsz.x * 0.17, -gsz.y * 0.16)
