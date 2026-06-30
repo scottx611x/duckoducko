@@ -1742,52 +1742,55 @@ def build_bread():
 def build_loon(bob=0):
     """LUCIEN — a common loon DJ, 3/4 front (head toward +z). Glossy black, white-checkered
     back, the signature white necklace, a dagger bill, deep-red eyes, and DJ headphones."""
-    BLK = (26, 28, 36); BLKH = (44, 48, 60); WHT = (238, 242, 248)
-    BILL = (20, 22, 28); EYE = (214, 38, 34); HP = (40, 36, 58); CYAN = (120, 212, 255)
+    BLK = (22, 24, 34); BLKH = (60, 70, 98); WHT = (248, 250, 254)
+    BILL = (96, 104, 124); BILLD = (54, 60, 78); EYE = (244, 40, 38); EYEH = (255, 150, 120)
+    HP = (28, 30, 40); HPBAND = (255, 138, 36); CYAN = (120, 226, 255); CREST = (40, 44, 60)
     V = {}
     put, ellip, box = _vox_helpers(V)
     ny = bob                                                # head-bob offset (DJ nod)
     # sleek body, low and elongated
     ellip(0, 0, 0, 3.6, 2.7, 6.4, BLK)
-    ellip(0, 1.6, -0.4, 3.0, 1.8, 5.4, BLKH, only_empty=True)   # glossy back sheen
+    ellip(0, 1.8, -0.6, 3.0, 1.8, 5.4, BLKH, only_empty=True)   # glossy back sheen
     ellip(0, -1.9, 0.6, 3.0, 1.5, 4.8, WHT, only_empty=True)    # white breast/belly
-    # checkered back — the loon's giveaway
-    for (x, z) in [(-2, 3), (1, 2), (2, 4), (-1, 0), (0, 5), (2, -2), (-2, -3), (1, -4)]:
-        put(x, 3, z, WHT); put(x, 2, z, WHT, only_empty=True)
+    # checkered back — the loon's GIVEAWAY: bold rows of white squares
+    for zrow, xs in [(4, (-2, 0, 2)), (3, (-1, 1)), (2, (-2, 0, 2)), (1, (-1, 1)), (0, (-2, 0, 2)), (-2, (-1, 1)), (-3, (-2, 0, 2))]:
+        for x in xs:
+            put(x, 3, zrow, WHT); put(x, 2, zrow, WHT, only_empty=True)
     # neck rising from the front, curving up toward the head
     for i in range(5):
         ellip(0, 2 + i + ny * (i / 4.0), int(4 - i * 0.2), 1.9 - i * 0.06, 1.8, 1.9 - i * 0.06, BLK)
-    # white NECKLACE banding the lower neck
-    for a in range(10):
-        ang = a * (math.tau / 10.0)
+    # bold white NECKLACE banding the lower neck
+    for a in range(12):
+        ang = a * (math.tau / 12.0)
         put(int(round(math.cos(ang) * 2.0)), 3 + ny, int(round(4 + math.sin(ang) * 2.0)), WHT if a % 2 == 0 else BLK)
-    # head + dagger bill
+    # head + slim dagger bill
     hy = 8 + ny; hz = 3
     ellip(0, hy, hz, 2.8, 2.8, 3.0, BLK)
     ellip(0, hy + 1.4, hz - 1.0, 2.0, 1.6, 2.0, BLKH, only_empty=True)
-    for i in range(10):                                     # the long dagger bill, tapering to a point
+    put(0, hy + 3, hz - 1, CREST); put(-1, hy + 4, hz - 1, CREST); put(1, hy + 3, hz - 2, CREST)  # jaunty crest
+    for i in range(8):                                      # slim dagger bill, lit ridge -> dark tip
         zz = hz + 2 + i
-        put(0, hy, zz, BILL)
-        if i < 6:
-            put(0, hy - 1, zz, BILL)
-        if i < 3:
-            put(0, hy + 1, zz, BILL, only_empty=True); put(1, hy, zz, BILL, only_empty=True); put(-1, hy, zz, BILL, only_empty=True)
-    for s in (1, -1):                                       # deep red eyes
-        put(s * 2, hy + 1, hz + 1, EYE); put(s * 2, hy + 1, hz + 2, EYE)
-    # DJ HEADPHONES: ear cups + a band over the crown, one cup glowing
+        put(0, hy, zz, BILL if i < 5 else BILLD)
+        if i < 2:
+            put(0, hy - 1, zz, BILLD); put(1, hy, zz, BILLD, only_empty=True); put(-1, hy, zz, BILLD, only_empty=True)
+    for s in (1, -1):                                       # BIG bright-red loon eyes + a hot glint
+        put(s * 2, hy + 1, hz + 1, EYE); put(s * 2, hy + 1, hz + 2, EYE); put(s * 2, hy + 2, hz + 1, EYE)
+        put(s * 2 + s, hy + 2, hz + 2, EYEH)
+    # BIG DJ HEADPHONES: vivid orange band over the crown + glowing cyan ear-cups
     for s in (1, -1):
-        ellip(s * 3, hy, hz, 1.3, 1.7, 1.4, HP)
-    for x in range(-3, 4):
-        put(x, hy + 3, hz, HP); put(x, hy + 3, hz - 1, HP, only_empty=True)
-    put(3, hy, hz + 1, CYAN); put(3, hy, hz, CYAN); put(-3, hy, hz + 1, CYAN)
+        ellip(s * 3, hy, hz, 1.5, 2.0, 1.5, HP)
+        put(s * 3, hy, hz + 1, CYAN); put(s * 3, hy, hz, CYAN); put(s * 3, hy + 1, hz, CYAN)
+    for x in range(-3, 4):                                  # chunky band arcing over the head
+        put(x, hy + 4 - abs(x) // 2, hz, HPBAND); put(x, hy + 4 - abs(x) // 2, hz - 1, HPBAND, only_empty=True)
     return V
 
 
 def build_lucien_dj(pose="scratch_r_d", gape=False):
     """LUCIEN at his DECKS — an upright BLACK loon DJ behind a detailed voxel console. `pose` choreographs
     his wings: scratch either platter, tap the mixer, or throw a wing (or both) UP for the drop."""
-    BLK = (24, 26, 34); BLKH = (66, 74, 100); WHT = (246, 248, 252)
-    BILL = (22, 24, 32); EYE = (236, 60, 52); HP = (54, 52, 78); CYAN = (130, 222, 255)
+    BLK = (22, 24, 34); BLKH = (60, 70, 98); WHT = (248, 250, 254)
+    BILL = (96, 104, 124); BILLD = (54, 60, 78); EYE = (244, 40, 38); EYEH = (255, 150, 120)
+    HP = (28, 30, 40); HPBAND = (255, 138, 36); CYAN = (120, 226, 255); CREST = (40, 44, 60)
     WOOD = (96, 72, 128); WOODH = (146, 116, 184); WOODD = (64, 46, 88)
     REC = (52, 52, 66); RED = (224, 72, 70); CHROME = (216, 222, 232); LIME = (150, 240, 120); PINK = (250, 120, 200)
     V = {}
@@ -1819,37 +1822,51 @@ def build_lucien_dj(pose="scratch_r_d", gape=False):
         put(kx, 2, 6, CHROME); put(kx, 2, 8, CYAN)         # two knobs
     for fx in (-1, 0, 1):
         put(fx, 2, 9, CHROME)                              # fader caps
-    # === LUCIEN, upright behind the decks ===
-    ellip(0, 6, -2, 3.2, 4.4, 2.8, BLK)
-    ellip(0, 4, -1, 2.4, 2.4, 2.2, WHT, only_empty=True)   # white breast
-    for (x, z) in [(-2, -3), (1, -3), (2, -1), (-1, -2), (0, -4)]:
-        put(x, 8, z, WHT, only_empty=True)                 # checkered back
-    for i in range(3):
-        ellip(0, 9 + i, -2 + int(i * 0.2), 1.7, 1.7, 1.7, BLK)
+    # === LUCIEN the loon DJ, upright behind the decks ===
+    ellip(0, 6, -2, 3.2, 4.6, 2.9, BLK)                    # sleek upright body
+    ellip(0, 6.5, -3.6, 2.6, 3.6, 1.6, BLKH, only_empty=True)  # glossy back sheen
+    ellip(0, 4, -0.4, 2.5, 3.0, 2.2, WHT, only_empty=True)  # bright white breast
+    # the loon's GIVEAWAY: a bold black-and-white CHECKERED back (rows of white squares)
+    for zrow, xs in [(-4, (-2, 0, 2)), (-3, (-1, 1)), (-2, (-2, 0, 2)), (-1, (-1, 1))]:
+        for x in xs:
+            put(x, 9, zrow, WHT); put(x, 8, zrow, WHT, only_empty=True)
+    for i in range(3):                                      # neck column rising to the head
+        ellip(0, 9 + i, -1 + int(i * 0.2), 1.8 - i * 0.1, 1.7, 1.8 - i * 0.1, BLK)
+    # a BOLD white NECKLACE ringing the throat (vertical-bar pattern)
+    for a in range(12):
+        ang = a * (math.tau / 12.0)
+        put(int(round(math.cos(ang) * 1.9)), 9, int(round(-1 + math.sin(ang) * 1.9)), WHT if a % 2 == 0 else BLK)
     hy = 13
-    # a head TILT for the hype poses (chin up on the drop)
-    htilt = 2 if gape else (1 if ("up" in pose or pose == "drop") else 0)   # chin UP on a gape so the open mouth faces us
-    ellip(0, hy + htilt, -1, 2.7, 2.7, 2.8, BLK)
-    ellip(0, hy + 1.2 + htilt, -2.0, 1.9, 1.5, 1.8, BLKH, only_empty=True)
-    BILLH = (92, 100, 122); TONGUE = (244, 110, 150); TONGUED = (210, 70, 116)   # steel ridge so the bill reads
+    htilt = 2 if gape else (1 if ("up" in pose or pose == "drop") else 0)   # chin UP on the drop / wail
+    ellip(0, hy + htilt, -1, 2.7, 2.7, 2.9, BLK)           # round head
+    ellip(0, hy + 1.3 + htilt, -2.1, 1.8, 1.5, 1.7, BLKH, only_empty=True)
+    # a couple of jaunty CREST feathers sticking up — zany DJ flair
+    put(0, hy + 3 + htilt, -2, CREST); put(-1, hy + 4 + htilt, -2, CREST); put(1, hy + 3 + htilt, -3, CREST)
+    TONGUE = (244, 110, 150); TONGUED = (210, 70, 116)
     g = 2 if gape else 0
-    for i in range(10):                                    # UPPER mandible — longer, lit top ridge + a little width
-        yy = hy - i // 3 + htilt + g
-        put(0, yy, 1 + i, BILLH if i < 6 else BILL)
-        put(1, yy, 1 + i, BILL, only_empty=True); put(-1, yy, 1 + i, BILL, only_empty=True)
-    for i in range(6):                                     # LOWER mandible (drops wide open on a gape)
-        put(0, hy - 1 - i // 3 + htilt - g, 1 + i, BILL)
-    if gape:                                               # a bright PINK TONGUE filling the open gape
+    for i in range(8):                                     # the slim dagger BILL, tapering to a point
+        yy = hy - i // 4 + htilt + g
+        put(0, yy, 1 + i, BILL if i < 5 else BILLD)        # lit top ridge fading to dark tip
+        if 1 <= i <= 2:                                    # a touch of width only at the base
+            put(1, yy, 1 + i, BILLD, only_empty=True); put(-1, yy, 1 + i, BILLD, only_empty=True)
+    for i in range(5):                                     # lower mandible (gapes wide for the wail)
+        put(0, hy - 1 - i // 4 + htilt - g, 1 + i, BILLD)
+    if gape:                                               # a bright pink TONGUE in the open wail
         for i in range(4):
             put(0, hy - 1 + htilt, 2 + i, TONGUE if i < 3 else TONGUED)
-    put(2, hy + 1 + htilt, 0, EYE); put(-2, hy + 1 + htilt, 0, EYE)
-    for s in (1, -1):
-        ellip(s * 3, hy + htilt, -1, 1.3, 1.7, 1.4, HP)
-    for x in range(-3, 4):
-        put(x, hy + 3 + htilt, -1, HP)
-    put(3, hy + htilt, 0, CYAN); put(-3, hy + htilt, 0, CYAN)
-    for x in range(-2, 3):
-        put(x, 9, 0, WHT, only_empty=True)                 # necklace
+    for s2 in (1, -1):                                     # BIG bright-red loon eyes (the signature) + a hot glint
+        put(s2 * 2, hy + 1 + htilt, 0, EYE); put(s2 * 2, hy + 1 + htilt, 1, EYE)
+        put(s2 * 2, hy + 2 + htilt, 0, EYE)
+        put(s2 * 2 + s2, hy + 2 + htilt, 1, EYEH)
+    # BIG DJ HEADPHONES: a vivid orange band over the crown + glowing cyan ear-cups
+    for s2 in (1, -1):
+        ellip(s2 * 3, hy + htilt, -1, 1.5, 2.0, 1.6, HP)
+        put(s2 * 3, hy + htilt, 0, CYAN); put(s2 * 3, hy + htilt, 1, CYAN); put(s2 * 3, hy - 1 + htilt, 0, CYAN)
+    for x in range(-3, 4):                                 # the chunky band arcing over the head
+        yb = hy + 4 + htilt - abs(x) // 2
+        put(x, yb, -1, HPBAND); put(x, yb, -2, HPBAND, only_empty=True)
+    for x in range(-2, 3):                                 # white necklace front-and-center too
+        put(x, 9, 0, WHT, only_empty=True)
 
     def wing(shoulder, target):                            # a tapering feathered wing arm
         for i in range(7):

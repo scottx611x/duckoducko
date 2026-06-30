@@ -408,3 +408,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-30 — 2 new WEARABLES SHIPPED (v1.16.0)
 - LILY PAD HAT (cost 500): +1 duckling joins your brood each run (NEW axis — no wearable boosted ducklings before; fills the empty ducklings-category wear slot). SOU'WESTER (cost 450): +8% all-weather pace.
 - Both authored across all 3 layers (flat icon gen_wearables.py, 3D worn + MEGA-meld voxel_duck.py build_hat + _WEAR3D_IDS). Scott approved both; asked to PUNCH UP THE LILY PAD (was green-on-green on the mallard) -> brightened pad + dark rim ring + bigger pink bloom, raised y11-13 domed. Now pops. MEGA-meld verified consistent.
+
+
+## 2026-06-30 — Lucien art + BONGO fixes + dev menu (v1.16.1)
+- LUCIEN art reworked (Scott: not a proper zany loon DJ): orange headphone band + cyan cups, bold checkered back + necklace, big red eyes, slim dagger bill (was a pale club), crest. build_lucien_dj + build_loon in voxel_duck.py. Console kept.
+- BONGO bugs (Scott): (1) had GERALD text at half-HP (fell into gerald else -> 'GERALD IS FURIOUS' + gerald feather-storm ult) + ascension-revive line -> added bongo branches ('BONGO IS CRANKY' / 'ugh. STILL here.'), no feather-storm. (2) triple lily-hop waves too closely spaced (0.42s apart = unjumpable) -> added a 'hopland' settle (0.7s) between hops, ~1.1s apart now.
+- SCOOTYBOOTY dev buttons (Scott: too crowded): replaced the inline 5-boss row with ONE 'DEV' button -> a PLAYTEST menu overlay (6 bosses incl BONGO + 4 utilities: +5000ft/+500 feathers/fill loft/+3 shields). dev_menu state + DEV_MENU const + _dev_menu_rect/_dev_do/_draw_dev_menu.

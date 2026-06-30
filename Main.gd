@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.0"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.1"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -576,7 +576,8 @@ const ASC_MOD_DESCS := [
 	"Herons hunt in packs; log-jam walls appear.", "Logs actively drift toward your lane.", "Snacks give far less LOFT charge.",
 	"Every boss cheats death once — twice the fight.", "Crosswind gusts shove you off your line.", "Snacks become painfully scarce.",
 	"The river's final, merciless test — everything at once."]
-var cheat_unlock := false   # scootybooty ACTIVE: name-gated full unlock + dev boss buttons
+var cheat_unlock := false   # scootybooty ACTIVE: name-gated full unlock + dev playtest menu
+var dev_menu := false       # the scootybooty PLAYTEST menu overlay is open
 var boss_kinds: Array = ["gerald", "snapz"]   # first two boss slots, shuffled per run for variety
 # --- SCOOTYBOOTY BOT SIM: an AI duck plays headless; we tally metrics to flag broken/unfair runs ---
 var bot_mode := false
@@ -599,6 +600,14 @@ const DEV_BOSS_BTNS := [
 	{"name": "GERALD", "idx": 0}, {"name": "SNAPZ", "idx": 1}, {"name": "G-III", "idx": 2},
 	{"name": "BREAD", "idx": -1},   # -1 = summon the MAGIC BREAD straight away (ascension test)
 	{"name": "BARRY", "idx": -4},  # -4 = summon Barry the beaver
+]
+# the scootybooty PLAYTEST menu — one button opens this grid (replaces the crowded inline row)
+const DEV_MENU := [
+	{"name": "GERALD", "act": "gerald"}, {"name": "BONGO", "act": "bongo"},
+	{"name": "SNAPZ", "act": "snapz"}, {"name": "BARRY", "act": "beaver"},
+	{"name": "ETERNAL", "act": "eternal"}, {"name": "BREAD", "act": "bread"},
+	{"name": "+5000 FT", "act": "warp"}, {"name": "+500 FTHR", "act": "feathers"},
+	{"name": "FILL LOFT", "act": "loft"}, {"name": "+3 SHIELD", "act": "shield"},
 ]
 # GERALD has opinions. he shares them mid-fight (pompous, petty, faintly British).
 const GERALD_TAUNTS := [
@@ -2220,6 +2229,36 @@ func _dev_boss_rect(i: int) -> Rect2:
 	var gap := 8.0
 	var w: float = (VIEW.x - 2.0 * m - gap * (n - 1)) / n
 	return Rect2(m + i * (w + gap), 902.0, w, 42.0)
+
+func _dev_btn_rect() -> Rect2:
+	return Rect2(VIEW.x - 84.0, 898.0, 64.0, 38.0)   # the single DEV button (bottom-right)
+
+func _dev_menu_panel() -> Rect2:
+	return Rect2(40.0, 286.0, VIEW.x - 80.0, 392.0)
+
+func _dev_menu_rect(i: int) -> Rect2:
+	var p := _dev_menu_panel()
+	var col := i % 2
+	var row := i / 2
+	var pad := 16.0
+	var gap := 12.0
+	var w: float = (p.size.x - 2.0 * pad - gap) / 2.0
+	var h := 50.0
+	return Rect2(p.position.x + pad + col * (w + gap), p.position.y + 56.0 + row * (h + gap), w, h)
+
+func _dev_do(act: String) -> void:
+	match act:
+		"gerald": _force_boss(0)
+		"bongo": _force_boss(0, "bongo")
+		"snapz": _force_boss(1)
+		"beaver": _force_boss(0, "beaver")
+		"eternal": _force_boss(2)
+		"bread": _force_boss(-1)
+		"warp": distance += 50000.0; _flash("WARP +5000 ft")
+		"feathers": run_feathers += 500; _flash("+500 feathers")
+		"loft": loft = 1.0; loft_ready = true; _flash("LOFT filled")
+		"shield": shield_charges += 3; _flash("+3 shields")
+	dev_menu = false
 
 func _force_boss(idx: int, kind_override := "") -> void:
 	if not alive or in_menu or boss != null:
@@ -4502,16 +4541,15 @@ func _on_press(pos: Vector2) -> void:
 		_sfx("click")
 		_enter_menu()                              # abandon ship (mobile's Esc)
 		return
-	# DEV (scootybooty): boss-test buttons jump straight into a fight
+	# DEV (scootybooty): one button opens the PLAYTEST menu (no more crowded inline row)
 	if cheat_unlock and boss == null and not drafting:
-		for i in DEV_BOSS_BTNS.size():
-			if _dev_boss_rect(i).has_point(pos):
-				var _bi: int = DEV_BOSS_BTNS[i].idx
-				if _bi == -4:                       # BEAVER
-					_force_boss(0, "beaver")
-				else:
-					_force_boss(_bi)
-				return
+		if dev_menu:
+			for i in DEV_MENU.size():
+				if _dev_menu_rect(i).has_point(pos):
+					_dev_do(DEV_MENU[i].act); _sfx("click"); return
+			dev_menu = false; _sfx("click"); return     # tap off the menu closes it
+		if _dev_btn_rect().has_point(pos):
+			dev_menu = true; _sfx("click"); return
 	if drafting:
 		if anim_t - draft_open_t < 0.45:
 			return                                 # grace: no hop-spam click-through
@@ -5930,7 +5968,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			boss_flash = 0.6
 			duck_shake = maxf(duck_shake, 0.5)
 			_flash("IT WON'T STAY DOWN", 1.8)
-			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else "death is for\nLESSER birds."))
+			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else ("ugh.\nSTILL here." if boss.kind == "bongo" else "death is for\nLESSER birds.")))
 			_sfx("laugh", 0.9); _sfx("mega", 0.5)
 			_spawn_parts(boss.x, boss.y, 28, Color(1.0, 0.4, 0.42), 280.0)
 			return
@@ -5962,6 +6000,10 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			_flash("BARRY IS FURIOUS", 1.6)
 			_gerald_say("DAM you to\nSPLINTERS!")
 			_sfx("laugh", 0.85)
+		elif boss.kind == "bongo":
+			_flash("BONGO IS CRANKY", 1.6)
+			_gerald_say("okay. OKAY.\nyou want THIS?")
+			_sfx("ribbit", 0.9)
 		else:
 			_flash("GERALD IS FURIOUS", 1.6)
 			_gerald_say("NOW you've done it.")
@@ -6411,9 +6453,13 @@ func _bongo_fight(delta: float) -> void:
 			if boss.hopn >= 3:
 				_bongo_recover(1.35)                         # three hops leaves him good and winded
 			else:
-				boss.hop_from = boss.x
-				boss.hop_to = clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
-				boss.t = 0.0
+				boss.dive_stage = "hopland"; boss.t = 0.0    # SETTLE so each wave is spaced enough to jump
+	elif st == "hopland":
+		boss.y = 150.0
+		if boss.t >= 0.7:                                     # a clear beat between waves (was back-to-back = unjumpable)
+			boss.hop_from = boss.x
+			boss.hop_to = clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
+			boss.dive_stage = "hop"; boss.t = 0.0
 	# --- GULP-N-BELCH: throat sac inflates, INHALES you toward his maw, then belches a fan of flies. ---
 	elif st == "gulpwarn":
 		boss.throat = clampf(boss.t / 0.55, 0.0, 1.0)         # the big bullfrog throat-sac balloons
@@ -10529,17 +10575,37 @@ func _draw() -> void:
 	# DEV (scootybooty): boss-test shortcut buttons along the bottom
 	if cheat_unlock and alive and boss == null and not drafting and not paused and not in_menu \
 			and not in_select and not in_shop and not in_shrine:
-		for i in DEV_BOSS_BTNS.size():
-			var rc := _dev_boss_rect(i)
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.5, 0.1, 0.12, 0.82)
-			sb.set_corner_radius_all(10)
-			sb.set_border_width_all(2)
-			sb.border_color = Color(1, 0.5, 0.4, 0.8)
-			draw_style_box(sb, rc)
-			draw_string(font, Vector2(rc.position.x, rc.position.y + 28), "> " + DEV_BOSS_BTNS[i].name,
-				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 20, Color(1, 0.92, 0.85))
-		_otext(Vector2(0, 884), "DEV · boss test", 13, Color(1, 0.6, 0.5, 0.7), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+		_draw_dev_menu()
+
+func _draw_dev_menu() -> void:
+	# the single DEV button (bottom-right), unobtrusive
+	var br := _dev_btn_rect()
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.5, 0.1, 0.12, 0.82) if not dev_menu else Color(0.85, 0.3, 0.2, 0.95)
+	bsb.set_corner_radius_all(10); bsb.set_border_width_all(2); bsb.border_color = Color(1, 0.5, 0.4, 0.85)
+	draw_style_box(bsb, br)
+	draw_string(font, Vector2(br.position.x, br.position.y + 26), "DEV", HORIZONTAL_ALIGNMENT_CENTER, br.size.x, 19, Color(1, 0.92, 0.85))
+	if not dev_menu:
+		return
+	# the PLAYTEST menu overlay
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.02, 0.05, 0.6))
+	var p := _dev_menu_panel()
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.12, 0.07, 0.09, 0.98); psb.set_corner_radius_all(16)
+	psb.set_border_width_all(2); psb.border_color = Color(1, 0.5, 0.4, 0.85)
+	draw_style_box(psb, p)
+	_otext(Vector2(0, p.position.y + 32), "SCOOTYBOOTY · PLAYTEST", 19, Color(1, 0.7, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	for i in DEV_MENU.size():
+		var rc := _dev_menu_rect(i)
+		var util: bool = DEV_MENU[i].act in ["warp", "feathers", "loft", "shield"]
+		var isb := StyleBoxFlat.new()
+		isb.bg_color = Color(0.16, 0.18, 0.26, 0.95) if util else Color(0.42, 0.12, 0.14, 0.95)
+		isb.set_corner_radius_all(10); isb.set_border_width_all(2)
+		isb.border_color = Color(0.5, 0.7, 0.95, 0.7) if util else Color(1, 0.55, 0.45, 0.8)
+		draw_style_box(isb, rc)
+		draw_string(font, Vector2(rc.position.x, rc.position.y + 32), DEV_MENU[i].name,
+			HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 21, Color(1, 0.94, 0.88))
+	_otext(Vector2(0, p.end.y - 18), "tap off to close", 13, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 
 # the conga line compresses as it grows so every duckling stays on screen.
 # it starts BELOW the duck sprite (~44px of butt) so nobody waddles underneath it.
