@@ -467,3 +467,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 2026-06-30 — remove preen, keep flap + wearables (v1.16.10)
 - Scott: get rid of the preen, keep the wing flap, dont remove wearables. Removed the preen trigger/draw branches + dead vars (menu/select_preen_t); menu ducks now ONLY flap. Wearables stay ON during the flap (hat drawn at hero yaw, no longer hidden). preen frames left on disk unused (harmless).
+
+
+## 2026-07-01 — flap at CURRENT facing (v1.16.11 pending)
+- Scott: the flap locked the duck to a fixed forward-right hero view — weird when it was rotating/facing away. Fix: render a WINGS-OUT TURNTABLE (<sp>_flap_%02d, 24 yaws at hero pitch) instead of the 2 fixed-hero flap frames; _flapspin(sp)+_flap_frame(sp,yaw) pick the wings-out frame at the duck CURRENT yaw. Menu + select draws now alternate folded<->wings-out at _mspin/select_yaw -> the duck flaps IN PLACE at any facing; hat rides the same yaw. Dropped the deg_to_rad(20) hero override + preen frames.
+
+- v1.16.11 SHIPPED: flap plays at the current facing (wings-out turntable), no more snap to front.

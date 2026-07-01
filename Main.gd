@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.10"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.11"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -11767,14 +11767,21 @@ func _pick_duck_tex(h: float, cur):
 	return cur["idle"][int(anim_t * 3.0) % 2]
 
 # ---- menu --------------------------------------------------------------------
-var tex_menuanim := {}   # species -> {"flap":[t0,t1]} — real wings-out idle flap frames
-func _menuanim(sp: String) -> Dictionary:
-	if not tex_menuanim.has(sp):
-		var d := {}
-		if ResourceLoader.exists("res://art/%s_flap0.png" % sp):
-			d["flap"] = [load("res://art/%s_flap0.png" % sp), load("res://art/%s_flap1.png" % sp)]
-		tex_menuanim[sp] = d
-	return tex_menuanim[sp]
+var tex_flapspin := {}   # species -> [24] wings-out turntable frames (lazy) — flap plays at the CURRENT yaw
+func _flapspin(sp: String) -> Array:
+	if not tex_flapspin.has(sp):
+		var arr: Array = []
+		if ResourceLoader.exists("res://art/%s_flap_00.png" % sp):
+			for i in 24:
+				arr.append(load("res://art/%s_flap_%02d.png" % [sp, i]))
+		tex_flapspin[sp] = arr
+	return tex_flapspin[sp]
+
+func _flap_frame(sp: String, yaw: float):    # the wings-out frame nearest this yaw (same index math as _spin_frame)
+	var arr := _flapspin(sp)
+	if arr.is_empty():
+		return null
+	return arr[int(floor(fposmod(yaw, TAU) / TAU * arr.size())) % arr.size()]
 
 func _draw_menu() -> void:
 	if name_edit != null:                              # name your duck HERE (below "tap to play"), not in select
@@ -11808,10 +11815,11 @@ func _draw_menu() -> void:
 		var _mspin := anim_t * 0.55 + menu_spin
 		var hf = _spin_frame(star, _mspin, quacking)
 		var mflap := clampf(1.0 - (anim_t - menu_flap_t) / 0.55, 0.0, 1.0)    # idle WING FLAP (real spread wings)
-		var ma := _menuanim(star)
-		var flapping: bool = mflap > 0.0 and ma.has("flap")
-		if flapping:
-			hf = ma["flap"][int(anim_t * 15.0) % 2]      # alternate out / out_up -> wings really flap
+		var flapping: bool = mflap > 0.0 and not _flapspin(star).is_empty()
+		if flapping and int(anim_t * 12.0) % 2 == 0:     # alternate WINGS-OUT / folded — at his CURRENT facing
+			var _ff = _flap_frame(star, _mspin)
+			if _ff != null:
+				hf = _ff
 		var hpos := Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0 - sin(mflap * PI) * 24.0 * (1.0 if flapping else 0.0))
 		var _wy := 498.0                                # a stable waterline under the bobbing hero
 		_fill_ellipse(Vector2(cx, _wy), 48.0, 12.0, Color(0.0, 0.0, 0.05, 0.18))   # soft contact shadow
@@ -11820,11 +11828,10 @@ func _draw_menu() -> void:
 			draw_arc(Vector2(cx, _wy), 18.0 + _rp * 44.0, 0.0, TAU, 30, Color(0.72, 0.86, 1.0, (1.0 - _rp) * 0.16), 2.0)
 		_blit_centered(hf, hpos, 4.6)
 		var mwl := _worn_list(); mwl.reverse()         # BODY first, then HEAD on top (hat over the shell — no clipping)
-		var _hatyaw: float = deg_to_rad(20.0) if flapping else _mspin   # flap frame is at the hero angle; hat stays ON
-		for wid in mwl:
-			_blit_centered(_wear3d_spin(wid, _hatyaw), hpos, 4.6)
+		for wid in mwl:                                # hat rides the CURRENT facing (matches body during the flap)
+			_blit_centered(_wear3d_spin(wid, _mspin), hpos, 4.6)
 			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), _hatyaw), hpos, 4.6)
+				_blit_centered(_spin_from(_propblade_now(), _mspin), hpos, 4.6)
 		if anim_t - menu_msg_t < 3.0:
 			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
@@ -12430,19 +12437,19 @@ func _draw_select() -> void:
 	var psc: float = 6.9 * duck.get("size", 1.0) * (0.9 if is_hen else 1.0)
 	if unlocked:
 		var flap := clampf(1.0 - (anim_t - select_flap_t) / 0.55, 0.0, 1.0)   # WING FLAP (real spread wings)
-		var sma := _menuanim(rsp)
-		var sflapping: bool = flap > 0.0 and sma.has("flap")
+		var sflapping: bool = flap > 0.0 and not _flapspin(rsp).is_empty()
 		var sfr = fr
-		if sflapping:
-			sfr = sma["flap"][int(anim_t * 15.0) % 2]
+		if sflapping and int(anim_t * 12.0) % 2 == 0:  # alternate WINGS-OUT / folded at the CURRENT facing
+			var _sff = _flap_frame(rsp, select_yaw)
+			if _sff != null:
+				sfr = _sff
 		var fbob := bob - sin(flap * PI) * 22.0 * (1.0 if sflapping else 0.0)   # little hop on the flap
 		_blit_modulated(sfr, Vector2(cx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
-		var _shy: float = deg_to_rad(20.0) if sflapping else select_yaw   # flap frame is at the hero angle; hat stays ON
 		var wl := _worn_list(); wl.reverse()           # BODY first, then HEAD on top (hat over the life jacket)
-		for wid in wl:                                 # preview the duck in your full outfit
-			_blit_centered(_wear3d_spin(wid, _shy), Vector2(cx, 276.0 + fbob), psc)
+		for wid in wl:                                 # hat rides the CURRENT facing (matches body during the flap)
+			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx, 276.0 + fbob), psc)
 			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), _shy), Vector2(cx, 276.0 + fbob), psc)
+				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx, 276.0 + fbob), psc)
 	else:
 		# locked: a dark silhouette — keep the mystery (pure black for secrets)
 		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)

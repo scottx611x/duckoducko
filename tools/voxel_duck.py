@@ -799,11 +799,10 @@ def generate_ducks(art_dir):
         # hops: wings spread (out / out_up flap), same back-view camera
         save(render(shade(build(sp, "out")), gy, PITCH, scale=sc), "%s_hop_0.png" % sp)
         save(render(shade(build(sp, "out_up")), gy, PITCH, scale=sc), "%s_hop_1.png" % sp)
-        # menu/select IDLE ANIMATIONS at the hero angle: a real WING FLAP (spread wings) + a PREEN (head tucked in)
-        save(render(shade(build(sp, "out")), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_flap0.png" % sp)
-        save(render(shade(build(sp, "out_up")), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_flap1.png" % sp)
-        save(render(shade(build(sp, "folded", preen=math.radians(-96))), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_preen0.png" % sp)
-        save(render(shade(build(sp, "folded", preen=math.radians(-112))), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_preen1.png" % sp)
+        # WINGS-OUT turntable (24 yaws, hero pitch) — the menu/select flap plays at the duck's CURRENT facing
+        SHflap = shade(build(sp, "out"))
+        for i in range(24):
+            save(render(SHflap, math.radians(i * 15), math.radians(HERO_PITCH), scale=sc), "%s_flap_%02d.png" % (sp, i))
         # face: close-up head, front-on (used at mega-hop apex + menus)
         save(render(SH, math.radians(0), math.radians(15), out=FACE_CANVAS,
                     scale=2.5 * size, cy_frac=0.46), "%s_face.png" % sp)
