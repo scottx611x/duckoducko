@@ -433,3 +433,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-30 — REVERT beat-drop feature (v1.16.5)
 - Scott: 'hate this feature revert Lucien dropping the beat.' Fully removed the v1.16.4 808-bassline + periodic beat-drop: LUCIEN_808/_lucien_808, party_t, drop_t, the periodic drop timer, and the duckling feral animation (jitter/bounce/roll/rainbow) in _draw_ducklings. Tapping Lucien is back to the plain djdrop scratch. 0 refs remain.
 - Art upgrade for Lucien in progress (voxel_duck.py, staged) — showing Scott renders for approval before shipping (keeps big cans; white chest + prouder head + glossy + shorter bill). NOT in this release.
+
+
+## 2026-06-30 — Lucien art upgrade + profile frame + BONGO faces duck (v1.16.6)
+- LUCIEN art UPGRADE (Scott flip-flopped then: 'sorry I like it try it out'): fuller bright WHITE CHEST (reads as a proper loon, black back/white front, not a dark blob), head held PROUD on a longer neck, glossy sheen + hot specular highlight, crisper checkered back, neater SHORTER bill (range 6). Big DJ cans KEPT. build_lucien_dj + (portrait unchanged this round).
+- PROFILE frame: Scott wanted a profile view in his DJ routine. Added lucien_dj_p10 rendered at 68deg (own bbox crop so it doesnt shift the front frames); Main.gd loads 11 frames + LUCIEN_SET routine includes idx 10 twice for a side-on beat.
+- BONGO facing: Scott 'isnt friggin locked looking right?' -> _draw_boss_bongo now flips horizontally to FACE the duck (face = 1 if duck_x>=boss.x else -1 via draw_set_transform). Verified L/R.

@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.5"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.6"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1285,7 +1285,7 @@ func _ready() -> void:
 		tex_loon_bob = load("res://art/loon_bob.png")
 	if ResourceLoader.exists("res://art/lucien_dj_p0.png"):   # 10 frames: 7-pose routine + gape(7) + head-turn L/R(8,9)
 		tex_lucien_dj = []
-		for _li in 10:
+		for _li in 11:
 			tex_lucien_dj.append(load("res://art/lucien_dj_p%d.png" % _li))
 	if ResourceLoader.exists("res://art/magicbread.png"):
 		tex_bread = load("res://art/magicbread.png")
@@ -9014,7 +9014,7 @@ func _draw_loon(center: Vector2, s: float, bob_t: float) -> void:
 
 # LUCIEN at his VOXEL DJ decks — the whole rig is one voxel model. He sways left/right working the
 # booth, and cycles his scratch frames (slow idle, rapid on a tap).
-const LUCIEN_SET := [8, 0, 1, 9, 0, 1, 7, 0, 2, 3, 2, 3, 4, 8, 0, 9, 7, 5, 6, 6, 5, 4]   # routine w/ head-turns(8/9) + gape(7)
+const LUCIEN_SET := [8, 0, 1, 9, 0, 1, 7, 0, 2, 3, 10, 2, 3, 4, 8, 0, 10, 9, 7, 5, 6, 6, 5, 4]   # routine w/ head-turns(8/9), gape(7), PROFILE(10)
 func _draw_lucien_booth(center: Vector2) -> void:
 	if tex_lucien_dj.size() < 7:
 		_draw_loon(center, 3.0, anim_t)        # safety fallback
@@ -11077,7 +11077,10 @@ func _draw_boss_bongo() -> void:
 		mod = mod * Color(0.7, 0.8, 1.1)               # winded, woozy blue
 	elif boss.get("hit_flash", 0.0) > 0.0:
 		mod = Color(1.6, 1.4, 1.4)
-	draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
+	var face: float = 1.0 if duck_x >= boss.x else -1.0    # BONGO turns to FACE the duck (was locked looking right)
+	draw_set_transform(gpos, 0.0, Vector2(face, 1.0))
+	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# bullfrog THROAT: a pale chin-pouch that ONLY inflates during a gulp wind-up (no idle dot on his face)
 	var bthroat: float = float(boss.get("throat", 0.0))
 	if st in ["gulpwarn", "gulp"]:                      # GULP VACUUM: throat balloons + air streaks rush in

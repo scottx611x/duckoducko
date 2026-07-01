@@ -1822,34 +1822,37 @@ def build_lucien_dj(pose="scratch_r_d", gape=False):
         put(kx, 2, 6, CHROME); put(kx, 2, 8, CYAN)         # two knobs
     for fx in (-1, 0, 1):
         put(fx, 2, 9, CHROME)                              # fader caps
-    # === LUCIEN the loon DJ, upright behind the decks ===
-    ellip(0, 6, -2, 3.2, 4.6, 2.9, BLK)                    # sleek upright body
-    ellip(0, 6.5, -3.6, 2.6, 3.6, 1.6, BLKH, only_empty=True)  # glossy back sheen
-    ellip(0, 4, -0.4, 2.5, 3.0, 2.2, WHT, only_empty=True)  # bright white breast
-    # the loon's GIVEAWAY: a bold black-and-white CHECKERED back (rows of white squares)
-    for zrow, xs in [(-4, (-2, 0, 2)), (-3, (-1, 1)), (-2, (-2, 0, 2)), (-1, (-1, 1))]:
+    # === LUCIEN the loon DJ, upright behind the decks — GLOSSY + solid, head held proud ===
+    WHTD = (196, 206, 222)                                 # soft shade so the white chest reads round
+    ellip(0, 6, -2, 3.1, 4.9, 2.9, BLK)                    # solid chunky body, a touch taller
+    ellip(0, 7.8, -3.9, 2.3, 3.2, 1.3, BLKH)              # bold glossy sheen streak down the back
+    ellip(0, 9.5, -3.6, 1.3, 1.6, 0.9, (108, 120, 150), only_empty=True)  # a hot specular highlight
+    ellip(0, 4.2, 0.4, 2.4, 3.2, 2.1, WHT, only_empty=True)  # full bright white breast
+    ellip(0, 2.6, 1.5, 1.7, 1.7, 1.4, WHTD, only_empty=True)  # belly shade -> the chest looks rounded
+    # the loon's GIVEAWAY: a crisp black-and-white CHECKERED back (more rows, tighter)
+    for zrow, xs in [(-5, (-2, 0, 2)), (-4, (-1, 1)), (-3, (-2, 0, 2)), (-2, (-1, 1)), (-1, (-2, 0, 2)), (0, (-1, 1))]:
         for x in xs:
             put(x, 9, zrow, WHT); put(x, 8, zrow, WHT, only_empty=True)
-    for i in range(3):                                      # neck column rising to the head
-        ellip(0, 9 + i, -1 + int(i * 0.2), 1.8 - i * 0.1, 1.7, 1.8 - i * 0.1, BLK)
+    for i in range(4):                                     # a longer slender neck so the head rides PROUD (not hunched)
+        ellip(0, 9 + i, -1 + int(i * 0.2), 1.9 - i * 0.09, 1.7, 1.9 - i * 0.09, BLK)
     # a BOLD white NECKLACE ringing the throat (vertical-bar pattern)
     for a in range(12):
         ang = a * (math.tau / 12.0)
-        put(int(round(math.cos(ang) * 1.9)), 9, int(round(-1 + math.sin(ang) * 1.9)), WHT if a % 2 == 0 else BLK)
-    hy = 13
+        put(int(round(math.cos(ang) * 1.9)), 10, int(round(-1 + math.sin(ang) * 1.9)), WHT if a % 2 == 0 else BLK)
+    hy = 14
     htilt = 2 if gape else (1 if ("up" in pose or pose == "drop") else 0)   # chin UP on the drop / wail
-    ellip(0, hy + htilt, -1, 2.7, 2.7, 2.9, BLK)           # round head
-    ellip(0, hy + 1.3 + htilt, -2.1, 1.8, 1.5, 1.7, BLKH, only_empty=True)
+    ellip(0, hy + htilt, -1, 2.8, 2.8, 3.0, BLK)          # a fuller, neater head
+    ellip(0, hy + 1.4 + htilt, -2.2, 1.9, 1.5, 1.8, BLKH, only_empty=True)  # glossy crown sheen
     # a couple of jaunty CREST feathers sticking up — zany DJ flair
     put(0, hy + 3 + htilt, -2, CREST); put(-1, hy + 4 + htilt, -2, CREST); put(1, hy + 3 + htilt, -3, CREST)
     TONGUE = (244, 110, 150); TONGUED = (210, 70, 116)
     g = 2 if gape else 0
-    for i in range(8):                                     # the slim dagger BILL, tapering to a point
+    for i in range(6):                                    # a NEAT dagger bill (shorter, lit ridge -> dark tip)
         yy = hy - i // 4 + htilt + g
-        put(0, yy, 1 + i, BILL if i < 5 else BILLD)        # lit top ridge fading to dark tip
-        if 1 <= i <= 2:                                    # a touch of width only at the base
+        put(0, yy, 1 + i, BILL if i < 4 else BILLD)
+        if 1 <= i <= 2:
             put(1, yy, 1 + i, BILLD, only_empty=True); put(-1, yy, 1 + i, BILLD, only_empty=True)
-    for i in range(5):                                     # lower mandible (gapes wide for the wail)
+    for i in range(4):                                    # lower mandible (gapes wide for the wail)
         put(0, hy - 1 - i // 4 + htilt - g, 1 + i, BILLD)
     if gape:                                               # a bright pink TONGUE in the open wail
         for i in range(4):
@@ -2330,6 +2333,11 @@ def generate_critters(art_dir):
         if _b: _ldbb = _b if _ldbb is None else (min(_ldbb[0], _b[0]), min(_ldbb[1], _b[1]), max(_ldbb[2], _b[2]), max(_ldbb[3], _b[3]))
     _ldbb = (max(0, _ldbb[0] - 4), max(0, _ldbb[1] - 4), min(180, _ldbb[2] + 4), min(180, _ldbb[3] + 4))
     for _i, _im in enumerate(_ldimgs): save(_im.crop(_ldbb), "lucien_dj_p%d.png" % _i)
+    # p10: a PROFILE beat — Lucien turned side-on over the decks (own crop so it won't shift the front frames)
+    _lprof = render(shade(build_lucien_dj("scratch_r_u", gape=False)), math.radians(68), math.radians(30), out=200, scale=3.0)
+    _pb = _lprof.getbbox()
+    if _pb: _lprof = _lprof.crop((max(0, _pb[0] - 4), max(0, _pb[1] - 4), min(200, _pb[2] + 4), min(200, _pb[3] + 4)))
+    save(_lprof, "lucien_dj_p10.png")
     # THE MAGIC BREAD + DONNI the speedboat, as voxel sprites (consistent pixel-art style)
     save(render(shade(build_bread()), math.radians(24), math.radians(36), out=128, scale=5.5), "magicbread.png")
     save(render(shade(build_boat()), math.radians(180), math.radians(46), out=160, scale=3.4), "donni.png")
