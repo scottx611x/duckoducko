@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.8"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.9"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -11772,6 +11772,16 @@ func _pick_duck_tex(h: float, cur):
 	return cur["idle"][int(anim_t * 3.0) % 2]
 
 # ---- menu --------------------------------------------------------------------
+var tex_menuanim := {}   # species -> {"flap":[t0,t1], "preen":[t0,t1]} — real wings-out + head-tuck idle poses
+func _menuanim(sp: String) -> Dictionary:
+	if not tex_menuanim.has(sp):
+		var d := {}
+		if ResourceLoader.exists("res://art/%s_flap0.png" % sp):
+			d["flap"] = [load("res://art/%s_flap0.png" % sp), load("res://art/%s_flap1.png" % sp)]
+			d["preen"] = [load("res://art/%s_preen0.png" % sp), load("res://art/%s_preen1.png" % sp)]
+		tex_menuanim[sp] = d
+	return tex_menuanim[sp]
+
 func _draw_menu() -> void:
 	if name_edit != null:                              # name your duck HERE (below "tap to play"), not in select
 		name_edit.visible = in_menu and not booting and not in_settings
@@ -11801,26 +11811,32 @@ func _draw_menu() -> void:
 		var star := last_species if ducks.has(last_species) else "mallard"
 		# beak opens AT the current spin angle — no more snapping to a frozen front pose
 		var quacking := anim_t - menu_quack_t < 0.45
-		var hf = _spin_frame(star, anim_t * 0.55 + menu_spin, quacking)
-		var mflap := clampf(1.0 - (anim_t - menu_flap_t) / 0.4, 0.0, 1.0)     # idle WING FLAP
-		var mpreen := clampf(1.0 - (anim_t - menu_preen_t) / 0.9, 0.0, 1.0)   # idle PREEN (head-dip + nibble)
-		var mhx := sin(mpreen * PI * 7.0) * 5.0 * (1.0 if mpreen > 0.0 else 0.0)
-		var hpos := Vector2(cx + mhx, 448.0 + sin(anim_t * 2.5) * 10.0 - sin(mflap * PI) * 20.0 + sin(mpreen * PI) * 12.0)
+		var _mspin := anim_t * 0.55 + menu_spin
+		var hf = _spin_frame(star, _mspin, quacking)
+		var mflap := clampf(1.0 - (anim_t - menu_flap_t) / 0.55, 0.0, 1.0)    # idle WING FLAP (real spread wings)
+		var mpreen := clampf(1.0 - (anim_t - menu_preen_t) / 1.1, 0.0, 1.0)   # idle PREEN (neck bent, head in the feathers)
+		var ma := _menuanim(star)
+		var flapping: bool = mflap > 0.0 and ma.has("flap")
+		var preening: bool = mpreen > 0.0 and ma.has("preen")
+		if flapping:
+			hf = ma["flap"][int(anim_t * 15.0) % 2]      # alternate out / out_up -> wings really flap
+		elif preening:
+			hf = ma["preen"][int(anim_t * 9.0) % 2]      # nibble wiggle, head buried
+		var mhx := sin(mpreen * PI * 6.0) * 4.0 * (1.0 if preening else 0.0)
+		var hpos := Vector2(cx + mhx, 448.0 + sin(anim_t * 2.5) * 10.0 - sin(mflap * PI) * 24.0 * (1.0 if flapping else 0.0))
 		var _wy := 498.0                                # a stable waterline under the bobbing hero
 		_fill_ellipse(Vector2(cx, _wy), 48.0, 12.0, Color(0.0, 0.0, 0.05, 0.18))   # soft contact shadow
 		for _rr in range(2):                            # gentle pond ripples grounding him on the river
 			var _rp := fmod(anim_t * 0.4 + _rr * 0.5, 1.0)
 			draw_arc(Vector2(cx, _wy), 18.0 + _rp * 44.0, 0.0, TAU, 30, Color(0.72, 0.86, 1.0, (1.0 - _rp) * 0.16), 2.0)
 		_blit_centered(hf, hpos, 4.6)
-		if mflap > 0.0:                                # flapping wing-strokes sweeping off both sides
-			var mfa := sin(mflap * PI * 3.0) * 0.5 + 0.5
-			for _ms in [-1.0, 1.0]:
-				draw_arc(hpos + Vector2(_ms * 66.0, -18.0), 26.0 + mfa * 16.0, PI * (0.2 if _ms > 0 else 0.8), PI * (0.8 if _ms > 0 else 1.4), 12, Color(1, 1, 1, 0.5 * mflap), 4.0)
 		var mwl := _worn_list(); mwl.reverse()         # BODY first, then HEAD on top (hat over the shell — no clipping)
-		for wid in mwl:                                # the menu hero wears your full outfit (turntable-matched)
-			_blit_centered(_wear3d_spin(wid, anim_t * 0.55 + menu_spin), hpos, 4.6)
-			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), anim_t * 0.55 + menu_spin), hpos, 4.6)
+		if not preening:                                # while the head is tucked in a preen, the hat is out of view
+			var _hatyaw: float = deg_to_rad(20.0) if flapping else _mspin   # flap frame is at the hero angle
+			for wid in mwl:
+				_blit_centered(_wear3d_spin(wid, _hatyaw), hpos, 4.6)
+				if wid == "prop":
+					_blit_centered(_spin_from(_propblade_now(), _hatyaw), hpos, 4.6)
 		if anim_t - menu_msg_t < 3.0:
 			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
@@ -12425,23 +12441,26 @@ func _draw_select() -> void:
 	var is_hen: bool = hen_mode and sp != "hen"        # running this drake as his hen?
 	var psc: float = 6.9 * duck.get("size", 1.0) * (0.9 if is_hen else 1.0)
 	if unlocked:
-		var flap := clampf(1.0 - (anim_t - select_flap_t) / 0.4, 0.0, 1.0)   # an excited WING FLAP
-		var preen := clampf(1.0 - (anim_t - select_preen_t) / 0.9, 0.0, 1.0)   # a quiet PREEN (head-tuck + nibble)
-		var fbob := bob - sin(flap * PI) * 22.0 * (1.0 if flap > 0.0 else 0.0)   # little hop on the flap
-		fbob += sin(preen * PI) * 12.0                  # ...dips DOWN to groom on a preen
-		var pnx := sin(preen * PI * 7.0) * 5.0 * (1.0 if preen > 0.0 else 0.0)   # quick side-to-side nibble
-		_blit_modulated(fr, Vector2(cx + pnx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
-		var wl := _worn_list(); wl.reverse()           # BODY first, then HEAD on top (hat over the life jacket)
-		for wid in wl:                                 # preview the duck in your full outfit
-			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx + pnx, 276.0 + fbob), psc)
-			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx + pnx, 276.0 + fbob), psc)
-		if flap > 0.0:                                 # flapping wing-strokes sweeping off both sides
-			var fa := sin(flap * PI * 3.0) * 0.5 + 0.5
-			for s in [-1.0, 1.0]:
-				var wc := Vector2(cx + s * 70.0, 256.0 + fbob)
-				draw_arc(wc, 30.0 + fa * 18.0, PI * (0.2 if s > 0 else 0.8), PI * (0.8 if s > 0 else 1.4),
-					12, Color(1, 1, 1, 0.5 * flap), 4.0)
+		var flap := clampf(1.0 - (anim_t - select_flap_t) / 0.55, 0.0, 1.0)   # WING FLAP (real spread wings)
+		var preen := clampf(1.0 - (anim_t - select_preen_t) / 1.1, 0.0, 1.0)   # PREEN (neck bent into the feathers)
+		var sma := _menuanim(rsp)
+		var sflapping: bool = flap > 0.0 and sma.has("flap")
+		var spreening: bool = preen > 0.0 and sma.has("preen")
+		var sfr = fr
+		if sflapping:
+			sfr = sma["flap"][int(anim_t * 15.0) % 2]
+		elif spreening:
+			sfr = sma["preen"][int(anim_t * 9.0) % 2]
+		var fbob := bob - sin(flap * PI) * 22.0 * (1.0 if sflapping else 0.0)   # little hop on the flap
+		var pnx := sin(preen * PI * 6.0) * 4.0 * (1.0 if spreening else 0.0)   # quick side-to-side nibble
+		_blit_modulated(sfr, Vector2(cx + pnx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
+		if not spreening:                              # while the head is tucked in a preen, the hat is out of view
+			var _shy: float = deg_to_rad(20.0) if sflapping else select_yaw   # flap frame is at the hero angle
+			var wl := _worn_list(); wl.reverse()       # BODY first, then HEAD on top (hat over the life jacket)
+			for wid in wl:                             # preview the duck in your full outfit
+				_blit_centered(_wear3d_spin(wid, _shy), Vector2(cx + pnx, 276.0 + fbob), psc)
+				if wid == "prop":
+					_blit_centered(_spin_from(_propblade_now(), _shy), Vector2(cx + pnx, 276.0 + fbob), psc)
 	else:
 		# locked: a dark silhouette — keep the mystery (pure black for secrets)
 		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)

@@ -341,7 +341,7 @@ def feminize(P):                                     # legacy shim -> the real p
     return P
 
 
-def build(sp="mallard", wings="folded", beak_open=False, elder=False, hen_override=False):
+def build(sp="mallard", wings="folded", beak_open=False, elder=False, hen_override=False, preen=0.0):
     """Return {(x,y,z): rgb}.  x=right, y=up, z=head(+).  Shared duck geometry,
     species palette + flags (crest / head patch / pin tail / face paint)."""
     spec = SPECIES[sp]
@@ -594,6 +594,16 @@ def build(sp="mallard", wings="folded", beak_open=False, elder=False, hen_overri
             ellip(sx, 9 + NY, 11.0, 1.9, 1.0, 1.4, BW)
             put(sx, 10 + NY, 11, BH)
             put(sx - 1, 9 + NY, 12, BS)
+    if preen != 0.0:
+        # PREEN: swing the head cluster DOWN + back into the flank feathers (rotate in the y-z plane about the neck base)
+        piv_y, piv_z = 3.4, 6.0
+        ca, sa = math.cos(preen), math.sin(preen)
+        head = [(k, c) for k, c in V.items() if k[2] >= 6 and k[1] >= 3]
+        for k, _c in head:
+            del V[k]
+        for (x, y, z), c in head:
+            dy = y - piv_y; dz = z - piv_z
+            V[(x, int(round(dy * ca - dz * sa + piv_y)), int(round(dy * sa + dz * ca + piv_z)))] = c
     return V
 
 
@@ -789,6 +799,11 @@ def generate_ducks(art_dir):
         # hops: wings spread (out / out_up flap), same back-view camera
         save(render(shade(build(sp, "out")), gy, PITCH, scale=sc), "%s_hop_0.png" % sp)
         save(render(shade(build(sp, "out_up")), gy, PITCH, scale=sc), "%s_hop_1.png" % sp)
+        # menu/select IDLE ANIMATIONS at the hero angle: a real WING FLAP (spread wings) + a PREEN (head tucked in)
+        save(render(shade(build(sp, "out")), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_flap0.png" % sp)
+        save(render(shade(build(sp, "out_up")), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_flap1.png" % sp)
+        save(render(shade(build(sp, "folded", preen=math.radians(-96))), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_preen0.png" % sp)
+        save(render(shade(build(sp, "folded", preen=math.radians(-112))), math.radians(HERO_YAW), math.radians(HERO_PITCH), scale=sc), "%s_preen1.png" % sp)
         # face: close-up head, front-on (used at mega-hop apex + menus)
         save(render(SH, math.radians(0), math.radians(15), out=FACE_CANVAS,
                     scale=2.5 * size, cy_frac=0.46), "%s_face.png" % sp)

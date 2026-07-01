@@ -454,3 +454,12 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Duckling WEARABLES fucked up on turning (+ during the upgrade draft): the hat used _pick_wear3d (already banked via duck_vx) AND got the duckling roll transform = DOUBLE-BANK/detach. Fix: _wear3d_idle() returns the FRONT frame; ducklings bank via the roll transform only. Draft case is the same _draw_ducklings path -> fixed too.
 - DEV playtest menu now shows boss MUGSHOT icons (Gerald/BONGO/Snapz/Barry/Eternal/Bread) via _dev_icon(act); utilities stay text-only.
 - BONGO tongue came out of his NOSE: mouth origin was gsz.y*0.06 (eye level); moved to gsz.y*0.19 (his real mouth/maw).
+
+
+## 2026-06-30 — REAL menu-duck flap/preen poses (v1.16.9 pending)
+- Scott: the flap/preen were too subtle/fake ('need to see wings OUT and flappin, neck bent, really getting in there preening'). Replaced the bob+arcs with REAL voxel poses:
+  - build() gained a preen param -> post-process rotates the HEAD cluster down+back into the flank (y-z rotation about the neck base). 
+  - render loop now saves <sp>_flap0/1 (wings=out/out_up at HERO angle) + <sp>_preen0/1 (preen -96/-112deg) per species.
+  - Main.gd: _menuanim(sp) lazy-loads them; menu + select ducks blit alternating flap frames (wings really flap) / preen frames (head buried, nibble wiggle) during the idle windows. Hat drawn at hero yaw during flap; hidden during preen (head tucked).
+
+- v1.16.9 SHIPPED: real flap (wings spread) + preen (neck bent into feathers) menu-duck poses.
