@@ -506,5 +506,5 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ### 🚢 RELEASE STATUS (2026-07-01 eve)
 - Committed locally: `36f7561` (v1.17.0 work). Web bundle exported + boots locally (HTTP 200).
-- ❗ AWAITING SCOTT (publish actions are his call): `git push` then `tools/release.sh v1.17.0`.
+- [x] RELEASED by Scott's go-ahead (2026-07-01 eve): pushed to main, v1.17.0 live — GH release (APK + web zip) + Pages deploy verified (site 200, assets present). https://duckoducko.scott-ouellette.com
 - Save backed up to scratchpad before today's sim batches; bot runs no longer touch the save going forward.
