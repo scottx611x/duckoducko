@@ -1785,7 +1785,7 @@ def build_loon(bob=0):
     return V
 
 
-def build_lucien_dj(pose="scratch_r_d", gape=False):
+def build_lucien_dj(pose="scratch_r_d", gape=False, head_yaw=0.0):
     """LUCIEN at his DECKS — an upright BLACK loon DJ behind a detailed voxel console. `pose` choreographs
     his wings: scratch either platter, tap the mixer, or throw a wing (or both) UP for the drop."""
     BLK = (22, 24, 34); BLKH = (60, 70, 98); WHT = (248, 250, 254)
@@ -1841,34 +1841,41 @@ def build_lucien_dj(pose="scratch_r_d", gape=False):
         put(int(round(math.cos(ang) * 1.9)), 10, int(round(-1 + math.sin(ang) * 1.9)), WHT if a % 2 == 0 else BLK)
     hy = 14
     htilt = 2 if gape else (1 if ("up" in pose or pose == "drop") else 0)   # chin UP on the drop / wail
-    ellip(0, hy + htilt, -1, 2.8, 2.8, 3.0, BLK)          # a fuller, neater head
-    ellip(0, hy + 1.4 + htilt, -2.2, 1.9, 1.5, 1.8, BLKH, only_empty=True)  # glossy crown sheen
-    # a couple of jaunty CREST feathers sticking up — zany DJ flair
-    put(0, hy + 3 + htilt, -2, CREST); put(-1, hy + 4 + htilt, -2, CREST); put(1, hy + 3 + htilt, -3, CREST)
+    # build the HEAD cluster into its own dict so we can TURN HIS HEAD alone (console/body stay put)
+    Hd = {}
+    hput, hellip, hbox = _vox_helpers(Hd)
+    hellip(0, hy + htilt, -1, 2.8, 2.8, 3.0, BLK)         # a fuller, neater head
+    hellip(0, hy + 1.4 + htilt, -2.2, 1.9, 1.5, 1.8, BLKH, only_empty=True)  # glossy crown sheen
+    hput(0, hy + 3 + htilt, -2, CREST); hput(-1, hy + 4 + htilt, -2, CREST); hput(1, hy + 3 + htilt, -3, CREST)  # jaunty crest
     TONGUE = (244, 110, 150); TONGUED = (210, 70, 116)
     g = 2 if gape else 0
     for i in range(6):                                    # a NEAT dagger bill (shorter, lit ridge -> dark tip)
         yy = hy - i // 4 + htilt + g
-        put(0, yy, 1 + i, BILL if i < 4 else BILLD)
+        hput(0, yy, 1 + i, BILL if i < 4 else BILLD)
         if 1 <= i <= 2:
-            put(1, yy, 1 + i, BILLD, only_empty=True); put(-1, yy, 1 + i, BILLD, only_empty=True)
+            hput(1, yy, 1 + i, BILLD, only_empty=True); hput(-1, yy, 1 + i, BILLD, only_empty=True)
     for i in range(4):                                    # lower mandible (gapes wide for the wail)
-        put(0, hy - 1 - i // 4 + htilt - g, 1 + i, BILLD)
+        hput(0, hy - 1 - i // 4 + htilt - g, 1 + i, BILLD)
     if gape:                                               # a bright pink TONGUE in the open wail
         for i in range(4):
-            put(0, hy - 1 + htilt, 2 + i, TONGUE if i < 3 else TONGUED)
+            hput(0, hy - 1 + htilt, 2 + i, TONGUE if i < 3 else TONGUED)
     for s2 in (1, -1):                                     # BIG bright-red loon eyes (the signature) + a hot glint
-        put(s2 * 2, hy + 1 + htilt, 0, EYE); put(s2 * 2, hy + 1 + htilt, 1, EYE)
-        put(s2 * 2, hy + 2 + htilt, 0, EYE)
-        put(s2 * 2 + s2, hy + 2 + htilt, 1, EYEH)
-    # BIG DJ HEADPHONES: a vivid orange band over the crown + glowing cyan ear-cups
-    for s2 in (1, -1):
-        ellip(s2 * 3, hy + htilt, -1, 1.5, 2.0, 1.6, HP)
-        put(s2 * 3, hy + htilt, 0, CYAN); put(s2 * 3, hy + htilt, 1, CYAN); put(s2 * 3, hy - 1 + htilt, 0, CYAN)
-    for x in range(-3, 4):                                 # the chunky band arcing over the head
+        hput(s2 * 2, hy + 1 + htilt, 0, EYE); hput(s2 * 2, hy + 1 + htilt, 1, EYE)
+        hput(s2 * 2, hy + 2 + htilt, 0, EYE)
+        hput(s2 * 2 + s2, hy + 2 + htilt, 1, EYEH)
+    for s2 in (1, -1):                                     # BIG DJ HEADPHONES: orange band + glowing cyan cups
+        hellip(s2 * 3, hy + htilt, -1, 1.5, 2.0, 1.6, HP)
+        hput(s2 * 3, hy + htilt, 0, CYAN); hput(s2 * 3, hy + htilt, 1, CYAN); hput(s2 * 3, hy - 1 + htilt, 0, CYAN)
+    for x in range(-3, 4):
         yb = hy + 4 + htilt - abs(x) // 2
-        put(x, yb, -1, HPBAND); put(x, yb, -2, HPBAND, only_empty=True)
-    for x in range(-2, 3):                                 # white necklace front-and-center too
+        hput(x, yb, -1, HPBAND); hput(x, yb, -2, HPBAND, only_empty=True)
+    # TURN THE HEAD: rotate the cluster around the neck axis (0, zc) by head_yaw, then merge onto the body
+    ca, sa = math.cos(head_yaw), math.sin(head_yaw)
+    zc = -1.0
+    for (hx, hyv, hz), hc in Hd.items():
+        dz = hz - zc
+        put(int(round(hx * ca - dz * sa)), hyv, int(round(hx * sa + dz * ca + zc)), hc)
+    for x in range(-2, 3):                                 # white necklace front-and-center (body, stays put)
         put(x, 9, 0, WHT, only_empty=True)
 
     def wing(shoulder, target):                            # a tapering feathered wing arm
@@ -2322,22 +2329,17 @@ def generate_critters(art_dir):
     save(render(shade(build_loon(0)), math.radians(62), math.radians(22), out=128, scale=2.6), "loon.png")
     save(render(shade(build_loon(2)), math.radians(62), math.radians(22), out=128, scale=2.6), "loon_bob.png")
     # LUCIEN frames: 7 poses + a GAPE (beak open + pink tongue) + 2 head-turn yaws (subtle sway)
-    _lframes = [("scratch_r_d", False, 22), ("scratch_r_u", False, 22), ("scratch_l_d", False, 22),
-                ("scratch_l_u", False, 22), ("tap", False, 22), ("wing_up", False, 22), ("drop", False, 22),
-                ("scratch_r_d", True, 22), ("scratch_r_d", False, 13), ("scratch_r_d", False, 31)]
-    _ldimgs = [render(shade(build_lucien_dj(_po, gape=_g)), math.radians(_y), math.radians(30), out=180, scale=3.0)
-               for (_po, _g, _y) in _lframes]
+    _lframes = [("scratch_r_d", False, 22, 0.0), ("scratch_r_u", False, 22, 0.0), ("scratch_l_d", False, 22, 0.0),
+                ("scratch_l_u", False, 22, 0.0), ("tap", False, 22, 0.0), ("wing_up", False, 22, 0.0), ("drop", False, 22, 0.0),
+                ("scratch_r_d", True, 22, 0.0), ("scratch_r_u", False, 22, 0.62), ("scratch_l_u", False, 22, -0.62)]
+    _ldimgs = [render(shade(build_lucien_dj(_po, gape=_g, head_yaw=_hy)), math.radians(_y), math.radians(30), out=180, scale=3.0)
+               for (_po, _g, _y, _hy) in _lframes]
     _ldbb = None                                            # p0-6 routine, p7 gape, p8/p9 head-turn L/R
     for _im in _ldimgs:
         _b = _im.getbbox()
         if _b: _ldbb = _b if _ldbb is None else (min(_ldbb[0], _b[0]), min(_ldbb[1], _b[1]), max(_ldbb[2], _b[2]), max(_ldbb[3], _b[3]))
     _ldbb = (max(0, _ldbb[0] - 4), max(0, _ldbb[1] - 4), min(180, _ldbb[2] + 4), min(180, _ldbb[3] + 4))
     for _i, _im in enumerate(_ldimgs): save(_im.crop(_ldbb), "lucien_dj_p%d.png" % _i)
-    # p10: a PROFILE beat — Lucien turned side-on over the decks (own crop so it won't shift the front frames)
-    _lprof = render(shade(build_lucien_dj("scratch_r_u", gape=False)), math.radians(68), math.radians(30), out=200, scale=3.0)
-    _pb = _lprof.getbbox()
-    if _pb: _lprof = _lprof.crop((max(0, _pb[0] - 4), max(0, _pb[1] - 4), min(200, _pb[2] + 4), min(200, _pb[3] + 4)))
-    save(_lprof, "lucien_dj_p10.png")
     # THE MAGIC BREAD + DONNI the speedboat, as voxel sprites (consistent pixel-art style)
     save(render(shade(build_bread()), math.radians(24), math.radians(36), out=128, scale=5.5), "magicbread.png")
     save(render(shade(build_boat()), math.radians(180), math.radians(46), out=160, scale=3.4), "donni.png")

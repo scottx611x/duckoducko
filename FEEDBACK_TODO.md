@@ -439,3 +439,12 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - LUCIEN art UPGRADE (Scott flip-flopped then: 'sorry I like it try it out'): fuller bright WHITE CHEST (reads as a proper loon, black back/white front, not a dark blob), head held PROUD on a longer neck, glossy sheen + hot specular highlight, crisper checkered back, neater SHORTER bill (range 6). Big DJ cans KEPT. build_lucien_dj + (portrait unchanged this round).
 - PROFILE frame: Scott wanted a profile view in his DJ routine. Added lucien_dj_p10 rendered at 68deg (own bbox crop so it doesnt shift the front frames); Main.gd loads 11 frames + LUCIEN_SET routine includes idx 10 twice for a side-on beat.
 - BONGO facing: Scott 'isnt friggin locked looking right?' -> _draw_boss_bongo now flips horizontally to FACE the duck (face = 1 if duck_x>=boss.x else -1 via draw_set_transform). Verified L/R.
+
+
+## 2026-06-30 — badge fix + hen text + menu flap/preen + Lucien HEAD-TURN (v1.16.7 pending)
+- Codex NEW badge was under the SHOP button (drawn before it + positioned too high overlapping shop bottom). Now drawn AFTER the buttons (on top) + seated at the codex row vertical-center. 
+- Hens all said 'trimmer + nimbler, the clever hen' -> added HEN_TAG per-species dict; select subtitle uses HEN_TAG.get(species). Each hen now has her own tagline.
+- Menu ducks periodically FLAP/PREEN on their own: idle_anim timer in _process fires select_flap_t/select_preen_t (select) or menu_flap_t/menu_preen_t (title) every ~3.5-7.5s; draws add a hop+wing-arcs (flap) and a head-dip+nibble (preen).
+- LUCIEN head-turn (Scott: the one whole-model profile frame is TRASH; wants his HEAD alone turning): refactored build_lucien_dj with head_yaw param — head/bill/eyes/crest/cans built into a temp dict, ROTATED around the neck axis, merged onto the fixed body+console. p8/p9 are now real head-turns (head_yaw ±0.62); removed the trash p10 profile.
+
+- v1.16.7 SHIPPED: all 4 (codex badge / per-species hen tags / menu duck flap+preen / Lucien head-turn frames).

@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.6"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.7"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -703,6 +703,11 @@ var lucien_scratch_t := -10.0   # LUCIEN drags the record with his wing on a tap
 var select_flap_t := -10.0      # a happy WING FLAP on the select duck (fires every few taps)
 var select_tap_n := 0           # taps since the last flap
 var select_flap_at := 3         # ...flap after this many (re-rolled each time)
+var select_preen_t := -10.0     # the select duck PREENS (head-tuck + nibble)
+var menu_flap_t := -10.0        # the title-menu duck's periodic wing flap
+var menu_preen_t := -10.0       # ...and its preen
+var idle_anim_t := 0.0          # countdown to the next idle flap/preen on a menu duck
+var idle_anim_next := 4.0
 var spin_prev_x := 0.0
 var spin_prev_y := 0.0
 var species := "mallard"        # which roster duck is in play
@@ -949,6 +954,16 @@ const DUCK_TAG := {
 	"harlequin": "the painted whitewater duck", "eider": "the gentle giant king", "rubberduck": "the squeak heard 'round the pond",
 	"golden": "the myth, the legend, the bird", "disco": "the boogie incarnate", "shadow": "the drake from beyond",
 	"teal": "small, fast, already gone", "merganser": "the sleek fish-torpedo", "goldeneye": "the golden-eyed diver",
+}
+# per-species HEN taglines — the females are NOT all "the clever hen"; each has her own understated character
+const HEN_TAG := {
+	"mallard": "the clever hen — she runs the river", "wood": "the teardrop-eyed hen",
+	"bufflehead": "the quick little drab diver", "shoveler": "the spoonbill's shrewd half",
+	"pintail": "the slender brown arrow", "hoodie": "the cinnamon-crested hen",
+	"ruddy": "the plain, fearless stiff-tail", "canvasback": "the soft-grey racer",
+	"harlequin": "the subtle whitewater hen", "eider": "the barred brown queen",
+	"golden": "the myth's better half", "teal": "small, brown, already gone",
+	"merganser": "the rusty-headed fisher", "goldeneye": "the chocolate-headed diver",
 }
 const DUCK_LORE := {
 	"mallard": "The default duck. The bird on the box. Green head, white collar, an opinion about bread he'll share whether you ask or not. He's not the fastest or the floatiest — he's the one every other duck is secretly measured against, and he knows it.",
@@ -1285,7 +1300,7 @@ func _ready() -> void:
 		tex_loon_bob = load("res://art/loon_bob.png")
 	if ResourceLoader.exists("res://art/lucien_dj_p0.png"):   # 10 frames: 7-pose routine + gape(7) + head-turn L/R(8,9)
 		tex_lucien_dj = []
-		for _li in 11:
+		for _li in 10:
 			tex_lucien_dj.append(load("res://art/lucien_dj_p%d.png" % _li))
 	if ResourceLoader.exists("res://art/magicbread.png"):
 		tex_bread = load("res://art/magicbread.png")
@@ -5100,6 +5115,18 @@ func _process(delta: float) -> void:
 	if in_menu:
 		menu_spin += menu_spin_vel * delta
 		menu_spin_vel = move_toward(menu_spin_vel, 0.0, delta * 10.0)
+	if (in_menu or in_select) and not booting and not in_settings and not in_shop:   # ducks idly flap / preen on their own
+		idle_anim_t += delta
+		if idle_anim_t >= idle_anim_next:
+			idle_anim_t = 0.0
+			idle_anim_next = randf_range(3.5, 7.5)
+			var _preen := randf() < 0.45
+			if in_select:
+				if _preen: select_preen_t = anim_t
+				else: select_flap_t = anim_t
+			else:
+				if _preen: menu_preen_t = anim_t
+				else: menu_flap_t = anim_t
 	if paused:
 		pause_yaw += delta * 0.5                    # the pause duck idles on its turntable
 		if pause_line == "" or anim_t - pause_line_t > 4.5:
@@ -9014,7 +9041,7 @@ func _draw_loon(center: Vector2, s: float, bob_t: float) -> void:
 
 # LUCIEN at his VOXEL DJ decks — the whole rig is one voxel model. He sways left/right working the
 # booth, and cycles his scratch frames (slow idle, rapid on a tap).
-const LUCIEN_SET := [8, 0, 1, 9, 0, 1, 7, 0, 2, 3, 10, 2, 3, 4, 8, 0, 10, 9, 7, 5, 6, 6, 5, 4]   # routine w/ head-turns(8/9), gape(7), PROFILE(10)
+const LUCIEN_SET := [8, 0, 1, 9, 0, 1, 7, 0, 2, 3, 2, 3, 4, 8, 0, 9, 7, 5, 6, 6, 5, 4]   # routine w/ HEAD-TURNS(8/9) + gape(7)
 func _draw_lucien_booth(center: Vector2) -> void:
 	if tex_lucien_dj.size() < 7:
 		_draw_loon(center, 3.0, anim_t)        # safety fallback
@@ -11752,13 +11779,20 @@ func _draw_menu() -> void:
 		# beak opens AT the current spin angle — no more snapping to a frozen front pose
 		var quacking := anim_t - menu_quack_t < 0.45
 		var hf = _spin_frame(star, anim_t * 0.55 + menu_spin, quacking)
-		var hpos := Vector2(cx, 448.0 + sin(anim_t * 2.5) * 10.0)
+		var mflap := clampf(1.0 - (anim_t - menu_flap_t) / 0.4, 0.0, 1.0)     # idle WING FLAP
+		var mpreen := clampf(1.0 - (anim_t - menu_preen_t) / 0.9, 0.0, 1.0)   # idle PREEN (head-dip + nibble)
+		var mhx := sin(mpreen * PI * 7.0) * 5.0 * (1.0 if mpreen > 0.0 else 0.0)
+		var hpos := Vector2(cx + mhx, 448.0 + sin(anim_t * 2.5) * 10.0 - sin(mflap * PI) * 20.0 + sin(mpreen * PI) * 12.0)
 		var _wy := 498.0                                # a stable waterline under the bobbing hero
 		_fill_ellipse(Vector2(cx, _wy), 48.0, 12.0, Color(0.0, 0.0, 0.05, 0.18))   # soft contact shadow
 		for _rr in range(2):                            # gentle pond ripples grounding him on the river
 			var _rp := fmod(anim_t * 0.4 + _rr * 0.5, 1.0)
 			draw_arc(Vector2(cx, _wy), 18.0 + _rp * 44.0, 0.0, TAU, 30, Color(0.72, 0.86, 1.0, (1.0 - _rp) * 0.16), 2.0)
 		_blit_centered(hf, hpos, 4.6)
+		if mflap > 0.0:                                # flapping wing-strokes sweeping off both sides
+			var mfa := sin(mflap * PI * 3.0) * 0.5 + 0.5
+			for _ms in [-1.0, 1.0]:
+				draw_arc(hpos + Vector2(_ms * 66.0, -18.0), 26.0 + mfa * 16.0, PI * (0.2 if _ms > 0 else 0.8), PI * (0.8 if _ms > 0 else 1.4), 12, Color(1, 1, 1, 0.5 * mflap), 4.0)
 		var mwl := _worn_list(); mwl.reverse()         # BODY first, then HEAD on top (hat over the shell — no clipping)
 		for wid in mwl:                                # the menu hero wears your full outfit (turntable-matched)
 			_blit_centered(_wear3d_spin(wid, anim_t * 0.55 + menu_spin), hpos, 4.6)
@@ -11785,15 +11819,16 @@ func _draw_menu() -> void:
 		draw_line(_gc + Vector2(cos(_ga), sin(_ga)) * 4.0, _gc + Vector2(cos(_ga), sin(_ga)) * 8.5, Color(1.0, 0.94, 0.8, 0.95), 2.5)
 	draw_circle(_gc, 5.5, Color(1.0, 0.94, 0.8, 0.95))
 	draw_circle(_gc, 2.3, Color(0.09, 0.12, 0.17))
-	# a "NEW!" badge on the codex button when undiscovered entries await
-	var newc := _codex_new_count()
-	if newc > 0:
-		var bp := MENU_CODEX_BTN.position + Vector2(MENU_CODEX_BTN.size.x - 14.0, 2.0)
-		var npulse := 0.6 + 0.4 * sin(anim_t * 5.0)
-		draw_circle(bp, 13.0, Color(1.0, 0.32, 0.3, npulse))
-		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_draw_button(MENU_DUCKS_BTN, "DUCKS", 24, true)
 	_draw_button(MENU_SHOP_BTN, "SHOP", 24, true)
+	# a "NEW!" badge on the codex button — drawn LAST (on top of the buttons) + seated ON the codex row,
+	# clear of the SHOP button above it
+	var newc := _codex_new_count()
+	if newc > 0:
+		var bp := MENU_CODEX_BTN.position + Vector2(MENU_CODEX_BTN.size.x - 14.0, MENU_CODEX_BTN.size.y * 0.5)
+		var npulse := 0.6 + 0.4 * sin(anim_t * 5.0)
+		draw_circle(bp, 12.0, Color(1.0, 0.32, 0.3, npulse))
+		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 944), "DUCKODUCKO beta · made by scott", 12, Color(1, 1, 1, 0.32),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
@@ -12368,13 +12403,16 @@ func _draw_select() -> void:
 	var psc: float = 6.9 * duck.get("size", 1.0) * (0.9 if is_hen else 1.0)
 	if unlocked:
 		var flap := clampf(1.0 - (anim_t - select_flap_t) / 0.4, 0.0, 1.0)   # an excited WING FLAP
+		var preen := clampf(1.0 - (anim_t - select_preen_t) / 0.9, 0.0, 1.0)   # a quiet PREEN (head-tuck + nibble)
 		var fbob := bob - sin(flap * PI) * 22.0 * (1.0 if flap > 0.0 else 0.0)   # little hop on the flap
-		_blit_modulated(fr, Vector2(cx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
+		fbob += sin(preen * PI) * 12.0                  # ...dips DOWN to groom on a preen
+		var pnx := sin(preen * PI * 7.0) * 5.0 * (1.0 if preen > 0.0 else 0.0)   # quick side-to-side nibble
+		_blit_modulated(fr, Vector2(cx + pnx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
 		var wl := _worn_list(); wl.reverse()           # BODY first, then HEAD on top (hat over the life jacket)
 		for wid in wl:                                 # preview the duck in your full outfit
-			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx, 276.0 + fbob), psc)
+			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx + pnx, 276.0 + fbob), psc)
 			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx, 276.0 + fbob), psc)
+				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx + pnx, 276.0 + fbob), psc)
 		if flap > 0.0:                                 # flapping wing-strokes sweeping off both sides
 			var fa := sin(flap * PI * 3.0) * 0.5 + 0.5
 			for s in [-1.0, 1.0]:
@@ -12405,7 +12443,7 @@ func _draw_select() -> void:
 	var show_secret: bool = is_secret and not unlocked
 	var disp_name: String = ("? ? ?" if show_secret else ("HEN " + str(duck.name) if is_hen else str(duck.name)))
 	_otext(Vector2(0, 422.0), disp_name, 34, Color(1.0, 0.78, 0.9) if is_hen else Color.WHITE, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 8)
-	_otext(Vector2(0, 454.0), ("trimmer + nimbler, the clever hen" if is_hen else str(duck.trait)), 20, Color(1, 0.85, 0.45, 0.85) if show_secret else Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	_otext(Vector2(0, 454.0), (str(HEN_TAG.get(duck.species, "the understated hen")) if is_hen else str(duck.trait)), 20, Color(1, 0.85, 0.45, 0.85) if show_secret else Color(1, 1, 1, 0.75), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 	# the ♀ SEX toggle — run any drake as his hen (♀ glyph since the font lacks the symbol)
 	if not is_secret and sp != "hen":
 		var hb := SEL_HEN_BTN
