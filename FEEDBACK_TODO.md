@@ -508,3 +508,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Committed locally: `36f7561` (v1.17.0 work). Web bundle exported + boots locally (HTTP 200).
 - [x] RELEASED by Scott's go-ahead (2026-07-01 eve): pushed to main, v1.17.0 live — GH release (APK + web zip) + Pages deploy verified (site 200, assets present). https://duckoducko.scott-ouellette.com
 - Save backed up to scratchpad before today's sim batches; bot runs no longer touch the save going forward.
+
+## ➕ PLAYTEST (Scott, 2026-07-01 eve, on v1.17.0)
+- [x] **BIG DAY unexplained** v1.17.1 — tap now opens an explainer card (sun + "one river, dealt fresh each morning" + today's best + FLY TODAY'S RIVER button; tap-off backs out). Verified via --bigdayshot.
+- [x] **Lilypads distracting** v1.17.1 — scenery now sparse (interval 1.0-1.9s, hard cap 9), hugs the banks (middle belongs to gameplay), 20% smaller, sunk cool+translucent (0.88a), never during bosses, lily/lilyflower weights cut ~35-50%. Verified via --rivershot: center channel clear.
+- [x] **Laggy** v1.17.1 — water FX gated to gameplay screens only (menus back to pre-1.17 cost), streaks 14->9, foam 14->10 segs, bubbles 3->2, streaks/foam+shimmer all skipped during boss fights (arena tint owns those frames), scenery capped. 🟡 feel check on Scott's phone.

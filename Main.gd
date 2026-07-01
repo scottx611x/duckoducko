@@ -1122,6 +1122,8 @@ var bigday := false
 var bigday_seed := 0
 var bigday_best := 0
 var bigday_date := ""
+var bigday_modal := false       # the "what IS this?" card (Scott: mode shipped unexplained)
+const BIGDAY_PLAY_BTN := Rect2(120.0, 560.0, 300.0, 56.0)
 
 func _today_str() -> String:
 	var d := Time.get_date_dict_from_system()
@@ -1257,13 +1259,13 @@ func _update_river_events(delta: float) -> void:
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
-	[["env_lily_0", 3.0], ["env_lily_1", 2.4], ["env_lilyflower", 1.0], ["env_duckweed_0", 1.4], ["env_stone_0", 0.8], ["env_snag", 0.5], ["env_sailboat", 0.10], ["env_bottle", 0.08], ["env_raft", 0.06]],
-	[["env_lily_0", 2.2], ["env_lily_1", 2.0], ["env_lilyflower", 1.4], ["env_duckweed_1", 1.2], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
-	[["env_snag", 2.6], ["env_duckweed_0", 2.2], ["env_duckweed_1", 1.8], ["env_stone_0", 1.0], ["env_lily_0", 0.7], ["env_bottle", 0.12]],
+	[["env_lily_0", 2.0], ["env_lily_1", 1.6], ["env_lilyflower", 0.5], ["env_duckweed_0", 1.4], ["env_stone_0", 0.8], ["env_snag", 0.5], ["env_sailboat", 0.10], ["env_bottle", 0.08], ["env_raft", 0.06]],
+	[["env_lily_0", 1.5], ["env_lily_1", 1.3], ["env_lilyflower", 0.7], ["env_duckweed_1", 1.2], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
+	[["env_snag", 2.6], ["env_duckweed_0", 2.2], ["env_duckweed_1", 1.8], ["env_stone_0", 1.0], ["env_lily_0", 0.5], ["env_bottle", 0.12]],
 	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_duckweed_0", 0.6], ["env_sailboat", 0.14], ["env_raft", 0.10]],
-	[["env_lily_0", 2.0], ["env_lily_1", 1.8], ["env_lilyflower", 1.6], ["env_stone_1", 1.0], ["env_duckweed_1", 1.0], ["env_sailboat", 0.12], ["env_bottle", 0.08]],
-	[["env_lily_0", 2.6], ["env_lilyflower", 2.2], ["env_duckweed_0", 2.4], ["env_duckweed_1", 2.0], ["env_snag", 1.0], ["env_raft", 0.10]],
-	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 1.2], ["env_snag", 0.8], ["env_duckweed_1", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
+	[["env_lily_0", 1.4], ["env_lily_1", 1.2], ["env_lilyflower", 0.8], ["env_stone_1", 1.0], ["env_duckweed_1", 1.0], ["env_sailboat", 0.12], ["env_bottle", 0.08]],
+	[["env_lily_0", 1.7], ["env_lilyflower", 1.1], ["env_duckweed_0", 2.0], ["env_duckweed_1", 1.7], ["env_snag", 1.0], ["env_raft", 0.10]],
+	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 0.8], ["env_snag", 0.8], ["env_duckweed_1", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
 ]
 var golden_t := 0.0              # GOLDEN HOUR: warm sunset wash remaining
 var golden_next := 38.0          # countdown to the next golden hour
@@ -1827,6 +1829,13 @@ func _ready() -> void:
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_river_%d.png" % theme_idx)
+		get_tree().quit()
+	elif "--bigdayshot" in OS.get_cmdline_user_args():
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		bigday_modal = true; bigday_best = 4210; bigday_date = _today_str()
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_bigday.png")
 		get_tree().quit()
 	elif "--forkshot" in OS.get_cmdline_user_args():
 		# FORK verification: the split island + signs on screen
@@ -3068,6 +3077,7 @@ func _pick_menu_flotsam() -> void:
 func _enter_menu() -> void:
 	in_menu = true
 	bigday = false                                  # Big Day ends at the menu (tap it again to retry today)
+	bigday_modal = false
 	in_select = false
 	in_shop = false
 	in_shrine = false
@@ -4701,6 +4711,19 @@ func _on_press(pos: Vector2) -> void:
 				_sfx("unlock")
 			return
 		_sfx("click")
+		if bigday_modal:                       # the explainer card owns the tap
+			if BIGDAY_PLAY_BTN.grow(8.0).has_point(pos):
+				bigday_modal = false
+				bigday = true
+				bigday_date = _today_str()
+				var ds := Time.get_date_dict_from_system()
+				bigday_seed = ds.year * 10000 + ds.month * 100 + ds.day
+				seed(bigday_seed)
+				_flash("BIG DAY — today's river", 2.0)
+				start_game()
+			else:
+				bigday_modal = false           # tap anywhere else: back to the menu
+			return
 		if MENU_DUCKS_BTN.has_point(pos):
 			_open_select()
 		elif MENU_SHOP_BTN.has_point(pos):
@@ -4712,13 +4735,7 @@ func _on_press(pos: Vector2) -> void:
 		elif MENU_SETTINGS_BTN.has_point(pos):
 			_open_settings()
 		elif MENU_BIGDAY_BTN.has_point(pos):
-			bigday = true
-			bigday_date = _today_str()
-			var ds := Time.get_date_dict_from_system()
-			bigday_seed = ds.year * 10000 + ds.month * 100 + ds.day
-			seed(bigday_seed)
-			_flash("BIG DAY — today's river", 2.0)
-			start_game()
+			bigday_modal = true                # explain first, fly second
 		elif anim_t - menu_enter_t > 0.35:
 			bigday = false
 			start_game()                       # grace: a stray tap can't insta-start
@@ -5522,10 +5539,11 @@ func _update_play(delta: float) -> void:
 				_collect_trash(pr)             # folds into the queue (orbit/sling/economy all run off this)
 	props = props.filter(func(pr): return pr.y < VIEW.y + 40.0 and not pr.get("got", false))
 
-	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide)
+	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide).
+	# CALM rules (Scott: "lilypads distracting"): sparse, bank-hugging, capped, never during bosses.
 	env_timer -= delta
-	if env_timer <= 0.0 and not tex_env.is_empty():
-		env_timer = randf_range(0.55, 1.15)
+	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 9:
+		env_timer = randf_range(1.0, 1.9)
 		var tbl: Array = ENV_TABLE[theme_idx]
 		var tot := 0.0
 		for entry in tbl:
@@ -5539,8 +5557,8 @@ func _update_play(delta: float) -> void:
 				roll -= float(entry[1])
 				if roll <= 0.0:
 					var rooted: bool = String(entry[0]) in ENV_ROOTED
-					# rooted things shelve near the banks (lanes stay readable); floaters roam wider
-					var margin: float = randf_range(10.0, 96.0) if rooted else randf_range(30.0, 170.0)
+					# everything shelves near the banks — the middle of the river belongs to GAMEPLAY
+					var margin: float = randf_range(8.0, 54.0) if rooted else randf_range(20.0, 100.0)
 					var ex: float = (BANK_W + margin) if randf() < 0.5 else (VIEW.x - BANK_W - margin)
 					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
 						"phase": randf() * TAU, "flip": randf() < 0.5})
@@ -10506,7 +10524,8 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, VIEW), base * tint_new)
 
 	# drifting shimmer layer: the same water, half-phase, breathing alpha
-	if has_art:
+	# (skipped mid-boss: the arena tint owns those frames — web frame budget)
+	if has_art and boss == null:
 		var t2 := tex_water.get_size()
 		var off2 := fmod(scroll * 1.22 + 31.0, t2.y)
 		var y2 := -t2.y + off2
@@ -10522,7 +10541,9 @@ func _draw() -> void:
 	if has_art:
 		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.26, 0.34, 0.52, 0.26), Color(0.11, 0.55, 0.36, 0.28), Color(0.09, 0.17, 0.45, 0.32)][theme_idx]
 		draw_rect(Rect2(Vector2.ZERO, VIEW), _wash)
-		_draw_living_water(scroll)
+		# living-water FX are GAMEPLAY-only (menus don't need streaks/foam — web frame budget)
+		if not (in_menu or in_select or in_shop or in_stats or in_codex or in_shrine or in_jukebox):
+			_draw_living_water(scroll)
 	# reed-lined banks frame the river (they take the theme wash too)
 	if has_art and tex_bank_l != null:
 		var bs := tex_bank_l.get_size()
@@ -10569,9 +10590,10 @@ func _draw() -> void:
 			continue
 		var esway: float = 0.0 if es.rooted else sin(anim_t * 0.9 + es.phase) * 0.09
 		var ebob: float = 0.0 if es.rooted else sin(anim_t * 1.6 + es.phase) * 1.6
-		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-2.0 if es.flip else 2.0, 2.0))
+		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-1.6 if es.flip else 1.6, 1.6))
 		var esz: Vector2 = etex.get_size()
-		draw_texture_rect(etex, Rect2(-esz * 0.5, esz), false)
+		# sunk INTO the water a touch (cool + translucent) so it reads background, never pickup
+		draw_texture_rect(etex, Rect2(-esz * 0.5, esz), false, Color(0.86, 0.93, 0.96, 0.88))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	_draw_river_events()
@@ -11765,9 +11787,12 @@ func _draw_living_water(scroll: float) -> void:
 	# deep channel: the middle runs darker (subtle, it's depth not a stripe)
 	var chw := VIEW.x * 0.30
 	draw_rect(Rect2(VIEW.x * 0.5 - chw * 0.5, 0, chw, VIEW.y), Color(0.03, 0.07, 0.16, 0.10))
+	# boss fights bring their own mood (arena tint/motes) — skip the flow FX there, save the draws
+	if boss != null:
+		return
 	# current streaks: thin elongated highlights that slide downstream a touch faster than the
 	# water tile — the river visibly FLOWS even when nothing else is on screen
-	for i in 14:
+	for i in 9:
 		var sx: float = BANK_W + 24.0 + fposmod(i * 197.31, VIEW.x - BANK_W * 2.0 - 48.0)
 		var slen: float = 34.0 + fposmod(i * 61.7, 52.0)
 		var sy: float = fposmod(i * 331.7 + scroll * (1.12 + fposmod(i * 0.13, 0.22)), VIEW.y + slen * 2.0) - slen
@@ -11778,12 +11803,12 @@ func _draw_living_water(scroll: float) -> void:
 	for side in 2:
 		var bx: float = BANK_W if side == 0 else VIEW.x - BANK_W
 		var pts := PackedVector2Array()
-		var seg := 14
+		var seg := 10
 		for k in seg + 1:
 			var yy := k * VIEW.y / seg
 			pts.append(Vector2(bx + sin(yy * 0.045 + anim_t * 1.7 + side * 3.1) * 2.4, yy))
 		draw_polyline(pts, Color(0.92, 0.98, 1.0, 0.16 + 0.05 * sin(anim_t * 2.2 + side)), 2.0)
-		for k in 3:
+		for k in 2:
 			var by2 := fposmod(k * 353.0 + side * 130.0 + scroll * 0.9, VIEW.y)
 			draw_circle(Vector2(bx + (4.0 if side == 0 else -4.0) + sin(anim_t + k) * 2.0, by2), 1.6,
 				Color(1, 1, 1, 0.18 + 0.1 * sin(anim_t * 3.0 + k * 2.0)))
@@ -12391,6 +12416,40 @@ func _draw_menu() -> void:
 		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 944), "DUCKODUCKO beta · made by scott", 12, Color(1, 1, 1, 0.32),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
+	# BIG DAY explainer card — on top of everything (a mode nobody explains isn't a mode)
+	if bigday_modal:
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.03, 0.07, 0.72))
+		var card := Rect2(56.0, 296.0, VIEW.x - 112.0, 356.0)
+		draw_rect(card.grow(4.0), Color(0.32, 0.22, 0.10))
+		draw_rect(card, Color(0.10, 0.14, 0.22))
+		draw_rect(card, Color(1.0, 0.85, 0.3, 0.5), false, 2.0)
+		# rising sun over the card title
+		var sunc := Vector2(cx, card.position.y + 44.0)
+		draw_circle(sunc, 15.0, Color(1.0, 0.85, 0.3))
+		for sr in 7:
+			var sa := PI + sr * PI / 6.0
+			draw_line(sunc + Vector2(cos(sa), sin(sa)) * 20.0, sunc + Vector2(cos(sa), sin(sa)) * 27.0, Color(1.0, 0.85, 0.3, 0.8), 2.2)
+		draw_rect(Rect2(card.position.x + 16.0, sunc.y + 4.0, card.size.x - 32.0, 8.0), Color(0.16, 0.30, 0.44))
+		_otext(Vector2(card.position.x, card.position.y + 92.0), "BIG DAY", 34, Color(1.0, 0.9, 0.45), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		var lines := [
+			"a birder's dawn-to-dusk challenge:",
+			"ONE river, dealt fresh each morning.",
+			"",
+			"today's date picks the bosses, the",
+			"shrine, every draft, every fork —",
+			"fly it as many times as you like.",
+		]
+		for li in lines.size():
+			_otext(Vector2(card.position.x, card.position.y + 128.0 + li * 22.0),
+				lines[li], 16, Color(0.92, 0.95, 1.0, 0.9), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		var bd_line: String = ("today's best: %d ft — beat it!" % bigday_best) \
+			if (bigday_best > 0 and bigday_date == _today_str()) else "your best today goes on the board."
+		_otext(Vector2(card.position.x, card.position.y + 128.0 + 6 * 22.0),
+			bd_line, 15, Color(1.0, 0.88, 0.5), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		_draw_button(BIGDAY_PLAY_BTN, "FLY TODAY'S RIVER", 20, true)
+		_otext(Vector2(card.position.x, card.end.y - 12.0), "(tap anywhere else to go back)",
+			13, Color(1, 1, 1, 0.45), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 # exact vertical centering (baseline math) — draw_string y is a BASELINE, and
 # guessed offsets drift across platforms/fonts
