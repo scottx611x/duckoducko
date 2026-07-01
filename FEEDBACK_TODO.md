@@ -503,3 +503,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - [x] **Heron art enrichment** — real voxel heron: 16-frame codex turntable (wired into COMPENDIUM) + 2 top-down strike-dive frames replacing the old 4-frame side-view blob in gameplay. Gerald's plumage palette = same species family.
 - [x] **Snapz maw-facing** — open-maw turntable now runs through the WIND-UP too (warn/snap/stuck) and the maw points AT the strike lane while he closes on it, then glares at the duck once he's over it. 🟡 (feel = Scott's call, per the no-retune rule this changes ART/READ only, not timings)
 - [x] **BOTSIM SAVE POLLUTION FIX** — bot runs were banking feathers + writing run_history/best_m into the REAL save on every batch death. Now sim runs persist nothing. (Save backed up before today's batches.)
+
+### 🚢 RELEASE STATUS (2026-07-01 eve)
+- Committed locally: `36f7561` (v1.17.0 work). Web bundle exported + boots locally (HTTP 200).
+- ❗ AWAITING SCOTT (publish actions are his call): `git push` then `tools/release.sh v1.17.0`.
+- Save backed up to scratchpad before today's sim batches; bot runs no longer touch the save going forward.
