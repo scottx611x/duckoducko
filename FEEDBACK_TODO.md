@@ -428,3 +428,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 ## 2026-06-30 — Lucien 808 bassline + beat-drop (v1.16.4); airpods REVERTED
 - Scott reversed the pass-2 Lucien (airpods/taller/short-bill): 'this art is worse, go back, big DJ cans are fine.' Reverted voxel_duck.py via git checkout -> big-cans Lucien restored + regenerated. LESSON: cans were never the problem; the taller+slim+airpods combo read worse.
 - NEW: tapping Lucien (store + boon draft) plays an 808 BASSLINE stepped note-by-note (_lucien_808 cycles LUCIEN_808 pitches via the djdrop sfx) so repeated taps build a riff. Every full bar (8 taps) + a periodic in-run timer (drop_t ~24-34s, not during boss/tut/draft) triggers party_t -> a BEAT DROP: the duckling brood goes FERAL in _draw_ducklings (x-jitter + frantic bounce + head-bang roll wiggle + rainbow hsv tint) + 'LUCIEN DROPS THE BEAT' flash.
+
+
+## 2026-06-30 — REVERT beat-drop feature (v1.16.5)
+- Scott: 'hate this feature revert Lucien dropping the beat.' Fully removed the v1.16.4 808-bassline + periodic beat-drop: LUCIEN_808/_lucien_808, party_t, drop_t, the periodic drop timer, and the duckling feral animation (jitter/bounce/roll/rainbow) in _draw_ducklings. Tapping Lucien is back to the plain djdrop scratch. 0 refs remain.
+- Art upgrade for Lucien in progress (voxel_duck.py, staged) — showing Scott renders for approval before shipping (keeps big cans; white chest + prouder head + glossy + shorter bill). NOT in this release.
