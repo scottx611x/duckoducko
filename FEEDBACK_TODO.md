@@ -448,3 +448,9 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - LUCIEN head-turn (Scott: the one whole-model profile frame is TRASH; wants his HEAD alone turning): refactored build_lucien_dj with head_yaw param — head/bill/eyes/crest/cans built into a temp dict, ROTATED around the neck axis, merged onto the fixed body+console. p8/p9 are now real head-turns (head_yaw ±0.62); removed the trash p10 profile.
 
 - v1.16.7 SHIPPED: all 4 (codex badge / per-species hen tags / menu duck flap+preen / Lucien head-turn frames).
+
+
+## 2026-06-30 — duckling-hat bank fix + dev boss icons + BONGO tongue (v1.16.8)
+- Duckling WEARABLES fucked up on turning (+ during the upgrade draft): the hat used _pick_wear3d (already banked via duck_vx) AND got the duckling roll transform = DOUBLE-BANK/detach. Fix: _wear3d_idle() returns the FRONT frame; ducklings bank via the roll transform only. Draft case is the same _draw_ducklings path -> fixed too.
+- DEV playtest menu now shows boss MUGSHOT icons (Gerald/BONGO/Snapz/Barry/Eternal/Bread) via _dev_icon(act); utilities stay text-only.
+- BONGO tongue came out of his NOSE: mouth origin was gsz.y*0.06 (eye level); moved to gsz.y*0.19 (his real mouth/maw).

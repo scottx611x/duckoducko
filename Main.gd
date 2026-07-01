@@ -214,7 +214,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.7"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.16.8"   # shown in Settings; keep in sync with export_presets.cfg
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -10611,6 +10611,15 @@ func _draw() -> void:
 			and not in_select and not in_shop and not in_shrine:
 		_draw_dev_menu()
 
+func _dev_icon(act: String):
+	match act:
+		"gerald", "eternal": return tex_gerald[0] if tex_gerald.size() > 0 else null
+		"bongo": return tex_bongo[0] if tex_bongo.size() > 0 else null
+		"snapz": return tex_snapz[0] if tex_snapz.size() > 0 else null
+		"beaver": return tex_beaver[0] if tex_beaver.size() > 0 else null
+		"bread": return tex_bread
+	return null
+
 func _draw_dev_menu() -> void:
 	# the single DEV button (bottom-right), unobtrusive
 	var br := _dev_btn_rect()
@@ -10637,8 +10646,18 @@ func _draw_dev_menu() -> void:
 		isb.set_corner_radius_all(10); isb.set_border_width_all(2)
 		isb.border_color = Color(0.5, 0.7, 0.95, 0.7) if util else Color(1, 0.55, 0.45, 0.8)
 		draw_style_box(isb, rc)
-		draw_string(font, Vector2(rc.position.x, rc.position.y + 32), DEV_MENU[i].name,
-			HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 21, Color(1, 0.94, 0.88))
+		var ic = _dev_icon(DEV_MENU[i].act)
+		if ic != null:                                  # boss MUGSHOT on the left of the button
+			var isz: float = rc.size.y - 12.0
+			var iscale: float = isz / float(maxi(ic.get_width(), ic.get_height()))
+			var idraw: Vector2 = ic.get_size() * iscale
+			var eternal_red: Color = Color(1.5, 0.4, 0.42) if DEV_MENU[i].act == "eternal" else Color(1, 1, 1)
+			draw_texture_rect(ic, Rect2(rc.position + Vector2(8.0, (rc.size.y - idraw.y) * 0.5), idraw), false, eternal_red)
+			draw_string(font, Vector2(rc.position.x + isz + 6.0, rc.position.y + 32), DEV_MENU[i].name,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x - isz - 6.0, 20, Color(1, 0.94, 0.88))
+		else:
+			draw_string(font, Vector2(rc.position.x, rc.position.y + 32), DEV_MENU[i].name,
+				HORIZONTAL_ALIGNMENT_CENTER, rc.size.x, 21, Color(1, 0.94, 0.88))
 	_otext(Vector2(0, p.end.y - 18), "tap off to close", 13, Color(1, 1, 1, 0.5), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 
 # the conga line compresses as it grows so every duckling stays on screen.
@@ -10680,7 +10699,7 @@ func _draw_ducklings() -> void:
 			for wid in dwl:
 				if wid == "prop":
 					continue
-				var hf = _pick_wear3d(wid, h)
+				var hf = _wear3d_idle(wid)      # FRONT frame — the roll transform already banks it (no double-bank)
 				if hf != null:
 					# items sit near the top of the 64px frame; scale up + seat LOWER so they hug the wee one (no float)
 					var hsc: Vector2 = sz * 1.3
@@ -11128,7 +11147,7 @@ func _draw_boss_bongo() -> void:
 	# the TONGUE: a thick pink tongue SHOOTS from his mouth toward the lane, then retracts
 	if st == "tongue":
 		var tlen: float = float(boss.get("tongue_len", 0.0))
-		var mouth := gpos + Vector2(0, gsz.y * 0.06)
+		var mouth := gpos + Vector2(0, gsz.y * 0.19)   # his actual MOUTH (lower face) — not his nose
 		var tip := mouth.lerp(Vector2(float(boss.get("tongue_tx", boss.x)), BASE_Y), tlen)
 		draw_line(mouth, tip, Color(0.80, 0.30, 0.38), 9.0)
 		draw_line(mouth, tip, Color(0.92, 0.45, 0.52), 5.0)
@@ -11481,6 +11500,10 @@ func _spin_from(w, yaw: float):
 
 func _pick_wear3d(hid: String, h: float):
 	return _pose_frame(_load_wear3d(hid), h)
+
+func _wear3d_idle(hid: String):                     # the FRONT (un-banked) wear frame — for ducklings that bank via a roll transform
+	var w = _load_wear3d(hid)
+	return w["idle"] if (w != null and not w.is_empty() and w.has("idle")) else null
 
 func _wear3d_spin(hid: String, yaw: float):
 	return _spin_from(_load_wear3d(hid), yaw)
