@@ -277,7 +277,8 @@ const MENU_DUCKS_BTN := Rect2(50.0, 772.0, 214.0, 52.0)
 const MENU_SHOP_BTN := Rect2(276.0, 772.0, 214.0, 52.0)
 const MENU_STATS_BTN := Rect2(50.0, 832.0, 214.0, 46.0)     # LOGBOOK
 const MENU_CODEX_BTN := Rect2(276.0, 832.0, 214.0, 46.0)    # COMPENDIUM
-const MENU_SETTINGS_BTN := Rect2(160.0, 886.0, 220.0, 30.0) # SETTINGS
+const MENU_SETTINGS_BTN := Rect2(50.0, 886.0, 214.0, 30.0)  # SETTINGS
+const MENU_BIGDAY_BTN := Rect2(276.0, 886.0, 214.0, 30.0)   # BIG DAY: today's seeded river
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 596.0, 220.0, 62.0)
 const SEL_PACK_BTN := Rect2(388.0, 598.0, 142.0, 58.0)   # MYSTERY EGG: gacha-unlock a random locked duck
@@ -1096,6 +1097,174 @@ var say_col := Color(1, 1, 1)
 # floating nonsense (WHIMSY §5): sailboat, bottle, flip-flop drift by, judging no one
 var props: Array = []           # {x, y, kind, phase}
 var prop_timer := 5.0
+
+# LIVING RIVER scenery: non-colliding pond dressing that drifts by (pads, weed, stones, whimsy floats).
+# Rooted things ride the riverbed at full scroll; floaters lag at ~0.85x with a sway — the speed
+# difference is what makes the water read as DEEP instead of a flat scrolling card.
+var env_scenery: Array = []
+var env_timer := 0.0
+var tex_env := {}
+
+# ---- RIVER EVENTS + FORKS: the replay engine. Events make a stretch of river briefly
+# DIFFERENT (announced, temporary); forks hand the player a ROUTE choice (biome + modifier).
+# Together, no two runs read the same. ----
+var ev_id := ""                 # active river event ("" = calm water)
+var ev_until := 0.0             # distance where the event ends
+var ev_next := 6500.0           # distance of the next event roll
+var ev_duckling := {}           # LOST DUCKLING raft: {x, y, saved}
+var fork := {}                  # active fork: {y, l:{...}, r:{...}, picked}
+var fork_next := 12000.0        # forks split the river between boss marks
+
+# BIG DAY: the daily seeded river (a birder's Big Day — everyone gets the SAME river today).
+# The structural beats (boss lineup, shrine deal, drafts, forks) re-seed off today's date, so
+# every attempt today shares the same bones. Replayable all day; best-of tracked per date.
+var bigday := false
+var bigday_seed := 0
+var bigday_best := 0
+var bigday_date := ""
+
+func _today_str() -> String:
+	var d := Time.get_date_dict_from_system()
+	return "%04d-%02d-%02d" % [d.year, d.month, d.day]
+
+func _bigday_reseed(salt: int) -> void:
+	if bigday:
+		seed(bigday_seed + salt)
+var stretch_mod := ""           # branch modifier applied to the current stretch
+var stretch_until := 0.0
+const RIVER_EVENTS := [
+	{"id": "squall", "name": "SQUALL!", "desc": "driving rain — feathers ride the wind"},
+	{"id": "tailwind", "name": "TAILWIND!", "desc": "the current surges — hold on"},
+	{"id": "lost_duckling", "name": "peep... peep...", "desc": "a little one drifts by — reach it!"},
+	{"id": "flush", "name": "FLOTSAM FLUSH!", "desc": "the river coughs up its junk drawer"},
+	{"id": "patrol", "name": "HERON PATROL!", "desc": "hunting in pairs — eyes up"},
+]
+const FORK_MODS := [
+	{"id": "feathers", "name": "FEATHER RUN", "desc": "feathers everywhere"},
+	{"id": "heron", "name": "HERON COUNTRY", "desc": "more herons, more feathers"},
+	{"id": "calm", "name": "CALM WATER", "desc": "gentle... almost too gentle"},
+	{"id": "junk", "name": "JUNK DRIFT", "desc": "flotsam-rich water"},
+	{"id": "snacks", "name": "SNACK BAR", "desc": "the good stuff floats here"},
+	{"id": "pike", "name": "PIKE'S HOLLOW", "desc": "something big lurks here"},
+]
+
+func _ev_heron_mult() -> float:
+	return (1.8 if ev_id == "patrol" else 1.0) \
+		* (1.5 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
+
+func _ev_snack_mult() -> float:
+	return (1.5 if ev_id == "squall" else 1.0) * (2.0 if ev_id == "tailwind" else 1.0) \
+		* (1.6 if stretch_mod == "feathers" else 1.0) * (1.35 if stretch_mod == "heron" else 1.0) \
+		* (0.8 if stretch_mod == "calm" else 1.0) * (1.7 if stretch_mod == "snacks" else 1.0)
+
+func _ev_prop_mult() -> float:
+	return (3.0 if ev_id == "flush" else 1.0) * (2.2 if stretch_mod == "junk" else 1.0)
+
+func _ev_speed_mult() -> float:
+	return 1.22 if ev_id == "tailwind" else 1.0
+
+func _update_river_events(delta: float) -> void:
+	if tut_mode or boss != null or not alive:
+		return
+	# end a running event
+	if ev_id != "" and distance >= ev_until:
+		if ev_id == "lost_duckling" and not ev_duckling.get("saved", false) and ev_duckling.is_empty():
+			pass
+		ev_id = ""; ev_duckling = {}
+	# the LOST DUCKLING raft drifts + can be rescued
+	if ev_id == "lost_duckling" and not ev_duckling.is_empty():
+		ev_duckling.y += speed * delta * 0.88
+		ev_duckling.x += sin(anim_t * 1.1) * 8.0 * delta
+		if not ev_duckling.get("saved", false) and absf(float(ev_duckling.x) - duck_x) < 44.0 \
+				and absf(float(ev_duckling.y) - BASE_Y) < 44.0:
+			ev_duckling.saved = true
+			_add_ducklings(1)
+			_flash("RESCUED!", 1.4)
+			ev_duckling = {}; ev_id = ""
+		elif float(ev_duckling.get("y", 0.0)) > VIEW.y + 30.0:
+			_say("the little one paddles off...", 2.2)     # missed — a soft, sad beat (whimsy rule: never punish hard)
+			ev_duckling = {}; ev_id = ""
+	# roll a new event
+	if ev_id == "" and distance >= ev_next and fork.is_empty():
+		var e: Dictionary = RIVER_EVENTS[randi() % RIVER_EVENTS.size()]
+		ev_id = e.id
+		ev_until = distance + randf_range(5200.0, 7200.0)
+		ev_next = ev_until + randf_range(6000.0, 9500.0)
+		_flash(e.name, 2.0)
+		_say(e.desc, 2.4)
+		_sfx("chime", 0.8)
+		if ev_id == "lost_duckling":
+			ev_duckling = {"x": randf_range(BANK_W + 60.0, VIEW.x - BANK_W - 60.0), "y": -50.0, "saved": false}
+			ev_until = distance + 2600.0               # one pass — catch it or it's gone
+	# FORKS: the river splits; your side of the wedge picks the branch
+	if fork.is_empty() and distance >= fork_next and ev_id == "" and not drafting:
+		_bigday_reseed(500 + int(fork_next / 1000.0))   # Big Day: same fork choices today
+		var mods: Array = FORK_MODS.duplicate()
+		if endless or next_boss_idx >= BOSS_MARKS.size():
+			mods = mods.filter(func(m): return String(m.id) != "pike")   # no Hollow after the Eternal
+		mods.shuffle()
+		var lmod: Dictionary = mods[0]
+		var rmod: Dictionary = mods[1]
+		if String(lmod.id) == "pike":                  # the Hollow is rare — reroll it half the time
+			if randf() < 0.5: lmod = mods[2]
+		elif String(rmod.id) == "pike":
+			if randf() < 0.5: rmod = mods[2]
+		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
+		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
+		if rth == lth: rth = (rth + 1) % THEMES.size()
+		fork = {"y": -140.0, "picked": false,
+			"l": {"theme": lth, "mod": lmod}, "r": {"theme": rth, "mod": rmod}}
+		_flash("THE RIVER SPLITS", 2.0)
+		_say("left or right? pick a channel!", 2.6)
+		_sfx("fwoosh", 0.7)
+	if not fork.is_empty():
+		fork.y += speed * delta
+		# the island is LAND: ease the duck out of the wedge so it never paddles on grass
+		var wtop: float = float(fork.y) - 130.0
+		var wbot: float = float(fork.y) + 270.0
+		if BASE_Y > wtop and BASE_Y < wbot:
+			var wprog: float = (BASE_Y - wtop) / (wbot - wtop)
+			var whalf: float = 8.0 + wprog * 78.0
+			var wdx: float = duck_x - VIEW.x * 0.5
+			if absf(wdx) < whalf:
+				var pushd: float = (whalf - absf(wdx) + 6.0) * (1.0 if wdx >= 0.0 else -1.0)
+				duck_x += pushd * clampf(delta * 7.0, 0.0, 1.0)
+				target_x = duck_x
+		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
+			fork.picked = true
+			var side: Dictionary = fork.l if duck_x < VIEW.x * 0.5 else fork.r
+			var m: Dictionary = side.mod
+			stretch_mod = String(m.id)
+			stretch_until = distance + THEME_LEN * 0.85
+			theme_prev = theme_idx
+			theme_idx = int(side.theme)
+			theme_sweep = 0.0
+			region_t = anim_t
+			biome_progress = float(theme_idx) * THEME_LEN + 400.0   # keep the modulo router in step
+			_swap_theme_music()
+			_flash("%s — %s" % [THEMES[theme_idx].name, m.name], 2.4)
+			_say(String(m.desc), 2.6)
+			_sfx("chime", 0.9)
+			_st("forks_taken")
+			if stretch_mod == "pike":                   # PIKE'S HOLLOW: the lurker ambushes this stretch
+				_force_boss(next_boss_idx, "pike")
+				if boss != null:
+					boss.bonus = true                   # branch duel: spoils only, no campaign-slot advance
+		if float(fork.y) > VIEW.y + 260.0:
+			fork = {}
+			fork_next = distance + randf_range(9000.0, 12000.0)
+	if stretch_mod != "" and distance >= stretch_until:
+		stretch_mod = ""
+const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
+const ENV_TABLE := [
+	[["env_lily_0", 3.0], ["env_lily_1", 2.4], ["env_lilyflower", 1.0], ["env_duckweed_0", 1.4], ["env_stone_0", 0.8], ["env_snag", 0.5], ["env_sailboat", 0.10], ["env_bottle", 0.08], ["env_raft", 0.06]],
+	[["env_lily_0", 2.2], ["env_lily_1", 2.0], ["env_lilyflower", 1.4], ["env_duckweed_1", 1.2], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
+	[["env_snag", 2.6], ["env_duckweed_0", 2.2], ["env_duckweed_1", 1.8], ["env_stone_0", 1.0], ["env_lily_0", 0.7], ["env_bottle", 0.12]],
+	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_duckweed_0", 0.6], ["env_sailboat", 0.14], ["env_raft", 0.10]],
+	[["env_lily_0", 2.0], ["env_lily_1", 1.8], ["env_lilyflower", 1.6], ["env_stone_1", 1.0], ["env_duckweed_1", 1.0], ["env_sailboat", 0.12], ["env_bottle", 0.08]],
+	[["env_lily_0", 2.6], ["env_lilyflower", 2.2], ["env_duckweed_0", 2.4], ["env_duckweed_1", 2.0], ["env_snag", 1.0], ["env_raft", 0.10]],
+	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 1.2], ["env_snag", 0.8], ["env_duckweed_1", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
+]
 var golden_t := 0.0              # GOLDEN HOUR: warm sunset wash remaining
 var golden_next := 38.0          # countdown to the next golden hour
 const GOLDEN_DUR := 14.0
@@ -1217,6 +1386,8 @@ var propblades: Array = []     # PROP BEANIE propeller: 4 spin-phase voxel sets 
 var propblades_tried := false  # don't keep retrying the load if the art is missing
 var wear_stacks := {}          # "hid|species" -> {slice_index: Texture2D} — hat baked into the MEGA tumble stack
 var tex_heron := []
+var tex_heron_swoop := []       # top-down strike-dive frames (wings out, legs trailing)
+var tex_heron_spin := []        # 16-frame codex turntable — the nemesis in the round
 var tex_gerald := []            # GERALD THE IMMENSE boss frames
 var tex_gerald_open: Texture2D  # ...his beak-open squawk frame
 var tex_snapz := []             # SNAPZ the snapping turtle boss frames (muddy, red-eyed)
@@ -1316,6 +1487,14 @@ func _ready() -> void:
 		if _boon_cache[mdl] != null:
 			tex_boon[bid] = _boon_cache[mdl]
 	tex_heron = [load("res://art/heron_0.png"), load("res://art/heron_1.png")]
+	for _hs in 2:
+		var _hp := "res://art/heron_swoop_%d.png" % _hs
+		if ResourceLoader.exists(_hp):
+			tex_heron_swoop.append(load(_hp))
+	for _hi in 16:
+		var _hq := "res://art/heron_spin_%02d.png" % _hi
+		if ResourceLoader.exists(_hq):
+			tex_heron_spin.append(load(_hq))
 	if ResourceLoader.exists("res://art/gerald_0.png"):
 		tex_gerald = [load("res://art/gerald_0.png"), load("res://art/gerald_1.png"), load("res://art/gerald_2.png")]
 		if ResourceLoader.exists("res://art/gerald_open.png"):
@@ -1393,7 +1572,7 @@ func _ready() -> void:
 			load("res://art/hawk_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
-	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread"]:   # COMPENDIUM turntables (+ open-mouth react sets)
+	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread", "heron"]:   # COMPENDIUM turntables (+ open-mouth react sets)
 		if ResourceLoader.exists("res://art/%s_spin_00.png" % cid):
 			var frames: Array = []
 			for i in 16:
@@ -1427,6 +1606,17 @@ func _ready() -> void:
 		var pp := "res://art/prop_%s.png" % pn
 		if ResourceLoader.exists(pp):
 			tex_props.append(load(pp))
+	# living-river scenery + bank dressing (defensive: any missing sprite just doesn't spawn)
+	for tbl in ENV_TABLE:
+		for entry in tbl:
+			var en: String = entry[0]
+			if not tex_env.has(en) and ResourceLoader.exists("res://art/%s.png" % en):
+				tex_env[en] = load("res://art/%s.png" % en)
+	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
+			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
+			"bank_pine", "bank_snowduck", "bank_cow"]:
+		if ResourceLoader.exists("res://art/%s.png" % bn):
+			tex_env[bn] = load("res://art/%s.png" % bn)
 	for kind in ITEM_DEFS:
 		tex_items[kind.name] = load("res://art/%s.png" % kind.name)
 	for w in WEARABLES:
@@ -1610,6 +1800,46 @@ func _ready() -> void:
 		get_tree().quit()
 	elif "--breadtest" in OS.get_cmdline_user_args():
 		_dbg_breadtest()
+	elif "--rivershot" in OS.get_cmdline_user_args():
+		# LIVING RIVER verification: mid-run frame with scenery/banks/water at a chosen theme
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
+		var _rth := int(_arg_val(OS.get_cmdline_user_args(), "--theme", "0"))
+		distance = 6000.0; biome_progress = float(_rth) * THEME_LEN + 800.0
+		theme_idx = _rth; theme_prev = _rth; theme_sweep = 1.0
+		for _ri in 16:                                  # pre-seed the scenery the run would have streamed in
+			var _rtbl: Array = ENV_TABLE[theme_idx].filter(func(e): return tex_env.has(e[0]))
+			if _rtbl.is_empty(): break
+			var _rtot := 0.0                            # WEIGHTED pick, same as live spawning (else rare rafts flood the shot)
+			for _re in _rtbl: _rtot += float(_re[1])
+			var _rroll := randf() * _rtot
+			var _rentry: Array = _rtbl[0]
+			for _re in _rtbl:
+				_rroll -= float(_re[1])
+				if _rroll <= 0.0:
+					_rentry = _re
+					break
+			var _rooted: bool = String(_rentry[0]) in ENV_ROOTED
+			var _rmargin: float = randf_range(10.0, 96.0) if _rooted else randf_range(30.0, 170.0)
+			env_scenery.append({"n": _rentry[0], "x": (BANK_W + _rmargin) if randf() < 0.5 else (VIEW.x - BANK_W - _rmargin),
+				"y": randf_range(20.0, VIEW.y - 40.0), "rooted": _rooted, "phase": randf() * TAU, "flip": randf() < 0.5})
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_river_%d.png" % theme_idx)
+		get_tree().quit()
+	elif "--forkshot" in OS.get_cmdline_user_args():
+		# FORK verification: the split island + signs on screen
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
+		distance = 11000.0
+		fork = {"y": 330.0, "picked": false,
+			"l": {"theme": 2, "mod": FORK_MODS[5]}, "r": {"theme": 5, "mod": FORK_MODS[0]}}
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_fork.png")
+		get_tree().quit()
 	elif "--ponchointro" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
@@ -1949,6 +2179,11 @@ func _load_save() -> void:
 	if cfg.load("user://save.cfg") == OK:
 		feathers = cfg.get_value("save", "feathers", 0)
 		best_m = cfg.get_value("save", "best_m", 0)
+		bigday_best = cfg.get_value("save", "bigday_best", 0)
+		bigday_date = cfg.get_value("save", "bigday_date", "")
+		if bigday_date != _today_str():                # a new day dawns — fresh Big Day board
+			bigday_best = 0
+			bigday_date = ""
 		unlocked_extra = cfg.get_value("save", "unlocked", [])
 		duck_name = cfg.get_value("save", "duck_name", "ducko")   # the base name
 		meta_owned = cfg.get_value("save", "meta", [])
@@ -2021,6 +2256,8 @@ func _save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("save", "feathers", feathers)
 	cfg.set_value("save", "best_m", best_m)
+	cfg.set_value("save", "bigday_best", bigday_best)
+	cfg.set_value("save", "bigday_date", bigday_date)
 	cfg.set_value("save", "unlocked", unlocked_extra)
 	cfg.set_value("save", "duck_name", duck_name)
 	cfg.set_value("save", "meta", meta_owned)
@@ -2830,6 +3067,7 @@ func _pick_menu_flotsam() -> void:
 
 func _enter_menu() -> void:
 	in_menu = true
+	bigday = false                                  # Big Day ends at the menu (tap it again to retry today)
 	in_select = false
 	in_shop = false
 	in_shrine = false
@@ -2947,6 +3185,7 @@ func _open_shrine() -> void:
 	in_shrine = true
 	_codex_see("elder")
 	shrine_open_t = anim_t
+	_bigday_reseed(2)                                  # Big Day: same shrine deal for everyone today
 	# only boons you've EARNED (tier <= bosses bested) can appear; beat bosses for richer ones.
 	# a WEIGHTED draw keeps humble/spammy boons (NEST EGG) from dominating every shrine
 	var pool: Array = BOONS.filter(func(b): return b.tier <= prev_run_bosses)
@@ -3060,6 +3299,7 @@ func _open_draft() -> void:
 	draft_count += 1
 	# each checkpoint is further out than the last: 400m, 500m, 625m, 781m...
 	next_draft += DRAFT_EVERY * pow(1.25, draft_count) * (0.8 if _meta("flyer") else 1.0)  # FREQUENT FLYER
+	_bigday_reseed(100 + draft_count)                  # Big Day: draft N deals the same 3 cards today
 	draft_choices = _deal_draft()
 	center_label.visible = false
 	_sfx("chime", 1.25)
@@ -4154,7 +4394,20 @@ func hyper_jump() -> void:
 	_spawn_parts(duck_x, BASE_Y, 12, Color(1.0, 0.9, 0.4), 220.0)
 
 func _float_text(x: float, y: float, txt: String, col := Color(1, 1, 1)) -> void:
-	floaties.append({"x": x, "y": y, "txt": txt, "t": 0.0, "col": col})
+	# anti-stack: if a young floaty already owns this spot, step down until clear
+	# (fast runs used to print "3200 ft" ON TOP OF "3400 ft" — unreadable mush)
+	var fy := y
+	var steps := 0
+	var moved := true
+	while moved and steps < 3:                # cap the ladder — a burst of texts shouldn't build a column
+		moved = false
+		for f in floaties:
+			if float(f.t) < 0.55 and absf(float(f.x) - x) < 70.0 and absf(float(f.y) - fy) < 24.0:
+				fy += 26.0
+				steps += 1
+				moved = true
+				break
+	floaties.append({"x": x, "y": fy, "txt": txt, "t": 0.0, "col": col})
 
 # ---- particles -----------------------------------------------------------------
 func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
@@ -4236,6 +4489,7 @@ func reset_game() -> void:
 	boss = null
 	boss_waves.clear()
 	next_boss_idx = 0
+	_bigday_reseed(1)                                  # Big Day: everyone faces the same lineup today
 	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = Eternal
 	boss_hp_bonus = 0
 	asc_pace = 1.0
@@ -4311,6 +4565,11 @@ func reset_game() -> void:
 	floaties.clear()
 	props.clear()
 	prop_timer = 5.0
+	env_scenery.clear()
+	env_timer = 0.4
+	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
+	ev_id = ""; ev_until = 0.0; ev_next = randf_range(6000.0, 8000.0); ev_duckling = {}
+	fork = {}; fork_next = randf_range(11000.0, 13000.0); stretch_mod = ""; stretch_until = 0.0
 	sadie = null
 	sadie_timer = 40.0
 	hawk = null
@@ -4452,7 +4711,16 @@ func _on_press(pos: Vector2) -> void:
 			_open_codex()
 		elif MENU_SETTINGS_BTN.has_point(pos):
 			_open_settings()
+		elif MENU_BIGDAY_BTN.has_point(pos):
+			bigday = true
+			bigday_date = _today_str()
+			var ds := Time.get_date_dict_from_system()
+			bigday_seed = ds.year * 10000 + ds.month * 100 + ds.day
+			seed(bigday_seed)
+			_flash("BIG DAY — today's river", 2.0)
+			start_game()
 		elif anim_t - menu_enter_t > 0.35:
+			bigday = false
 			start_game()                       # grace: a stray tap can't insta-start
 		return
 	if in_logs:
@@ -5039,14 +5307,21 @@ func die(msg: String, cat := "other", sub := "") -> void:
 	if _wear("crown"):
 		run_feathers = int(run_feathers * (1.0 + 0.25 * _wf("crown")))   # ROYAL CROWN: the river pays its taxes
 	run_feathers = int(run_feathers * _wear_set_mult())                  # FULLY DRESSED: head + body set bonus
-	feathers += run_feathers
-	dead_record = dead_m > best_m
-	if dead_record and best_m > 0:          # confetti for the new best
-		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 36, Color(1.0, 0.86, 0.35), 300.0)
-		_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 22, Color(0.55, 0.85, 1.0), 260.0)
-	best_m = maxi(best_m, dead_m)
-	_record_run()
-	_save()
+	if bot_mode:
+		dead_record = false      # SIM RUNS DON'T COUNT: no feathers, no logbook, no best —
+		                         # scootybooty was quietly banking currency + writing Scott's history
+	else:
+		feathers += run_feathers
+		if bigday and dead_m > bigday_best:                # today's Big Day board
+			bigday_best = dead_m
+			bigday_date = _today_str()
+		dead_record = dead_m > best_m
+		if dead_record and best_m > 0:          # confetti for the new best
+			_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 36, Color(1.0, 0.86, 0.35), 300.0)
+			_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.3, 22, Color(0.55, 0.85, 1.0), 260.0)
+		best_m = maxi(best_m, dead_m)
+		_record_run()
+		_save()
 	center_label.visible = false            # the death screen draws itself
 	loft_bar.visible = false                # no MEGA/LASER pills over the eulogy
 	score_label.visible = false             # hide the live ft/pace HUD over the eulogy
@@ -5192,7 +5467,7 @@ func _update_play(delta: float) -> void:
 				_sfx("fwoosh", 1.15, -3.0)
 				duck_shake = maxf(duck_shake, 0.15)
 		speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) \
-			* duck_pace_mul * (1.0 + 0.03 * speed_step) * asc_pace
+			* duck_pace_mul * (1.0 + 0.03 * speed_step) * asc_pace * _ev_speed_mult()
 	# ENDLESS gets RELENTLESS: hazard density climbs the further you push past the bread (no plateau)
 	endless_heat = clampf(1.0 + maxf(0.0, distance - endless_start_dist) / 36000.0, 1.0, 5.0) if endless else 1.0
 	# ZEN MODE: bullet-time slows the whole river (scroll, hazards, spawns) — not the duck
@@ -5233,7 +5508,7 @@ func _update_play(delta: float) -> void:
 		if int(lifetime["flotsam_" + _fpn]) >= 3:  # catalogue only once you've truly NOTICED it a few times
 			_codex_see("trash_" + _fpn)            # (so rare junk like the gnome stays a real discovery)
 		_st("flotsam_" + _fpn)                     # ...and this run's tally (for the run detail)
-		prop_timer = randf_range(1.7, 3.4) if junkboon else randf_range(4.5, 9.0)   # MORE trash once you can grab it
+		prop_timer = (randf_range(1.7, 3.4) if junkboon else randf_range(4.5, 9.0)) / _ev_prop_mult()   # MORE trash once you can grab it
 	for pr in props:
 		pr.y += speed * delta * 0.82
 		pr.x += sin(anim_t * 0.8 + pr.phase) * 6.0 * delta
@@ -5246,6 +5521,37 @@ func _update_play(delta: float) -> void:
 				pr["tex"] = int(pr.kind)
 				_collect_trash(pr)             # folds into the queue (orbit/sling/economy all run off this)
 	props = props.filter(func(pr): return pr.y < VIEW.y + 40.0 and not pr.get("got", false))
+
+	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide)
+	env_timer -= delta
+	if env_timer <= 0.0 and not tex_env.is_empty():
+		env_timer = randf_range(0.55, 1.15)
+		var tbl: Array = ENV_TABLE[theme_idx]
+		var tot := 0.0
+		for entry in tbl:
+			if tex_env.has(entry[0]):
+				tot += float(entry[1])
+		if tot > 0.0:
+			var roll := randf() * tot
+			for entry in tbl:
+				if not tex_env.has(entry[0]):
+					continue
+				roll -= float(entry[1])
+				if roll <= 0.0:
+					var rooted: bool = String(entry[0]) in ENV_ROOTED
+					# rooted things shelve near the banks (lanes stay readable); floaters roam wider
+					var margin: float = randf_range(10.0, 96.0) if rooted else randf_range(30.0, 170.0)
+					var ex: float = (BANK_W + margin) if randf() < 0.5 else (VIEW.x - BANK_W - margin)
+					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
+						"phase": randf() * TAU, "flip": randf() < 0.5})
+					break
+	for es in env_scenery:
+		es.y += speed * delta * (1.0 if es.rooted else 0.85)
+		if not es.rooted:
+			es.x += sin(anim_t * 0.7 + es.phase) * 5.0 * delta
+	env_scenery = env_scenery.filter(func(es): return es.y < VIEW.y + 60.0)
+
+	_update_river_events(delta)
 
 	# GOLDEN HOUR: now and then the river bathes in warm low light for a stretch (a birder's hour)
 	if golden_t > 0.0:
@@ -5998,6 +6304,9 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		if run_boons.has("tailwind"):                  # TAILWIND climbs LIVE with each boss you stomp
 			boon_pace += 0.04
 			_flash("TAILWIND SURGES!")
+		if boss.get("bonus", false):                   # PIKE'S HOLLOW: a branch-only duel — full spoils, but
+			_boss_leave()                              # the campaign ladder doesn't move (Snapz still waits)
+			return
 		next_boss_idx += 1
 		if next_boss_idx > bosses_cleared:
 			bosses_cleared = next_boss_idx          # lifetime best (kept for stats)
@@ -6532,7 +6841,15 @@ func _snapz_fight(delta: float) -> void:
 	match boss.dive_stage:
 		"", "dive":
 			tgt_yaw = clampf((duck_x - center) / center, -1.0, 1.0) * 0.8
-		"warn", "snap", "stuck":
+		"warn", "snap":
+			# the open maw points AT the strike LANE while he closes on it; once he's over
+			# it (angle collapses), he glares at the duck — the read is "he wants THAT spot"
+			var lane_dx: float = float(boss.get("dive_x", boss.x)) - boss.x
+			if absf(lane_dx) > 8.0:
+				tgt_yaw = clampf(lane_dx / center, -1.0, 1.0) * 0.8
+			else:
+				tgt_yaw = clampf((duck_x - boss.x) / center, -1.0, 1.0) * 0.8
+		"stuck":
 			tgt_yaw = clampf((duck_x - boss.x) / center, -1.0, 1.0) * 0.8   # 3/4 view leaning toward the duck (where he is vs the user) — NOT full profile
 	boss.yaw = lerp_angle(float(boss.get("yaw", 0.0)), tgt_yaw, clampf(delta * 6.0, 0.0, 1.0))
 	match boss.dive_stage:
@@ -6815,7 +7132,7 @@ func _spawn(delta: float) -> void:
 	item_timer -= delta
 	if item_timer <= 0.0:
 		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
-		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension)
+		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START:
@@ -6826,7 +7143,7 @@ func _spawn(delta: float) -> void:
 			enemies.append({"x": hx2, "y": -150.0, "vy": speed + 300.0, "id": _next_enemy_id()})
 		_codex_see("heron")
 		# herons get hungrier deep in the run (down to ~60% of the early gap; GLASS CANNON worse)
-		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0) / boon_heron_mult / (1.0 + 0.10 * ascension) / endless_heat
+		heron_timer = randf_range(4.5, 8.0) * clampf(1.0 - distance / 150000.0, 0.6, 1.0) / boon_heron_mult / (1.0 + 0.10 * ascension) / endless_heat / _ev_heron_mult()
 
 func _pick_kind() -> int:
 	var total := 0
@@ -7927,6 +8244,16 @@ func _draw_pause() -> void:
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
+	if bigday:                                     # this run rode today's river
+		var _bdt := "BIG DAY · %s" % _today_str()
+		var _bdw := font.get_string_size(_bdt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		draw_string(font, Vector2(VIEW.x * 0.5 - _bdw * 0.5, 54.0), _bdt,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1.0, 0.88, 0.5, 0.9))
+		if dead_m >= bigday_best and bigday_best > 0:
+			var _bbt := "today's best!"
+			var _bbw := font.get_string_size(_bbt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+			draw_string(font, Vector2(VIEW.x * 0.5 - _bbw * 0.5, 72.0), _bbt,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.75, 0.35, 0.85))
 	# drifting feathers set the mood — warm + golden on a win, cool + falling on a death
 	var fcol := Color(1.0, 0.86, 0.5) if run_won else Color(0.7, 0.78, 0.92)
 	for i in 9:
@@ -10195,6 +10522,7 @@ func _draw() -> void:
 	if has_art:
 		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.26, 0.34, 0.52, 0.26), Color(0.11, 0.55, 0.36, 0.28), Color(0.09, 0.17, 0.45, 0.32)][theme_idx]
 		draw_rect(Rect2(Vector2.ZERO, VIEW), _wash)
+		_draw_living_water(scroll)
 	# reed-lined banks frame the river (they take the theme wash too)
 	if has_art and tex_bank_l != null:
 		var bs := tex_bank_l.get_size()
@@ -10233,6 +10561,20 @@ func _draw() -> void:
 	if in_shrine:
 		_draw_shrine()
 		return
+
+	# living-river scenery UNDER everything gameplay (it's part of the water, not on it)
+	for es in env_scenery:
+		var etex: Texture2D = tex_env.get(es.n)
+		if etex == null:
+			continue
+		var esway: float = 0.0 if es.rooted else sin(anim_t * 0.9 + es.phase) * 0.09
+		var ebob: float = 0.0 if es.rooted else sin(anim_t * 1.6 + es.phase) * 1.6
+		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-2.0 if es.flip else 2.0, 2.0))
+		var esz: Vector2 = etex.get_size()
+		draw_texture_rect(etex, Rect2(-esz * 0.5, esz), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	_draw_river_events()
 
 	# water trail / wake
 	for p in wake:
@@ -10377,6 +10719,13 @@ func _draw() -> void:
 			var hs := tex_shadow.get_size() * DUCK_DRAW * (0.6 + prox)
 			draw_texture_rect(tex_shadow, Rect2(Vector2(e.x, BASE_Y) - hs * 0.5, hs), false, Color(1, 1, 1, prox))
 	for e in enemies:
+		# the REAL top-down strike-dive (wings out, legs trailing) — flap alternates as it drops;
+		# falls back to the old side-view frames if the swoop set isn't generated
+		if not tex_heron_swoop.is_empty() and has_art:
+			var sf: Texture2D = tex_heron_swoop[int(anim_t * 6.0) % tex_heron_swoop.size()]
+			var sz2: Vector2 = sf.get_size() * DUCK_DRAW * 1.15
+			draw_texture_rect(sf, Rect2(Vector2(e.x, e.y) - sz2 * 0.5, sz2), false)
+			continue
 		# slow majestic swoop: up -> glide -> down -> glide, ~1.3s per full beat
 		var hseq := [1, 0, 2, 0] if tex_heron.size() >= 3 else [0, 1]
 		var hf: Texture2D = tex_heron[hseq[int(anim_t * 3.0) % hseq.size()]] if has_art else null
@@ -10420,6 +10769,7 @@ func _draw() -> void:
 				_spawn_parts(m.x, m.y + 10.0, 1, Color(0.97, 0.87, 0.45), 60.0)
 
 	if boss != null:
+		_draw_boss_arena()           # the fight owns the frame: mood tint + vignette + arena motes
 		_draw_boss_ground()          # telegraph + shockwaves, on the water under everyone
 	_draw_ducklings()
 	_draw_duck()
@@ -10722,6 +11072,42 @@ func _duckling_h(i: int) -> float:
 	return 0.0
 
 # GERALD: telegraph target + dive shockwaves, drawn on the water (under the duck)
+# ARENA DRESSING: the intro's mood should not evaporate when the letterbox lifts.
+# Each boss tints the water his colour, the frame vignettes in, and his own motes drift
+# the arena (feathers / swamp bubbles / wood chips / cold sparks / spores).
+func _draw_boss_arena() -> void:
+	if boss.phase == "leave":
+		return
+	var kind := String(boss.get("kind", "gerald"))
+	var a_in: float = clampf(boss.t / 1.2, 0.0, 1.0) if boss.phase == "enter" else 1.0
+	var tint: Color
+	var mote: Color
+	match kind:
+		"snapz":  tint = Color(0.07, 0.16, 0.12, 0.24); mote = Color(0.55, 0.78, 0.66)
+		"beaver": tint = Color(0.17, 0.11, 0.05, 0.22); mote = Color(0.78, 0.62, 0.38)
+		"bongo":  tint = Color(0.08, 0.18, 0.07, 0.22); mote = Color(0.66, 0.9, 0.5)
+		"pike":   tint = Color(0.04, 0.09, 0.19, 0.26); mote = Color(0.6, 0.78, 0.95)
+		_:
+			if boss.get("eternal", false):
+				tint = Color(0.13, 0.02, 0.05, 0.30); mote = Color(0.85, 0.3, 0.32)
+			else:
+				tint = Color(0.10, 0.07, 0.16, 0.20); mote = Color(0.85, 0.88, 0.95)
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(tint.r, tint.g, tint.b, tint.a * a_in))
+	# vignette: three soft steps per edge — the eye stays on the duel
+	for i in 3:
+		var vw := 46.0 - i * 14.0
+		var va := (0.10 - i * 0.03) * a_in
+		draw_rect(Rect2(0, 0, vw, VIEW.y), Color(0, 0, 0, va))
+		draw_rect(Rect2(VIEW.x - vw, 0, vw, VIEW.y), Color(0, 0, 0, va))
+		draw_rect(Rect2(0, 0, VIEW.x, vw * 0.7), Color(0, 0, 0, va))
+		draw_rect(Rect2(0, VIEW.y - vw * 0.7, VIEW.x, vw * 0.7), Color(0, 0, 0, va))
+	# arena motes: slow, his colour, drifting like the fight stirred the whole pond
+	for i in 9:
+		var mx := fposmod(i * 173.3 + sin(anim_t * 0.5 + i * 1.7) * 40.0 + anim_t * (6.0 + float(i % 3) * 4.0), VIEW.x)
+		var my := fposmod(i * 251.7 + anim_t * (14.0 + float(i % 4) * 7.0), VIEW.y)
+		var ma := (0.10 + 0.08 * sin(anim_t * 1.8 + i * 2.2)) * a_in
+		draw_circle(Vector2(mx, my), 1.8 + float(i % 3) * 0.8, Color(mote.r, mote.g, mote.b, maxf(ma, 0.0)))
+
 func _draw_boss_ground() -> void:
 	# darken the river for the duel
 	# the duel-darkness ramps IN as he arrives — so the heron's shadow reads on BRIGHT water first
@@ -10928,7 +11314,7 @@ func _draw_boss_gerald() -> void:
 				var sa := anim_t * 5.0 + s * TAU / 3.0
 				draw_circle(gpos + Vector2(cos(sa) * 34.0, -gsz.y * 0.36 + sin(sa) * 10.0), 4.0, Color(1, 1, 0.6, 0.9))
 		# GERALD's speech: a clear dark bubble near his head (kept on-screen)
-		if boss.say != "" and anim_t - boss.say_t < 1.9 and not tex_gerald.is_empty():
+		if boss.say != "" and anim_t - boss.say_t < 1.9 and not tex_gerald.is_empty() and boss.phase != "enter":
 			var s_above: bool = boss.y > 320.0        # he's low -> bubble above; high -> below
 			var s_gsz: Vector2 = tex_gerald[0].get_size() * 1.7 * boss.scale
 			var s_by: float = boss.y - s_gsz.y * 0.5 - 24.0 if s_above else boss.y + s_gsz.y * 0.44 + 24.0
@@ -11064,7 +11450,7 @@ func _draw_boss_beaver() -> void:
 		if st == "slam" and tp2 > 0.65:
 			for k in 9:
 				draw_circle(Vector2(boss.x + (k - 4) * 20.0, boss.y + 58.0 - absf(sin(float(k) * 1.3)) * 26.0), 4.0, Color(0.72, 0.86, 0.9, 0.6))
-	if boss.say != "" and anim_t - boss.say_t < 1.9:             # BARRY speaks: the evil red bubble
+	if boss.say != "" and anim_t - boss.say_t < 1.9 and boss.phase != "enter":             # BARRY speaks: the evil red bubble
 		var s_above: bool = boss.y > 320.0
 		var s_gsz: Vector2 = tex_beaver[0].get_size() * 1.8
 		var s_by: float = boss.y - s_gsz.y * 0.5 - 24.0 if s_above else boss.y + s_gsz.y * 0.44 + 24.0
@@ -11154,7 +11540,7 @@ func _draw_boss_bongo() -> void:
 		if dazed:
 			draw_line(ep + Vector2(-5, -5), ep + Vector2(5, 5), Color(0.2, 0.2, 0.3), 2.5)
 			draw_line(ep + Vector2(5, -5), ep + Vector2(-5, 5), Color(0.2, 0.2, 0.3), 2.5)
-	if boss.say != "" and anim_t - boss.say_t < 1.9:             # BONGO speaks: a flat, weary green bubble
+	if boss.say != "" and anim_t - boss.say_t < 1.9 and boss.phase != "enter":             # BONGO speaks: a flat, weary green bubble
 		var s_above: bool = boss.y > 320.0
 		var s_by: float = boss.y - gsz.y * 0.5 - 24.0 if s_above else boss.y + gsz.y * 0.44 + 24.0
 		s_by = clampf(s_by, 92.0, BASE_Y - 60.0)
@@ -11170,7 +11556,7 @@ func _draw_boss_snapz() -> void:
 		# he TURNS to face his work (turntable) while lurking/winding-up/sweeping; the actual BITE
 		# and the beached-stomp pose stay frontal so the jaws read clearly
 		var st: String = boss.dive_stage
-		var open_jaw: bool = st == "snap" or st == "stuck"
+		var open_jaw: bool = st == "snap" or st == "stuck" or st == "warn"   # jaws agape through the wind-up: the tell reads from across the river
 		var turn: Array = tex_snapz_open if (open_jaw and not tex_snapz_open.is_empty()) else tex_snapz_spin
 		var gt: Texture2D
 		if turn.is_empty():
@@ -11221,7 +11607,7 @@ func _draw_boss_snapz() -> void:
 			draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
 			_otext(Vector2(0, by2 - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
 		# SNAPZ speaks — the same CrEePY jittery red as Gerald (boss text stays red)
-		if boss.say != "" and anim_t - boss.say_t < 1.9 and sub < 0.5:
+		if boss.say != "" and anim_t - boss.say_t < 1.9 and sub < 0.5 and boss.phase != "enter":
 			var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 92.0, BASE_Y - 60.0)
 			_speech_bubble(Vector2(boss.x, s_by), boss.say,
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 18, 1.0, true,
@@ -11305,14 +11691,141 @@ func _draw_golden_hour() -> void:
 		draw_polyline(PackedVector2Array([Vector2(rx, -20.0), Vector2(rx + 70.0, VIEW.y + 20.0)]),
 			Color(1.0, 0.9, 0.62, 0.025 * ge), 34.0)
 
+# RIVER EVENTS + FORK visuals: the split island + hanging signs, the lost duckling's raft,
+# and squall rain. Drawn with the gameplay layer (they're world objects, not HUD).
+func _draw_river_events() -> void:
+	if not fork.is_empty():
+		var fy: float = fork.y
+		# the island wedge: a grassy tear the river parts around, widening downstream
+		var wtip := Vector2(VIEW.x * 0.5, fy - 130.0)
+		var wl := Vector2(VIEW.x * 0.5 - 74.0, fy + 210.0)
+		var wr := Vector2(VIEW.x * 0.5 + 74.0, fy + 210.0)
+		draw_colored_polygon(PackedVector2Array([wtip, wr + Vector2(0, 60), wl + Vector2(0, 60)]), Color(0.24, 0.42, 0.22))
+		draw_colored_polygon(PackedVector2Array([wtip + Vector2(0, 14), wr + Vector2(-10, 52), wl + Vector2(10, 52)]), Color(0.30, 0.50, 0.26))
+		# foam where the current splits around the tip
+		for k in 5:
+			var fa: float = 0.3 - k * 0.05
+			draw_arc(wtip + Vector2(0, 8), 10.0 + k * 7.0 + sin(anim_t * 2.0 + k) * 2.0, PI * 0.75, PI * 2.25, 14, Color(1, 1, 1, fa), 2.0)
+		# two hanging SIGNS naming each channel + its promise
+		for side in 2:
+			var sd: Dictionary = fork.l if side == 0 else fork.r
+			var sx: float = VIEW.x * (0.24 if side == 0 else 0.76)
+			var post := Vector2(sx, fy - 6.0)
+			draw_line(post, post + Vector2(0, -46.0), Color(0.42, 0.30, 0.18), 4.0)
+			var bw := 150.0
+			var brd := Rect2(post + Vector2(-bw * 0.5, -84.0), Vector2(bw, 44.0))
+			draw_rect(brd, Color(0.52, 0.38, 0.22))
+			draw_rect(brd, Color(0.30, 0.20, 0.10), false, 2.0)
+			var m: Dictionary = sd.mod
+			var tname: String = THEMES[int(sd.theme)].name
+			var t1w := font.get_string_size(tname, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			draw_string(font, brd.position + Vector2(bw * 0.5 - t1w * 0.5, 18.0), tname, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1.0, 0.96, 0.86))
+			var mn: String = String(m.name)
+			var t2w := font.get_string_size(mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+			draw_string(font, brd.position + Vector2(bw * 0.5 - t2w * 0.5, 36.0), mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
+				Color(1.0, 0.55, 0.5) if String(m.id) == "pike" or String(m.id) == "heron" else Color(0.72, 0.95, 0.72))
+	# the LOST DUCKLING drifts by on a scrap of driftwood, peeping
+	if ev_id == "lost_duckling" and not ev_duckling.is_empty():
+		var dpos := Vector2(ev_duckling.x, ev_duckling.y)
+		draw_set_transform(dpos, sin(anim_t * 1.3) * 0.08, Vector2.ONE)
+		draw_rect(Rect2(-20, 2, 40, 10), Color(0.45, 0.32, 0.18))          # the raft scrap
+		draw_rect(Rect2(-20, 2, 40, 3), Color(0.55, 0.42, 0.24))
+		# the tiny passenger: use the real duckling sprite if loaded, else a drawn chick
+		var dtex: Texture2D = tex_duckling.get("idle", [null])[0] if not tex_duckling.is_empty() else null
+		if dtex != null:
+			var dsz: Vector2 = dtex.get_size() * 2.0
+			draw_texture_rect(dtex, Rect2(Vector2(-dsz.x * 0.5, -dsz.y + 4.0), dsz), false)
+		else:
+			draw_circle(Vector2(0, -6), 8.0, Color(0.98, 0.88, 0.42))
+			draw_circle(Vector2(5, -12), 5.0, Color(0.98, 0.88, 0.42))
+			draw_circle(Vector2(6.6, -13), 1.1, Color(0.1, 0.1, 0.1))
+			draw_colored_polygon(PackedVector2Array([Vector2(9, -12), Vector2(14, -11), Vector2(9, -9.6)]), Color(0.95, 0.6, 0.2))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if fmod(anim_t, 1.1) < 0.5:
+			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
+	# SQUALL: slanting rain + a grey wash (reads instantly, costs nothing)
+	if ev_id == "squall":
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.36, 0.42, 0.52, 0.14))
+		for i in 26:
+			var rx := fposmod(i * 83.7 + anim_t * 340.0, VIEW.x + 80.0) - 40.0
+			var ry := fposmod(i * 149.3 + anim_t * 620.0, VIEW.y + 40.0) - 20.0
+			draw_line(Vector2(rx, ry), Vector2(rx - 7.0, ry + 16.0), Color(0.82, 0.9, 1.0, 0.34), 1.5)
+
+# LIVING WATER: the river reads as a RIVER, not a flat field — shallow warm margins near the
+# banks, a deep center channel, elongated current streaks sliding downstream at their own pace,
+# and a lapping foam line where water meets grass. All primitives, no assets, mobile-cheap.
+func _draw_living_water(scroll: float) -> void:
+	# shallows: the water warms + lightens toward each bank (real ponds shelve at the edge)
+	for i in 3:
+		var sw := 26.0 - i * 7.0
+		var sa := 0.05 + i * 0.02
+		draw_rect(Rect2(BANK_W, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
+		draw_rect(Rect2(VIEW.x - BANK_W - sw, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
+	# deep channel: the middle runs darker (subtle, it's depth not a stripe)
+	var chw := VIEW.x * 0.30
+	draw_rect(Rect2(VIEW.x * 0.5 - chw * 0.5, 0, chw, VIEW.y), Color(0.03, 0.07, 0.16, 0.10))
+	# current streaks: thin elongated highlights that slide downstream a touch faster than the
+	# water tile — the river visibly FLOWS even when nothing else is on screen
+	for i in 14:
+		var sx: float = BANK_W + 24.0 + fposmod(i * 197.31, VIEW.x - BANK_W * 2.0 - 48.0)
+		var slen: float = 34.0 + fposmod(i * 61.7, 52.0)
+		var sy: float = fposmod(i * 331.7 + scroll * (1.12 + fposmod(i * 0.13, 0.22)), VIEW.y + slen * 2.0) - slen
+		var wob: float = sin(anim_t * 1.4 + i * 2.1) * 2.0
+		var sa2: float = 0.06 + 0.03 * sin(anim_t * 0.9 + i)
+		draw_polyline(PackedVector2Array([Vector2(sx + wob, sy), Vector2(sx, sy + slen * 0.55), Vector2(sx - wob, sy + slen)]), Color(1.0, 1.0, 1.0, sa2), 2.0)
+	# lapping foam line at each bank edge: a gently waving bright seam + the odd bubble
+	for side in 2:
+		var bx: float = BANK_W if side == 0 else VIEW.x - BANK_W
+		var pts := PackedVector2Array()
+		var seg := 14
+		for k in seg + 1:
+			var yy := k * VIEW.y / seg
+			pts.append(Vector2(bx + sin(yy * 0.045 + anim_t * 1.7 + side * 3.1) * 2.4, yy))
+		draw_polyline(pts, Color(0.92, 0.98, 1.0, 0.16 + 0.05 * sin(anim_t * 2.2 + side)), 2.0)
+		for k in 3:
+			var by2 := fposmod(k * 353.0 + side * 130.0 + scroll * 0.9, VIEW.y)
+			draw_circle(Vector2(bx + (4.0 if side == 0 else -4.0) + sin(anim_t + k) * 2.0, by2), 1.6,
+				Color(1, 1, 1, 0.18 + 0.1 * sin(anim_t * 3.0 + k * 2.0)))
+
+# bank props per theme: [common, accent] generated sprites; primitives only as fallback
+const BANK_PROPS := [
+	["bank_cattail_0", "bank_cattail_1"],
+	["bank_umbrella", "bank_blanket"],
+	["bank_grave", "bank_deadtree"],
+	["bank_sandcastle", "bank_cattail_1"],
+	["bank_lamp", "bank_cattail_0"],
+	["bank_fern", "bank_shroom"],
+	["bank_pine", "bank_snowduck"],
+]
+
 func _draw_bank_decor() -> void:
 	if not has_art:
 		return
-	for k in 6:
-		var sy: float = fposmod(k * 150.0 + distance, VIEW.y + 200.0) - 100.0
+	var pair: Array = BANK_PROPS[theme_idx]
+	var have_tex: bool = tex_env.has(pair[0]) and tex_env.has(pair[1])
+	var nslots: int = 9 if have_tex else 6
+	for k in nslots:
+		var span := VIEW.y + 200.0
+		var sy: float = fposmod(k * (span / nslots) + distance, span) - 100.0
+		var wrap_i: int = int((k * (span / nslots) + distance) / span)
 		var left: bool = (k % 2 == 0)
 		var b := Vector2(BANK_W if left else VIEW.x - BANK_W, sy)
 		var d: float = 1.0 if left else -1.0          # lean into the river
+		if have_tex:
+			var h: int = (k * 31 + wrap_i * 17) % 100
+			# every so often the slot is a placid COW watching you paddle by (the background gag)
+			var tname: String
+			if tex_env.has("bank_cow") and h == 42:
+				tname = "bank_cow"
+			else:
+				tname = pair[0] if h % 3 != 0 else pair[1]
+			var btex: Texture2D = tex_env.get(tname)
+			if btex != null:
+				var bsz: Vector2 = btex.get_size() * 2.0
+				var inset: float = -d * (8.0 + float((k * 13 + wrap_i * 7) % 14))   # sit ON the grass
+				draw_texture_rect(btex, Rect2(Vector2(b.x + inset - bsz.x * 0.5, b.y - bsz.y), bsz), false)
+			continue
 		match theme_idx:
 			0:                                        # Lazy Pond — cattail reeds
 				draw_line(b, b + Vector2(d * 2.0, -24.0), Color(0.40, 0.55, 0.30), 2.0)
@@ -11847,6 +12360,19 @@ func _draw_menu() -> void:
 	_draw_button(MENU_STATS_BTN, "LOGBOOK", 19)
 	_draw_button(MENU_CODEX_BTN, "CODEX", 19)
 	_draw_button(MENU_SETTINGS_BTN, "SETTINGS", 16)
+	# BIG DAY: today's seeded river — a golden pill with a tiny rising sun
+	_draw_button(MENU_BIGDAY_BTN, "BIG DAY", 16, true)
+	var _sc := MENU_BIGDAY_BTN.position + Vector2(56.0, 15.0)
+	draw_circle(_sc, 6.0, Color(1.0, 0.85, 0.3))
+	for _sr in 5:
+		var _sa := -PI + _sr * PI / 4.0
+		draw_line(_sc + Vector2(cos(_sa), sin(_sa)) * 8.0, _sc + Vector2(cos(_sa), sin(_sa)) * 11.0, Color(1.0, 0.85, 0.3), 1.6)
+	draw_rect(Rect2(_sc.x - 10.0, _sc.y + 1.0, 20.0, 6.0), Color(0.42, 0.30, 0.16))   # horizon: the pill's wood
+	if bigday_best > 0 and bigday_date == _today_str():
+		var _bd := "today: %d ft" % bigday_best
+		var _bw := font.get_string_size(_bd, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		draw_string(font, Vector2(MENU_BIGDAY_BTN.position.x + MENU_BIGDAY_BTN.size.x * 0.5 - _bw * 0.5,
+			MENU_BIGDAY_BTN.position.y + MENU_BIGDAY_BTN.size.y + 14.0), _bd, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.9, 0.55, 0.8))
 	var _gc := MENU_SETTINGS_BTN.position + Vector2(52.0, 15.0)   # a procedural GEAR (web font lacks the emoji)
 	for _gt in 8:
 		var _ga: float = _gt * TAU / 8.0
@@ -13199,6 +13725,9 @@ func _sim_begin() -> void:
 	sim_runs_total = maxi(1, int(_arg_val(args, "--runs", "1")))
 	sim_force_boss = int(_arg_val(args, "--boss", "-1"))
 	sim_append = args.has("--append")
+	var sim_seed := _arg_val(args, "--seed", "")
+	if sim_seed != "":
+		seed(int(sim_seed))                       # reproducible batches for before/after comparisons
 	sim_runs_done = 0; sim_results = []
 	duck_name = "scootybooty"
 	print("[SIM] scootybooty bot sim: persona=%s runs=%d" % [bot_persona, sim_runs_total])
@@ -13212,8 +13741,7 @@ func _sim_start_run() -> void:
 		if r.species != "" and ducks.has(r.species):
 			break
 		tries += 1
-	start_game()
-	in_shrine = false; shrine_boons = []          # skip the pre-run shrine
+	start_game()                                  # shrine stays: _sim_watch drafts a boon like a player would
 	var _heads := ["crown", "pirate", "party", "lilypad", "souwester", "chef", "bandana", "goggles", "raccoon", "scarf", "halo", "boombox"]
 	var _bodies := ["turtle", "cape", "vest", "jetpack", "satchel"]
 	equipped_wear = _heads[randi() % _heads.size()] if randf() < 0.9 else ""    # scootybooty owns everything
@@ -13236,20 +13764,66 @@ func _bot_persona_params() -> Vector2:
 		"reckless": return Vector2(0.80, 0.85)
 		_:          return Vector2(1.00, 0.40)
 
+# draft/boon weights: defense keeps the bot alive to SEE bosses 2-3 (weights ~ what a decent player values)
+const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "school": 2.5, "double": 2.5,
+	"spring": 2.0, "zen": 2.0, "springy": 1.8, "wingducks": 1.8, "thunder": 1.6, "loft": 1.5,
+	"bounce": 1.4, "tiny": 1.4, "magnet": 1.2, "snacks": 1.2}
+const BOT_BOON_W := {"goosedown": 4.0, "secondwind": 3.5, "phoenix": 3.5, "clutch": 3.0,
+	"gosling_guard": 3.0, "lucky": 2.0, "tailwind": 1.6, "slipstream": 1.6, "momentum": 1.4}
+
+func _bot_pick_weighted(choices: Array, table: Dictionary):
+	var greed: float = _bot_persona_params().y      # greedy personas drift back toward "shiny = good"
+	var total := 0.0
+	var ws: Array = []
+	for c in choices:
+		var w: float = lerpf(float(table.get(String(c.get("id", "")), 1.0)), 1.0, greed)
+		ws.append(w); total += w
+	var roll := randf() * total
+	for i in choices.size():
+		roll -= float(ws[i])
+		if roll <= 0.0:
+			return choices[i]
+	return choices[choices.size() - 1]
+
 func _bot_danger_at(cx: float) -> float:
 	var d := 0.0
 	for e in enemies:                 # diving herons near the waterline
 		var ey: float = e.y
-		if ey > BASE_Y - 170.0 and ey < BASE_Y + 40.0 and absf(float(e.x) - cx) < 48.0:
-			d += 60.0 * (1.0 - clampf(absf(ey - BASE_Y) / 170.0, 0.0, 1.0))
-	if boss != null and String(boss.get("dive_stage", "")) in ["warn", "snap", "tele", "down"]:
-		if absf(float(boss.get("dive_x", -999.0)) - cx) < 58.0:
-			d += 85.0
+		if ey > BASE_Y - 190.0 and ey < BASE_Y + 40.0 and absf(float(e.x) - cx) < 52.0:
+			d += 70.0 * (1.0 - clampf(absf(ey - BASE_Y) / 190.0, 0.0, 1.0))
+	if boss != null:
+		var st := String(boss.get("dive_stage", ""))
+		# lane telegraphs: Gerald's dive, Snapz's chomp, Barry's log hurl — the tell marks the lane
+		if st in ["warn", "snap", "tele", "down", "throwwarn", "throw", "ptele", "pleap"]:
+			if absf(float(boss.get("dive_x", -999.0)) - cx) < 64.0:
+				d += 95.0
+		# BONGO's tongue locks onto a lane and SNAPS — be elsewhere
+		if st in ["tonguewarn", "tongue"]:
+			if absf(float(boss.get("tongue_tx", -999.0)) - cx) < 52.0:
+				d += 85.0
+		# BONGO's leap lands near you — clear the landing zone
+		if st == "hop" and absf(float(boss.get("hop_to", -999.0)) - cx) < 72.0:
+			d += 70.0
+		# BONGO's gulp drags you toward the maw — fight it from as wide as possible
+		if st in ["gulpwarn", "gulp"] and absf(float(boss.x) - cx) < 96.0:
+			d += 55.0
+		# FEATHER STORM: the drifting gap is the only shelter — everything else is lava
+		if st == "ultcast":
+			d += 130.0 * clampf(absf(float(boss.get("ult_gap", VIEW.x * 0.5)) - cx) / 110.0, 0.0, 1.0)
+	# PREDICTIVE glob dodging: integrate each glob to the waterline and avoid where it will LAND
+	# (this also threads Barry's log-wall gap and Snapz's torrent without special cases)
 	for g in boss_globs:
-		if float(g.y) > BASE_Y - 130.0 and absf(float(g.x) - cx) < 34.0:
-			d += 42.0
-	for l in logs:                    # log walls near the waterline
-		if float(l.y) > BASE_Y - 72.0 and float(l.y) < BASE_Y + 30.0:
+		var gvy: float = float(g.get("vy", 150.0))
+		if gvy <= 10.0:
+			continue
+		var tt: float = (BASE_Y - float(g.y)) / gvy
+		if tt < 0.0 or tt > 0.9:
+			continue
+		var gx: float = float(g.x) + float(g.get("vx", 0.0)) * tt
+		if absf(gx - cx) < (48.0 if g.get("log", false) else 38.0):
+			d += 52.0 * (1.0 - tt)
+	for l in logs:                    # log walls near the waterline (look further ahead the faster we go)
+		if float(l.y) > BASE_Y - (72.0 + speed * 0.14) and float(l.y) < BASE_Y + 30.0:
 			if absf(float(l.x) - cx) < float(l.w) * 0.5 + 18.0:
 				d += 30.0
 	if sadie != null and float(sadie.get("t", 0.0)) > 0.0:   # SADIE zooms across — dodge her lane near the waterline
@@ -13272,11 +13846,15 @@ func _bot_control(delta: float) -> void:
 		sim_donny_active = false
 	var lo := BANK_W + 30.0
 	var hi := VIEW.x - BANK_W - 30.0
-	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed"]:   # BOSS VULNERABLE: line up + stomp
-		target_x = clampf(float(boss.x), lo, hi)
-		if sim_hop_cd <= 0.0 and not is_airborne() and absf(float(boss.x) - duck_x) < 80.0:
-			hop(); sim_hop_cd = 0.22
-		return
+	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed", "pbeach"]:   # BOSS VULNERABLE: line up + stomp
+		var bx := clampf(float(boss.x), lo, hi)
+		# ...but never stomp-tunnel through a hazard: if the lineup lane is hot, survive
+		# first and take the next window (Chrissy kept flattening single-minded stompers)
+		if _bot_danger_at(bx) < 55.0 and _bot_danger_at(duck_x) < 55.0:
+			target_x = bx
+			if sim_hop_cd <= 0.0 and not is_airborne() and absf(float(boss.x) - duck_x) < 80.0:
+				hop(); sim_hop_cd = 0.22
+			return
 	var best_x := duck_x
 	var best_score := -1.0e9
 	for i in 13:
@@ -13290,21 +13868,36 @@ func _bot_control(delta: float) -> void:
 		hop(); sim_hop_cd = 0.22
 
 func _bot_should_hop() -> bool:
-	for l in logs:                    # vault an imminent log in our column
+	for l in logs:                    # vault an imminent log in our column (lead scales with current speed)
 		if absf(float(l.x) - duck_x) < float(l.w) * 0.5 + 16.0:
 			var dy: float = BASE_Y - float(l.y)
-			if dy > -6.0 and dy < 66.0:
+			if dy > -6.0 and dy < clampf(speed * 0.18, 56.0, 112.0):
 				return true
 	for t in boss_tides:              # hop the foam waves
 		if not t.get("hit", false) and absf(float(t.y) - BASE_Y) < 64.0:
 			return true
-	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed"]:
-		if absf(float(boss.x) - duck_x) < 52.0:
+	if boss != null:
+		var st := String(boss.get("dive_stage", ""))
+		if st in ["stuck", "dazed", "pbeach"] and absf(float(boss.x) - duck_x) < 52.0:
 			return true                # STOMP the beached/woozy boss
+		if st == "skim" and absf(float(boss.x) - duck_x) < 85.0:
+			return true                # HOP Gerald's horizontal SKIM-RAKE (airborne clears it)
+		# caught in the tongue's lane with no time to steer out? a hop clears it (tongue only snags grounded ducks)
+		if st == "tongue" and absf(float(boss.get("tongue_tx", -999.0)) - duck_x) < 40.0:
+			return true
+		# lunge already committed to our lane — leave the water NOW
+		if st in ["snap", "down"] and absf(float(boss.get("dive_x", -999.0)) - duck_x) < 54.0 and boss.t > 0.05:
+			return true
+	# a glob about to land on us that we can't outrun — hop it (airborne ducks don't get stung)
+	for g in boss_globs:
+		var gvy: float = float(g.get("vy", 150.0))
+		if gvy <= 10.0:
+			continue
+		var tt: float = (BASE_Y - float(g.y)) / gvy
+		if tt > 0.0 and tt < 0.3 and absf(float(g.x) + float(g.get("vx", 0.0)) * tt - duck_x) < 40.0:
+			return true
 	if donny != null and sim_donny_react and absf(float(donny.y) - BASE_Y) < 56.0 and absf(float(donny.x) - duck_x) < 36.0:
 		return true                    # JUMP over CHRISSY — airborne = her hull passes under
-	if boss != null and String(boss.get("dive_stage", "")) == "skim" and absf(float(boss.x) - duck_x) < 85.0:
-		return true                    # HOP Gerald's horizontal SKIM-RAKE (airborne clears it)
 	return false
 
 func _sim_duck_icon() -> String:
@@ -13393,11 +13986,12 @@ func _sim_record_run(stalled := false) -> void:
 func _sim_watch(delta: float) -> void:
 	if not bot_mode:
 		return
-	# auto-resolve pick screens (random, like a real player) so the run proceeds + exercises boons/power-ups
+	# auto-resolve pick screens with persona-weighted judgment (a real player DRAFTS A BUILD:
+	# skilled/cautious players buy survivability; random picks meant no shields = 1-hit boss deaths)
 	if in_shrine and shrine_boons.size() > 0:
-		_pick_boon(shrine_boons[randi() % shrine_boons.size()]); return
+		_pick_boon(_bot_pick_weighted(shrine_boons, BOT_BOON_W)); return
 	if drafting and draft_choices.size() > 0:
-		_pick_upgrade(draft_choices[randi() % draft_choices.size()]); return
+		_pick_upgrade(_bot_pick_weighted(draft_choices, BOT_DRAFT_W)); return
 	if in_shop:
 		in_shop = false; return
 	if boss != null and not sim_saw_boss:

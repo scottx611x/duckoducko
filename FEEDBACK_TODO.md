@@ -108,7 +108,7 @@ synergies, add varied TRASH-leveraging power-ups (e.g. trash-magnet → free bon
 - FINDINGS v1: skilled bot reaches Gerald (boss 1) ~5000m but DIES to him (also early donny/sadie deaths before threat model expanded). Does not yet WIN bosses.
 - [x] **--boss=N + boss-combat AI** — bot can be dropped straight into a chosen boss + now chases/stomps vulnerable bosses. FINDING: dropped into the NEW Snapz, the skilled bot beats it 6/6 taking ~1 hit -> the 3-lane chomps are DODGEABLE/FAIR (objective half of the Snapz playtest validated). FINDING: Donny is a 100%% death wall after (bot lacks Donny-awareness OR he is overtuned).
 - [x] **power-up metrics + Grafana sidecar** — report now captures drafted power-ups (picked dict) + boons; restructured into flat Grafana-friendly arrays (summary/deaths/ups/runs) written to tools/botsim_dashboard/data/. Built tools/botsim_dashboard/ (docker compose: Grafana-oss + Infinity datasource + nginx fileserver, auto-provisioned datasource+dashboard). VERIFIED end-to-end on localhost:3001 (3000 was taken). Panels: KPIs, death causes, power-up frequency, per-run table.
-- [ ] NEXT: add Donny (+ remaining char hazards) to the bot threat model so it reaches Snapz/Eternal via real progression; bigger persona batches; per-attack dodge-margin metrics; improve boss-combat AI (reliable bait->dodge->stomp) so the bot clears Gerald + reaches SNAPZ/Eternal — needed to actually validate the Snapz chomp redesign without Scott. Then per-attack dodge-margin metrics + bigger persona batches.
+- [x] **BOT BOSS-COMBAT AI (grand-takeover pass, 2026-07-01)** — complete per-boss threat model (Gerald dive/skim/FEATHER-STORM gap-seek/eswarm, Snapz lanes/torrent, Barry hurl/wall via predictive glob landing, Bongo tongue/leap/gulp), speed-scaled log anticipation, danger-aware stomp lineups (no more Chrissy-flattens-stomper), persona-weighted DRAFTING (skilled bots buy shields now), shrine boons ON, `--seed=` for reproducible batches. RESULT: forced-Gerald clear rate ~15% -> ~100%; bot now reaches Snapz AND the Eternal (30km) in normal-ish runs. Remaining (parked): per-attack dodge-margin metrics, bigger persona batches.
 
 ## ➕ BOSS REWORK (Scott, 2026-06-25) — IN PROGRESS (loop)
 - [x] **Stomp over-advertising -> subtle** v1.11.91 — the vulnerable-boss "HIT ME" glow was a big pulsing gold billboard; cut to a faint warm hint (both the Gerald `dazed` + Snapz `stuck` glows), slower pulse, gentler brighten. Cross-board.
@@ -473,3 +473,33 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - Scott: the flap locked the duck to a fixed forward-right hero view — weird when it was rotating/facing away. Fix: render a WINGS-OUT TURNTABLE (<sp>_flap_%02d, 24 yaws at hero pitch) instead of the 2 fixed-hero flap frames; _flapspin(sp)+_flap_frame(sp,yaw) pick the wings-out frame at the duck CURRENT yaw. Menu + select draws now alternate folded<->wings-out at _mspin/select_yaw -> the duck flaps IN PLACE at any facing; hat rides the same yaw. Dropped the deg_to_rad(20) hero override + preen frames.
 
 - v1.16.11 SHIPPED: flap plays at the current facing (wings-out turntable), no more snap to front.
+
+## 🎨 GRAND TAKEOVER MANDATE (Scott, 2026-07-01: "take an honest pass over my whole game so far. take over: great art, great replay value, anything else you want. don't resurface till it is great")
+- [ ] Honest full-game assessment (art, replay value, feel, UX) — log findings here
+- [ ] ART: raise weakest visuals to Gerald-Eternal bar (Scott's stated quality bar)
+- [ ] REPLAY VALUE: design + ship systems that make runs feel different (my judgment)
+- [ ] Work the 9 OPEN items above where they intersect (esp. standing "everything visually appealing" bar)
+- [ ] Playtest via --botsim before claiming anything works; 🟡 anything I can't verify in-motion
+
+
+### 📋 HONEST ASSESSMENT (2026-07-01, from screenshots + full code/art audit)
+**Genuinely great:** character art pipeline (voxel→turntables; ducks/bosses/Sadie rich + consistent), whimsy writing (death deck, boss intros), systems depth (boons/drafts/wearables/ascension/codex/logbook), dev tooling (botsim, shot harness). The Eternal intro's mood = the bar the rest should hit.
+**Honest problems, by leverage:**
+1. **THE RIVER IS THE WEAKEST ART IN THE GAME.** ~85% of every frame is flat color + sparse dot speckle + two thin repeating bank strips, for 30,000 ft. Characters have love; the canvas is placeholder-grade. Biome washes swap palette but composition never changes (Bog ≈ Aurora ≈ Pond in different hues). DESIGN §7 promised shimmer/parallax; WHIMSY §5-6 promised floating nonsense + per-theme gags — mostly absent in frames.
+2. **Boss arenas are empty** — mid-fight frames are a sprite at the top of a bare field. Intro mood doesn't carry into the fight.
+3. **Replay structure is 100% fixed**: same boss marks (5k/15k/30k), same biome order/length, same draft cadence. Only variance = 2 boss coin-flips + card RNG + loadout. After first ascension, runs FEEL identical; retention leans wholly on the feather grind + ascension stat-mods.
+4. **Bot can't fight bosses** (baseline: skilled bot dies AT Gerald, 1 hit taken) → I can't validate boss work autonomously (open item, line ~111).
+5. **Text overlap bugs**: boss-intro title clips the taunt bubble (s_eternal), stacked "3200 ft/3400 ft" milestone text (s_snapz_snap). Small, constant whimsy-killers.
+6. **Sparse stragglers**: heron = 4 flat frames (the signature nemesis!); PIKE fully built + 32 turntable frames but unreachable (pulled for Beaver — could return as branch-exclusive, NOT main rotation, respecting the pull).
+
+### 🎯 PLAN (leverage order)
+- [x] **LIVING RIVER pass** — shipped: bank foam seams, current streaks, shallow bank margins + deep channel, biome-weighted WATER SCENERY (lilies/duckweed/stones/snags + whimsy floats: bottle, flip-flop, sailboat, frog-on-raft), real pixel-art BANK PROPS per pond (cattails, picnic set, gravestone+dead tree, sandcastle, lamppost, fern+shrooms, snowy pine+snowduck) + a rare COW watching you. Rooted scenery rides the scroll, floaters lag at 0.85x (depth read). 43 new sprites via tools/gen_env.py (voxel pipeline, style-matched). 🟡 VERIFIED via --rivershot themes 0/2/5 stills — Scott should feel it in motion.
+- [x] **Boss arena dressing** — per-boss mood tint + vignette + drifting arena motes (Snapz murk/bubbles, Barry lumber, Bongo bayou, Pike cold blue, Eternal blood-red). 🟡 stills pending in-motion check.
+- [x] **REPLAY: river FORKS** — the river SPLITS (~12k, then every ~10k): island wedge + two signed channels (pond name + modifier: FEATHER RUN / HERON COUNTRY / CALM WATER / JUNK DRIFT / SNACK BAR / rare PIKE'S HOLLOW). Your side at the wedge = your route; branch modifier lasts most of the stretch. Duck is eased off the island (no grass-paddling). 🟡
+- [x] **REPLAY: river EVENTS** — announced, temporary: SQUALL (rain + feathers), TAILWIND (current surge + 2x snacks), LOST DUCKLING (reach the raft -> +1 duckling; miss it and it paddles off, gently sad), FLOTSAM FLUSH, HERON PATROL. ~1-2 per run between bosses. 🟡
+- [x] **REPLAY: BIG DAY (daily seed)** — menu pill (golden, rising sun): today's date seeds the run's BONES (boss lineup, shrine deal, each draft's 3 cards, fork spots+choices) — same river for everyone today, replayable all day, per-day best tracked under the pill. (Renamed from 'daily migration' — MIGRATION was already a boon; BIG DAY is the birder term anyway.)
+- [x] **Bot boss-combat AI** — see BOT NOTES above; forced-Gerald clears went ~15% -> ~100%, bot reaches the Eternal.
+- [x] **Fix text overlaps** — boss speech bubbles suppressed during letterboxed intros (title used to clip them); float-texts anti-stack (step down, capped at 3).
+- [x] **Heron art enrichment** — real voxel heron: 16-frame codex turntable (wired into COMPENDIUM) + 2 top-down strike-dive frames replacing the old 4-frame side-view blob in gameplay. Gerald's plumage palette = same species family.
+- [x] **Snapz maw-facing** — open-maw turntable now runs through the WIND-UP too (warn/snap/stuck) and the maw points AT the strike lane while he closes on it, then glares at the duck once he's over it. 🟡 (feel = Scott's call, per the no-retune rule this changes ART/READ only, not timings)
+- [x] **BOTSIM SAVE POLLUTION FIX** — bot runs were banking feathers + writing run_history/best_m into the REAL save on every batch death. Now sim runs persist nothing. (Save backed up before today's batches.)
