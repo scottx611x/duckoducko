@@ -463,3 +463,7 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
   - Main.gd: _menuanim(sp) lazy-loads them; menu + select ducks blit alternating flap frames (wings really flap) / preen frames (head buried, nibble wiggle) during the idle windows. Hat drawn at hero yaw during flap; hidden during preen (head tucked).
 
 - v1.16.9 SHIPPED: real flap (wings spread) + preen (neck bent into feathers) menu-duck poses.
+
+
+## 2026-06-30 — remove preen, keep flap + wearables (v1.16.10)
+- Scott: get rid of the preen, keep the wing flap, dont remove wearables. Removed the preen trigger/draw branches + dead vars (menu/select_preen_t); menu ducks now ONLY flap. Wearables stay ON during the flap (hat drawn at hero yaw, no longer hidden). preen frames left on disk unused (harmless).
