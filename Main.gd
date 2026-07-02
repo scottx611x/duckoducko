@@ -584,6 +584,7 @@ var boss_kinds: Array = ["gerald", "snapz"]   # first two boss slots, shuffled p
 var bot_mode := false
 var bot_persona := "skilled"
 var sim_runs_total := 1
+var sim_force_kind := ""
 var sim_runs_done := 0
 var sim_results: Array = []
 var sim_run_t := 0.0
@@ -629,6 +630,8 @@ const SNAPZ_STOMP_LINES := ["HSSS!", "my shell!", "grrrk.", "you DARE?", "snap..
 const BEAVER_STOMP_LINES := ["my DAM!", "right on the TAIL.", "the TIMBER...", "you chipped a tooth!", "renovations CANCELLED."]
 const BONGO_STOMP_LINES := ["...rude.", "ribbit. (ow.)", "i felt that.", "was that\nNECESSARY?", "...fine. FINE.", "ugh."]
 const BONGO_TAUNTS := ["ribbit.", "i was NAPPING.", "you woke me\nfor THIS?", "...still here?", "unbelievable.", "*unimpressed croak*"]
+const MEGASADIE_TAUNTS := ["BORF.", "ball?! BALL!!", "friend friend\nFRIEND", "AGAIN! AGAIN!", "*tail thunder*", "you SQUEAK?!", "chase chase chase"]
+const MEGASADIE_STOMP_LINES := ["hehe. again!", "BOOP.", "*happy sneeze*", "good hop!!", "you're IT!"]
 # BARRY is a gruff, work-obsessed engineer. everything is a construction site.
 const BEAVER_TAUNTS := ["DAM you.", "this is a\nCONSTRUCTION zone.", "you got a PERMIT?",
 	"i'll flood you OUT.", "load-bearing\nduck, eh?", "gnaw. gnaw. GNAW.",
@@ -663,6 +666,12 @@ const BOSS_INTROS := {
 		"bubbles rise in a slow, deliberate ring.\nthe old jaws of the deep are opening.",
 		"the water goes warm, then wrong.\nsomething down there has decided you'll do.",
 		"every fish flees upstream at once.\nthey have felt the old shell move."],
+	"sadie_final": [
+		"the river rises in one long brown swell.\nthe GOOD GIRL has grown. considerably.",
+		"a chuckit the size of the moon splashes down.\nsomebody wants to play. everybody runs.",
+		"the banks tremble with a happy rhythm.\nit is a tail. it is a VERY big tail.",
+		"she paddled after one thrown ball\nand came back the size of the weather.",
+		"no growl. no menace. only joy,\nat a scale the river cannot survive."],
 	"pike": [
 		"the reeds go still and something long and patient waits beneath you.",
 		"a single bubble rises, then nothing. the lurker has chosen its moment.",
@@ -687,6 +696,7 @@ const BOSS_INTRO_TAUNTS := {
 	"pike": ["from BELOW.", "snap. gulp. gone.", "i was always right here."],
 	"beaver": ["DAM you.", "TIMBER.", "this river is CONDEMNED.", "Barry builds. Barry BREAKS."],
 	"bongo": ["ribbit.", "you. AGAIN.", "i was COMFORTABLE.", "this had better\nbe WORTH it."],
+	"sadie_final": ["BALL?!", "you're here!!\nYOU'RE HERE!!", "one game.\nwinner gets the river."],
 }
 var boss = null             # null, or {hp, max_hp, x, y, phase, t, idx, dive*, ...}
 var boss_waves: Array = []  # shockwave rings from his dives (cosmetic): {x, r}
@@ -721,6 +731,7 @@ const GLIDE_DUR := 3.6
 var tornado_t := 0.0            # TORNADO: the duck is a spinning waterspout, vacuuming snacks
 var echo_pending := -1.0        # ECHO boon: >=0 = countdown to a weaker encore of the last special
 var special_scale := 1.0        # ECHO: scales the encore's power/duration down
+var echo_special := ""          # ECHO repeats the special that actually fired (no wild reroll)
 var firing_echo := false        # ECHO: guard so the encore can't schedule another encore
 var draft_grace := 0.0          # brief invincible breather right after a draft so hazards slide past, not vanish
 var slowmo_t := 0.0             # ZEN MODE: bullet-time — the river crawls so you can thread it
@@ -921,6 +932,8 @@ const CODEX := [
 		"lore": "A river beaver the size of a hay bale and twice as opinionated about water management. It has surveyed your stretch of river, declared it structurally unsound, and begun immediate aggressive renovation. It hurls gnawed logs down your lane, cracks its great flat tail to roll a wave at you, and throws up walls of timber across the current — gnawing all the while, always gnawing. Dodge the lumber, hop the wake, weave the wall, then bonk it on the skull while it admires its own handiwork."},
 	{"id": "bongo", "cat": "boss", "name": "BONGO", "tag": "boss · the awakened",
 		"lore": "You know the little bullfrog who sits on a drifting log and ribbits at you, flatly, disappointed? This is what happens when you bop one too many. BONGO is that frog, grown to the size of a small island and twice as unbothered. He'd rather be napping. Since you insist, he'll lash his tongue across your lane, belly-flop a wave at you, and inhale hard enough to drag you into his maw — all with the weary air of a creature doing you a favour. Dodge it, then bonk him while he sulks. He will not forgive this, but he will not exactly remember it either."},
+	{"id": "megasadie", "cat": "boss", "name": "SADIE THE BOUNDLESS", "tag": "final boss · the good girl",
+		"lore": "She chased one thrown ball past the horizon and came back the size of the weather. She is not angry. She has never been angry. She simply wants to play — fetch, zoomies, cannonball — with a duck-sized playmate, at a scale the river cannot survive. Win, and she flops over, delighted: best duck. BEST duck."},
 	{"id": "eternal", "cat": "boss", "name": "GERALD THE ETERNAL", "tag": "final boss · undead",
 		"lore": "Gerald came back. Wrong. Bigger, bloodier, no longer strictly alive, he has clawed his way back across from somewhere colder to reclaim what was always HIS. Death apparently taught him a second slam and a taste for summoning spectral herons out of the fog. He is the river's final word — and he is very, very tired of you."},
 	{"id": "heron", "cat": "enemy", "name": "HERON", "tag": "enemy · aerial",
@@ -1585,13 +1598,13 @@ func _ready() -> void:
 			for i in 16:
 				frames.append(load("res://art/%s_spin_%02d.png" % [cid, i]))
 			tex_codex_spin[cid] = frames
-	var _ctmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread"}   # GUARD against the recurring missing-codex-icon bug
+	var _ctmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}   # GUARD against the recurring missing-codex-icon bug
 	for _ce in CODEX:
 		if _ce.get("cat", "") in ["boss", "enemy", "friend"]:
 			var _cid: String = str(_ce.get("id", ""))
 			if not ((_ctmap.has(_cid) and tex_codex_spin.has(_ctmap[_cid])) or _codex_tex(_cid) != null):
 				_log("CODEX-ICON MISSING: '%s' (%s) -- add it to _codex_tex" % [_cid, str(_ce.get("name", ""))])
-			if _ce.get("cat", "") == "boss" and not tex_codex_spin.has("gerald" if _cid == "eternal" else _cid):
+			if _ce.get("cat", "") == "boss" and not tex_codex_spin.has("gerald" if _cid == "eternal" else ("sadie" if _cid == "megasadie" else _cid)):
 				_log("CODEX-DETAIL MISSING: boss '%s' has no turntable" % _cid)
 	for fi in range(6):                       # ON FIRE voxel flame volume (6-frame loop)
 		var fp := "res://art/fire_duck_%d.png" % fi
@@ -1834,6 +1847,23 @@ func _ready() -> void:
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_river_%d.png" % theme_idx)
+		get_tree().quit()
+	elif "--sadieshot" in OS.get_cmdline_user_args():
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
+		distance = 300000.0
+		_force_boss(2, "megasadie")
+		if boss != null:
+			boss.phase = "fight"; boss.t = 0.0
+			boss.y = 150.0
+			boss.dive_stage = "throwwarn"; boss.dive_x = VIEW.x * 0.4; boss.t = 0.3
+			_gerald_say("ball?! BALL!!")
+			_megasadie_ball(VIEW.x * 0.62)
+			boss_globs[0].y = 400.0
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_megasadie.png")
 		get_tree().quit()
 	elif "--henmenushot" in OS.get_cmdline_user_args():
 		booting = false; hen_mode = true; last_species = "mallard"
@@ -4525,7 +4555,7 @@ func reset_game() -> void:
 	boss_waves.clear()
 	next_boss_idx = 0
 	_bigday_reseed(1)                                  # Big Day: everyone faces the same lineup today
-	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = Eternal
+	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2], ["gerald", "megasadie"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = the ETERNAL or SADIE THE BOUNDLESS
 	boss_hp_bonus = 0
 	asc_pace = 1.0
 	bread_pending = false; bread_active = false; bread_delay = 0.0; bread_t = 0.0
@@ -5165,10 +5195,10 @@ func _sonic_quack() -> void:
 	_hit_boss(2)                               # a screen-clearing QUACK staggers Gerald hard
 
 # the LOFT meter is full — fire whichever special you have equipped this run
-func _fire_special() -> void:
+func _fire_special(force := "") -> void:
 	_st("specials")
 	tut_fired = true                               # tutorial: the LOFT/SPECIAL beat is satisfied
-	var sp := equipped_special
+	var sp := force if force != "" else equipped_special
 	if sp == "wild":                               # WILD CARD: pick a random special you own
 		var pool: Array = []
 		for s in SPECIALS:
@@ -5185,6 +5215,8 @@ func _fire_special() -> void:
 		_sonic_quack()
 	if run_boons.has("echo") and not firing_echo:   # ECHO: the special rings out a second, weaker time
 		echo_pending = 0.4
+		echo_special = sp                           # the encore repeats the SAME act (WILD used to
+		                                            # reroll — mega then a surprise mid-air GLIDE)
 
 # ZEN MODE: bullet-time — the whole river crawls so you can thread the chaos
 func fire_slowmo() -> void:                        # TORNADO (the slot formerly known as ZEN MODE)
@@ -5863,13 +5895,16 @@ func _update_play(delta: float) -> void:
 	_move_world(delta)
 	if draft_grace > 0.0:
 		draft_grace -= delta                       # the post-draft breather winds down
-	if echo_pending >= 0.0:                         # ECHO: a weaker encore ~0.4s after the primary fire
-		echo_pending -= delta
-		if echo_pending < 0.0 and alive:
-			firing_echo = true; special_scale = 0.6
-			loft = 1.0; loft_ready = true              # refund LOFT for the single encore
-			_fire_special()
-			firing_echo = false; special_scale = 1.0
+	if echo_pending >= 0.0:                         # ECHO: a weaker encore — but it WAITS for the stage:
+		# it used to fire a fixed 0.4s in, detonating MID-mega (and the guarded no-op left a free
+		# full LOFT bar). Now the countdown only runs once the primary special has fully played out.
+		if state != St.MEGA and glide_t <= 0.0 and tornado_t <= 0.0 and dash_t <= 0.0 and laser_t <= 0.0:
+			echo_pending -= delta
+			if echo_pending < 0.0 and alive:
+				firing_echo = true; special_scale = 0.6
+				loft = 1.0; loft_ready = true          # refund LOFT for the single encore
+				_fire_special(echo_special)
+				firing_echo = false; special_scale = 1.0
 	if dash_t > 0.0:
 		dash_t -= delta
 		distance += speed * delta                  # AFTERBURNER: a second helping of pace
@@ -6166,9 +6201,9 @@ func _start_boss(force_kind := "") -> void:
 	logs.clear()
 	boss_waves.clear()
 	boss_globs.clear()
-	var kind: String = force_kind if force_kind != "" else (boss_kinds[idx] if idx < boss_kinds.size() else "gerald")   # shuffled per run (slots 0/1); slot 2+ is always the Eternal
+	var kind: String = force_kind if force_kind != "" else (boss_kinds[idx] if idx < boss_kinds.size() else "gerald")   # shuffled per run (all 3 slots)
 	var final_gerald: bool = kind == "gerald" and idx >= 2
-	_codex_see("snapz" if kind == "snapz" else ("beaver" if kind == "beaver" else ("bongo" if kind == "bongo" else ("eternal" if final_gerald else "gerald"))))
+	_codex_see("snapz" if kind == "snapz" else ("beaver" if kind == "beaver" else ("bongo" if kind == "bongo" else ("megasadie" if kind == "megasadie" else ("eternal" if final_gerald else "gerald")))))
 	var hp := 3 + 2 * idx + boss_hp_bonus + ascension   # stomp him this many times to win (ascension hardens every boss)
 	var gap := 2.4 - 0.4 * idx                  # harder bosses attack more often
 	var bscale := 1.25                           # GERALD THE IMMENSE is a big bird
@@ -6201,6 +6236,13 @@ func _start_boss(force_kind := "") -> void:
 		title = "BONGO"
 		intro_pool = "bongo"
 		tint = Color(0.92, 1.0, 0.9)
+	elif kind == "megasadie":                    # SADIE THE BOUNDLESS: the good girl, at weather scale
+		hp += 11                                  # final-boss stature, same bar as the Eternal
+		gap *= 0.62
+		bscale = 2.1
+		title = "SADIE THE BOUNDLESS"
+		intro_pool = "sadie_final"
+		tint = Color(1.06, 0.98, 0.9)             # warm — she is not evil, she is ENTHUSIASTIC
 	elif final_gerald:                           # the FINAL heron: HUGE, undead, relentless
 		hp += 11
 		gap *= 0.46
@@ -6234,7 +6276,7 @@ func _start_boss(force_kind := "") -> void:
 	if music_player != null:
 		music_player.volume_db = -45.0       # silence the river theme for the duel
 	if boss_player != null:                  # ...and strike up the BOSS battle music
-		var track = boss_tracks.get("boss_eternal" if final_gerald else "boss_music")
+		var track = boss_tracks.get("boss_eternal" if (final_gerald or kind == "megasadie") else "boss_music")
 		if track != null:
 			boss_player.stream = track
 			boss_player.volume_db = _music_vol_eff()   # match the river / honour the settings volume toggle
@@ -6250,6 +6292,8 @@ func _gerald_say(line: String, wiggle := false) -> void:
 	_sfx("quack", randf_range(0.55, 0.7), -3.0)
 
 func _boss_leave() -> void:
+	if boss.kind == "megasadie":
+		_gerald_say("best duck.\nBEST duck.", true)   # she is not defeated. she is DELIGHTED.
 	boss.phase = "leave"
 	boss.t = 0.0
 	boss_globs.clear()                              # he's beaten — no in-flight spit may still kill you
@@ -6347,7 +6391,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			boss_flash = 0.6
 			duck_shake = maxf(duck_shake, 0.5)
 			_flash("IT WON'T STAY DOWN", 1.8)
-			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else ("ugh.\nSTILL here." if boss.kind == "bongo" else "death is for\nLESSER birds.")))
+			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else ("ugh.\nSTILL here." if boss.kind == "bongo" else ("she brought\nthe ball BACK." if boss.kind == "megasadie" else "death is for\nLESSER birds."))))
 			_sfx("laugh", 0.9); _sfx("mega", 0.5)
 			_spawn_parts(boss.x, boss.y, 28, Color(1.0, 0.4, 0.42), 280.0)
 			return
@@ -6373,7 +6417,12 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 	if not boss.phase2 and boss.hp <= boss.max_hp / 2:
 		boss.phase2 = true
 		boss.dive_gap *= 0.62
-		if boss.kind == "snapz":
+		if boss.kind == "megasadie":
+			_flash("SADIE WANTS DOUBLES", 1.6)
+			_gerald_say("best of\nTHREE!!")
+			_sfx("laugh", 1.25)
+			boss.ult = true                         # queue THE POINT (triple pounce)
+		elif boss.kind == "snapz":
 			_flash("SNAPZ IS ENRAGED", 1.6)
 			_gerald_say("RRRAAGH. SNAP SNAP.")
 			_sfx("laugh", 0.85)
@@ -6462,16 +6511,18 @@ func _update_boss(delta: float) -> void:
 					var f: float = 1.0 - pow(1.0 - clampf((et - 3.0) / 2.0, 0.0, 1.0), 2.2)
 					boss.x = lerpf(VIEW.x * 0.5 - side * 150.0, VIEW.x * 0.5, f)
 					boss.y = lerpf(BASE_Y - 58.0, 150.0, f)
-			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver", "bongo"] else 3.8):   # speaks once settled
+			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver", "bongo", "megasadie"] else 3.8):   # speaks once settled
 				boss.introspoke = true
-				var tpool: Array = BOSS_INTRO_TAUNTS.get(boss.get("intro_pool", "gerald"), [])
+				var tpool: Array = BOSS_INTRO_TAUNTS.get(boss.get("intro_pool", "gerald"), MEGASADIE_TAUNTS if boss.kind == "megasadie" else [])
 				if not tpool.is_empty():
 					_gerald_say(tpool[randi() % tpool.size()], true)
-			if boss.t >= (3.3 if boss.kind in ["snapz", "beaver", "bongo"] else 5.6):    # a longer, more menacing cinematic intro
+			if boss.t >= (3.3 if boss.kind in ["snapz", "beaver", "bongo", "megasadie"] else 5.6):    # a longer, more menacing cinematic intro
 				boss.phase = "fight"; boss.t = 0.0; boss.dive_t = boss.dive_gap
 		"fight":
 			if boss.kind == "snapz":
 				_snapz_fight(delta)
+			elif boss.kind == "megasadie":
+				_megasadie_fight(delta)
 			elif boss.kind == "pike":
 				_pike_fight(delta)
 			elif boss.kind == "beaver":
@@ -6884,6 +6935,146 @@ func _bongo_belch() -> void:
 	for a in [-0.5, 0.0, 0.5]:
 		boss_globs.append({"x": boss.x, "y": boss.y + 30.0, "vx": a * 150.0, "vy": 320.0, "t": 0.0, "fly": true})
 
+# SADIE THE BOUNDLESS: the alternate FINAL boss. She is not evil — she wants to PLAY,
+# at a scale the river cannot survive. Fetch is the fight:
+#   CHUCKIT RAIN ("throwwarn"/"throw"): giant balls hurled down lanes that BOUNCE once
+#   ZOOMIES ("skimwarn"/"skim"): a full-width water-line tear — HOP it
+#   CANNONBALL ("hopwarn"/"hop"): a sky-high belly-flop at your lane -> full-width wave, then
+#     she sits, tongue out, VERY proud = "dazed" (stomp; she thinks the bop is part of the game)
+#   ULT (half HP), THE POINT ("tele"/"down"): bird-dog stance, then a triple pounce chain
+# Stage names deliberately reuse the shared vocabulary so the bot's threat model reads her.
+func _megasadie_fight(delta: float) -> void:
+	var st: String = boss.dive_stage
+	boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.7
+	if st == "":
+		if boss.get("ult", false):                     # THE POINT: she locks on — then pounces. thrice.
+			boss.ult = false
+			boss.dive_stage = "tele"; boss.t = 0.0
+			boss.dive_x = clampf(duck_x, BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+			boss.pounce_n = 3
+			_gerald_say("found you.\nFOUND YOU!!")
+			_sfx("laugh", 1.2); _sfx("splash_big", 0.4)
+			return
+		boss.x = lerpf(boss.x, VIEW.x * 0.5 + sin(anim_t * 0.5) * 120.0, clampf(delta * 1.1, 0.0, 1.0))
+		boss.y = 205.0
+		boss.spit_t -= delta
+		if boss.spit_t <= 0.0:                         # idle: she lobs a friendly(?) ball your way
+			_megasadie_ball(clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 30.0, VIEW.x - BANK_W - 30.0))
+			boss.spit_t = (2.0 if boss.phase2 else 3.0) * randf_range(0.85, 1.15)
+		boss.dive_t -= delta
+		if boss.dive_t <= 0.0:
+			boss.t = 0.0
+			boss.dive_x = clampf(duck_x, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
+			boss.dive_stage = ["throwwarn", "skimwarn", "hopwarn"][randi() % 3]
+			_gerald_say(MEGASADIE_TAUNTS[randi() % MEGASADIE_TAUNTS.size()])
+	elif st == "throwwarn":                            # CHUCKIT RAIN wind-up: she rears with an armful
+		if boss.t >= (0.55 if boss.phase2 else 0.7):
+			boss.dive_stage = "throw"; boss.t = 0.0
+			var nb: int = 4 if boss.phase2 else 3
+			for k in nb:
+				var bxx: float = boss.dive_x + (k - (nb - 1) * 0.5) * 100.0
+				if bxx > BANK_W + 22.0 and bxx < VIEW.x - BANK_W - 22.0:
+					_megasadie_ball(bxx)           # out-of-range balls are DROPPED, not clamped —
+					                               # clamping stacked kill zones on the bank column
+			_sfx("fwoosh", 0.8); _sfx("thud", 0.7, -4.0)
+	elif st == "throw":
+		if boss.t >= 0.45:                         # ...then she WATCHES them fly, panting, proud —
+			boss.dive_stage = "dazed"; boss.t = 0.0    # a short window: every game has a lull
+			boss.daze_t = maxf(0.6, 0.95 / (1.0 + 0.09 * ascension))
+			boss.stomped = false
+	elif st == "skimwarn":                             # ZOOMIES wind-up: she coils to one side, tail going
+		var sd2: float = 1.0 if duck_x < VIEW.x * 0.5 else -1.0
+		boss.skim_dir = sd2
+		boss.x = lerpf(boss.x, VIEW.x * 0.5 - sd2 * (VIEW.x * 0.5 + 60.0), clampf(boss.t / 0.7, 0.0, 1.0))
+		boss.y = lerpf(boss.y, BASE_Y - 46.0, clampf(boss.t / 0.7, 0.0, 1.0))
+		if boss.t >= 0.7:
+			boss.dive_stage = "skim"; boss.t = 0.0
+			_sfx("fwoosh", 0.9, 2.0); _sfx("splash_big", 0.5)
+	elif st == "skim":                                 # ZOOMIES: a spray-wake tear across the water-line — HOP
+		var sd3: float = boss.get("skim_dir", 1.0)
+		var p2 := clampf(boss.t / 0.58, 0.0, 1.0)
+		boss.x = lerpf(VIEW.x * 0.5 - sd3 * (VIEW.x * 0.5 + 60.0), VIEW.x * 0.5 + sd3 * (VIEW.x * 0.5 + 60.0), p2)
+		boss.y = BASE_Y - 40.0 - sin(p2 * PI) * 14.0
+		if fmod(boss.t, 0.06) < delta:
+			ripples.append({"x": boss.x - sd3 * 40.0, "y": BASE_Y, "t": 0.0, "max": 60.0})
+		if not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 56.0:
+			boss.hit_cool = 1.0
+			_boss_hits_player()
+		if p2 >= 1.0:
+			if boss.phase2 and not boss.get("zoom2", false):   # phase 2: she doubles back ONCE
+				boss.zoom2 = true
+				boss.skim_dir = -sd3
+				boss.dive_stage = "skim"; boss.t = 0.0
+			else:
+				boss.zoom2 = false
+				boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.95, 1.25)
+	elif st == "hopwarn":                              # CANNONBALL wind-up: she crouches... and LAUNCHES
+		boss.y = lerpf(205.0, 168.0, clampf(boss.t / 0.5, 0.0, 1.0))
+		if boss.t >= 0.5:
+			boss.dive_stage = "hop"; boss.t = 0.0
+			boss.hop_from = boss.x
+			boss.hop_to = boss.dive_x
+			_sfx("fwoosh", 1.0, -2.0)
+	elif st == "hop":                                  # airborne arc down onto your lane
+		var hp2 := clampf(boss.t / 0.6, 0.0, 1.0)
+		boss.x = lerpf(boss.hop_from, boss.hop_to, hp2)
+		boss.y = 205.0 - sin(hp2 * PI) * 190.0 + hp2 * (BASE_Y - 245.0)
+		if hp2 >= 1.0:                                 # SPLASHDOWN: shockwave + full-width wave
+			boss.y = BASE_Y - 20.0
+			boss_waves.append({"x": boss.x, "r": 20.0})
+			boss_tides.append({"y": 120.0, "hit": false})   # the displaced water sweeps down from upriver —
+			                                                # spawning it AT the waterline was an unreactable hit
+			_water_burst(boss.x, BASE_Y, 1.8)
+			_sfx("splash_big", 1.0); duck_shake = maxf(duck_shake, 0.6)
+			if absf(duck_x - boss.x) < 62.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				boss.hit_cool = 1.0
+				_boss_hits_player()
+			boss.dive_stage = "dazed"; boss.t = 0.0    # winded + SO proud of that one
+			boss.daze_t = maxf(0.8, 1.6 / (1.0 + 0.09 * ascension))
+			boss.stomped = false
+	elif st == "tele":                                 # THE POINT: frozen bird-dog stance at your lane
+		boss.y = lerpf(boss.y, 205.0, clampf(delta * 3.0, 0.0, 1.0))
+		boss.dive_x = clampf(lerpf(boss.dive_x, duck_x, 0.05), BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+		if boss.t >= (0.5 if boss.phase2 else 0.66):
+			boss.dive_stage = "down"; boss.t = 0.0
+			_sfx("fwoosh", 0.8)
+	elif st == "down":                                 # POUNCE: slams your lane, then chains
+		var pp := clampf(boss.t / 0.26, 0.0, 1.0)
+		boss.x = boss.dive_x
+		boss.y = lerpf(205.0, BASE_Y + 6.0, pp)
+		if pp >= 1.0:
+			boss_waves.append({"x": boss.dive_x, "r": 18.0})
+			_water_burst(boss.dive_x, BASE_Y, 1.2)
+			_sfx("splash_big", 0.8); duck_shake = maxf(duck_shake, 0.5)
+			if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				boss.hit_cool = 1.0
+				_boss_hits_player()
+			boss.pounce_n = int(boss.get("pounce_n", 1)) - 1
+			if boss.pounce_n > 0:
+				boss.dive_stage = "tele"; boss.t = 0.0
+				boss.dive_x = clampf(duck_x, BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+				_gerald_say("AGAIN!")
+			else:                                      # three pounces leave her flopped + delighted
+				boss.dive_stage = "dazed"; boss.t = 0.0
+				boss.daze_t = maxf(0.9, 1.7 / (1.0 + 0.09 * ascension))
+				boss.stomped = false
+	elif st == "dazed":                                # sitting, tongue out, tail sweeping — STOMP window
+		boss.y = lerpf(boss.y, BASE_Y - 6.0, clampf(boss.t / 0.3, 0.0, 1.0))
+		boss.daze_t -= delta
+		var descending: bool = (state == St.HOPPING and hop_t > cur_hop_dur() * 0.5) or state == St.MEGA
+		if not boss.stomped and is_airborne() and descending and hop_height() < 0.55 and absf(duck_x - boss.x) < 84.0:
+			_boss_stomped()
+		if boss.daze_t <= 0.0:
+			boss.dive_stage = "up"; boss.t = 0.0
+	elif st == "up":
+		boss.y = lerpf(BASE_Y - 6.0, 205.0, clampf(boss.t / 0.45, 0.0, 1.0))
+		if boss.t >= 0.45:
+			boss.dive_stage = ""; boss.dive_t = boss.dive_gap * randf_range(0.85, 1.15)
+
+func _megasadie_ball(bx: float) -> void:
+	# a giant chuckit, hurled down the lane — it BOUNCES once off the water before clearing
+	boss_globs.append({"x": bx, "y": boss.y + 34.0, "vx": randf_range(-14.0, 14.0), "vy": 300.0, "ball": true, "bounced": false})
+
 func _snapz_fight(delta: float) -> void:
 	# TURN TO FACE: he tracks your lane while lurking, locks onto the strike lane to wind up,
 	# and goes side-on for the tail sweep — a deliberate turn, never a free spin
@@ -7050,7 +7241,7 @@ func _boss_stomped() -> void:
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
 	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
-	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else (BEAVER_STOMP_LINES if boss.kind == "beaver" else (BONGO_STOMP_LINES if boss.kind == "bongo" else GERALD_STOMP_LINES))
+	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else (BEAVER_STOMP_LINES if boss.kind == "beaver" else (BONGO_STOMP_LINES if boss.kind == "bongo" else (MEGASADIE_STOMP_LINES if boss.kind == "megasadie" else GERALD_STOMP_LINES)))
 	_gerald_say(lines[randi() % lines.size()], true)   # post-stomp pain: this one squirms
 	_hit_boss(1)
 
@@ -7081,15 +7272,26 @@ func _update_boss_globs(delta: float) -> void:
 	for f in boss_globs:
 		f.x += f.vx * delta
 		f.y += f.vy * delta
-		# a glob to the face stings unless you're hopping over it / invincible
-		# (only while he's actually FIGHTING — a defeated/leaving Gerald can't kill you)
-		if boss.phase == "fight" and f.y > BASE_Y - 46.0 and absf(f.x - duck_x) < (44.0 if f.get("log", false) else 30.0) \
+		# SADIE's chuckits BOUNCE once off the water before clearing out
+		if f.get("ball", false) and not f.get("bounced", false) and f.y > BASE_Y + 8.0:
+			f.bounced = true
+			f.vy = -absf(f.vy) * 1.25              # a chuckit BOUNCES — sky-high and out of your hair
+			                                        # (a weak bounce left a hitbox loitering at duck height)
+			ripples.append({"x": f.x, "y": BASE_Y, "t": 0.0, "max": 70.0})
+			_sfx("thud", 1.1, -6.0)
+		if f.get("ball", false) and f.get("bounced", false):
+			f.vy += 620.0 * delta                                  # gravity brings the bounce back down
+		# a glob to the face stings unless you're hopping over it / invincible — and only while
+		# it's FALLING (a chuckit rising off its bounce shouldn't clip you from below)
+		if boss.phase == "fight" and f.y > BASE_Y - 46.0 and float(f.get("vy", 1.0)) > 0.0 \
+				and float(f.get("vy", 1.0)) > (120.0 if f.get("ball", false) else 0.0) \
+				and absf(f.x - duck_x) < (44.0 if f.get("log", false) else (30.0 if f.get("ball", false) else 30.0)) \
 				and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
 			boss.hit_cool = 0.8
 			f.y = 9999.0
 			_spawn_parts(duck_x, BASE_Y - 20.0, 8, Color(0.36, 0.3, 0.18), 140.0)
 			_boss_hits_player(true)
-	boss_globs = boss_globs.filter(func(f): return f.y < BASE_Y + 30.0 and f.x > -40.0 and f.x < VIEW.x + 40.0)
+	boss_globs = boss_globs.filter(func(f): return (f.y < BASE_Y + 30.0 or (f.get("ball", false) and not f.get("bounced", false))) and f.y > -220.0 and f.x > -40.0 and f.x < VIEW.x + 40.0)
 
 func _boss_hits_player(by_glob := false) -> void:
 	if shield_charges > 0:
@@ -7099,11 +7301,14 @@ func _boss_hits_player(by_glob := false) -> void:
 	elif ducklings_n > 0:
 		_lose_duckling()
 	else:
+		var msd: bool = boss != null and boss.kind == "megasadie"
 		var snz: bool = boss != null and boss.kind == "snapz"
 		var bvr: bool = boss != null and boss.kind == "beaver"
 		var bng: bool = boss != null and boss.kind == "bongo"
 		var msg: String
-		if bng:                                      # the giant bullfrog — tongue, wave, or a belched fly
+		if msd:                                      # the good girl loved you a little too hard
+			msg = "beaned by a chuckit the size of a canoe." if by_glob else "SADIE pounced. you were the ball."
+		elif bng:                                      # the giant bullfrog — tongue, wave, or a belched fly
 			msg = "BONGO's splash washed you under." if by_glob else "BONGO's tongue snatched you clean off the river."
 		elif bvr:                                    # squashed by the engineer or its lumber
 			msg = "a BEAVER's hurled log bowled you over." if by_glob else "the BEAVER flattened you flat."
@@ -7111,7 +7316,9 @@ func _boss_hits_player(by_glob := false) -> void:
 			msg = "a SNAPZ muck-glob splattered you." if snz else "GERALD's muck-spit caught you mid-air."
 		else:                                        # the brute got you in person
 			msg = "SNAPZ chomped you clean off the river." if snz else "GERALD's beak ran you down."
-		die(msg, "bongo" if bng else ("beaver" if bvr else ("snapz_boss" if snz else "gerald")))
+		# per-attack attribution: WHICH move landed (dive_stage at the kill) — botsim tuning gold
+		var _katk := ("glob" if by_glob else String(boss.get("dive_stage", "")))
+		die(msg, "megasadie" if msd else ("bongo" if bng else ("beaver" if bvr else ("snapz_boss" if snz else "gerald"))), _katk)
 
 # A LOG JAM: a near-full-width WALL of logs you can't paddle through — but a BOOST LOG arrives
 # out front; nail the landing to VAULT the whole thing (or a big enough hop clears it).
@@ -9895,7 +10102,7 @@ func _codex_rarity_disc(box: Rect2, tier: int) -> void:
 
 func _codex_icon(it: Dictionary, box: Rect2) -> void:
 	# voxel turntables keyed differently than the codex key (loon/donni/bread) -> use their frame 0
-	var tmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread"}
+	var tmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}
 	if tmap.has(it.key) and tex_codex_spin.has(tmap[it.key]):
 		var tf: Array = tex_codex_spin[tmap[it.key]]
 		if tf.size() > 0:
@@ -10012,7 +10219,7 @@ func _draw_codex_detail(it: Dictionary) -> void:
 	var sid := ""
 	if it.type == "char":
 		sid = "gerald" if it.key == "eternal" else it.key
-	var turn_map := {"lucien": "loon", "donny": "donni", "bread_magic": "bread"}   # turntables keyed differently
+	var turn_map := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}   # turntables keyed differently
 	if turn_map.has(it.key):
 		sid = turn_map[it.key]
 	var frames: Array = tex_codex_spin.get(sid, [])
@@ -10838,6 +11045,8 @@ func _draw() -> void:
 	if boss != null:
 		if boss.kind == "pike":
 			_draw_boss_pike()        # the lurking fish, erupting nose-up
+		elif boss.kind == "megasadie":
+			_draw_boss_megasadie()   # the good girl, at weather scale
 		elif boss.kind == "beaver":
 			_draw_boss_beaver()      # the front-facing log-hurling bruiser
 		elif boss.kind == "bongo":
@@ -11147,6 +11356,7 @@ func _draw_boss_arena() -> void:
 		"beaver": tint = Color(0.17, 0.11, 0.05, 0.22); mote = Color(0.78, 0.62, 0.38)
 		"bongo":  tint = Color(0.08, 0.18, 0.07, 0.22); mote = Color(0.66, 0.9, 0.5)
 		"pike":   tint = Color(0.04, 0.09, 0.19, 0.26); mote = Color(0.6, 0.78, 0.95)
+		"megasadie": tint = Color(0.16, 0.10, 0.04, 0.20); mote = Color(0.85, 0.92, 0.3)
 		_:
 			if boss.get("eternal", false):
 				tint = Color(0.13, 0.02, 0.05, 0.30); mote = Color(0.85, 0.3, 0.32)
@@ -11275,6 +11485,15 @@ func _draw_boss_ground() -> void:
 			draw_circle(_wc, 6.0, Color(0.34, 0.64, 0.98))
 			draw_circle(_wc, 4.0, Color(0.62, 0.85, 1.0))
 			draw_circle(_wc - _v * 1.5 - Vector2(1.5, 1.5), 1.8, Color(0.97, 1.0, 1.0, 0.95))
+			continue
+		if f.get("ball", false):                                        # SADIE's giant chuckit — her real voxel ball, spinning
+			if tex_sadie_ball != null:
+				draw_set_transform(Vector2(f.x, f.y), anim_t * 6.0 + f.x * 0.1, Vector2.ONE)
+				var _bsz: Vector2 = tex_sadie_ball.get_size() * 2.6
+				draw_texture_rect(tex_sadie_ball, Rect2(-_bsz * 0.5, _bsz), false)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				draw_circle(Vector2(f.x, f.y), 15.0, Color(1.0, 0.55, 0.15))
 			continue
 		if f.get("log", false):                                         # BARRY thrown LOG - the real river-log sprite
 			var lc := Vector2(f.x, f.y)
@@ -11610,6 +11829,75 @@ func _draw_boss_bongo() -> void:
 	_draw_boss_pips()
 	_draw_boss_intro()
 
+func _draw_boss_megasadie() -> void:
+	var gpos := Vector2(boss.x, boss.y)
+	var st: String = boss.dive_stage
+	# her 16-frame turntable tracks the duck; gallop frames take over during the ZOOMIES
+	var gt: Texture2D = null
+	if st == "skim" and not tex_sadie_run.is_empty():
+		gt = tex_sadie_run[int(anim_t * 14.0) % tex_sadie_run.size()]
+	elif st == "dazed" and tex_sadie_greet != null:
+		gt = tex_sadie_greet                        # sitting, tongue out, SO proud
+	elif not tex_sadie_anim.is_empty():             # front-facing pose set: SHE looks at YOU
+		if st == "tele":
+			gt = tex_sadie_anim[2 if boss.dive_x < boss.x else 3]   # THE POINT: locked glance at your lane
+		elif st in ["hopwarn", "hop", "down"]:
+			gt = tex_sadie_anim[4 if tex_sadie_anim.size() > 4 else 0]
+		else:
+			gt = tex_sadie_anim[1 if int(anim_t * 2.4) % 2 == 0 else 0]   # happy head-bob idle
+	elif not tex_sadie.is_empty():
+		gt = tex_sadie[0]
+	if gt == null:
+		return
+	# BOUNDLESS: scale to a true final-boss footprint regardless of source frame size
+	# (her turntable frames are codex-sized — a fixed multiplier left her looking like a pup)
+	var gsz: Vector2 = gt.get_size() * (330.0 / maxf(1.0, gt.get_size().x))
+	# lane telegraphs: the chuckit rain lanes + THE POINT reticle (warm, not blood-red — she plays)
+	if st == "throwwarn":
+		var _wp := 0.5 + 0.5 * sin(anim_t * 14.0)
+		draw_circle(Vector2(boss.dive_x, BASE_Y), 26.0, Color(1.0, 0.75, 0.2, 0.14 + 0.1 * _wp))
+		draw_arc(Vector2(boss.dive_x, BASE_Y), 26.0, 0.0, TAU, 24, Color(1.0, 0.8, 0.3, 0.5 + 0.3 * _wp), 3.0)
+	if st == "tele":
+		var _tp := 0.5 + 0.5 * sin(anim_t * 16.0)
+		var _tr := 20.0 + clampf(boss.t / 0.6, 0.0, 1.0) * 26.0
+		draw_circle(Vector2(boss.dive_x, BASE_Y), _tr, Color(1.0, 0.62, 0.15, 0.16 * (0.6 + 0.4 * _tp)))
+		draw_arc(Vector2(boss.dive_x, BASE_Y), _tr, 0.0, TAU, 28, Color(1.0, 0.7, 0.2, 0.55 + 0.3 * _tp), 3.0)
+	# the shadow she casts (huge, softening when she's up top)
+	if tex_shadow != null:
+		var shs := tex_shadow.get_size() * 5.6
+		draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, gpos.y + gsz.y * 0.42) - shs * 0.5, shs),
+			false, Color(0, 0, 0, 0.20))
+	for _gl2 in 3:                                  # warm rim-light: the good girl glows, gently
+		draw_circle(gpos, gsz.x * (0.34 + _gl2 * 0.07), Color(1.0, 0.82, 0.4, 0.05 + 0.02 * sin(anim_t * 2.0 + _gl2)))
+	var stuck: bool = st == "dazed" and not boss.stomped
+	var mod := Color(1, 1, 1)
+	if stuck:
+		var gl := 0.5 + 0.5 * sin(anim_t * 9.0)
+		draw_circle(gpos, gsz.x * 0.3, Color(1.0, 0.85, 0.3, 0.10 + 0.10 * gl))
+		mod = Color(1, 1, 1).lerp(Color(1.25, 1.12, 0.8), 0.25 + 0.25 * gl)
+	if boss_flash > 0.0:
+		mod = Color(1, 1, 1).lerp(Color(6, 6, 6), boss_flash)
+	# happy tail thunder: water flecks kicked up behind her while she idles/zooms
+	if st in ["", "skim"] and fmod(anim_t, 0.14) < 0.02:
+		_spawn_parts(boss.x - boss.get("skim_dir", 0.0) * gsz.x * 0.3, gpos.y + gsz.y * 0.3, 2, Color(0.85, 0.93, 1.0), 120.0)
+	draw_set_transform(gpos, 0.0, Vector2(-1.0 if boss.get("skim_dir", 1.0) < 0.0 and st == "skim" else 1.0, 1.0))
+	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if stuck:
+		var by2 := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
+		var c := Color(1, 0.9, 0.35)
+		draw_line(Vector2(boss.x - 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
+		draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
+		_otext(Vector2(0, by2 - 34.0), "BOOP HER!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+	# she speaks in a WARM bubble — she is the only boss who is happy to see you
+	if boss.say != "" and anim_t - boss.say_t < 1.9 and boss.phase != "enter":
+		var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 112.0, BASE_Y - 60.0)
+		_speech_bubble(Vector2(boss.x, s_by), boss.say,
+			Color(0.12, 0.07, 0.02, 0.95), Color(0.9, 0.6, 0.2, 0.95), 18, 1.0, true,
+			Color(0.55, 0.34, 0.08), Color(1.0, 0.78, 0.25), 0.0, boss.get("say_wiggle", false))
+	_draw_boss_pips()
+	_draw_boss_intro()
+
 func _draw_boss_snapz() -> void:
 	var gpos := Vector2(boss.x, boss.y)
 	if not tex_snapz.is_empty():
@@ -11689,15 +11977,20 @@ func _draw_boss_intro() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0, 0, 0, 0.24 * a))                     # whole-screen dim (light, so the cinematic reads)
 	draw_rect(Rect2(0, 0, VIEW.x, bar_h), Color(0, 0, 0, 0.93 * a))                    # top bar
 	draw_rect(Rect2(0, VIEW.y - bar_h, VIEW.x, bar_h), Color(0, 0, 0, 0.93 * a))       # bottom bar
-	draw_rect(Rect2(0, bar_h - 2.0, VIEW.x, 2.0), Color(0.8, 0.04, 0.07, a))           # blood seam
-	draw_rect(Rect2(0, VIEW.y - bar_h, VIEW.x, 2.0), Color(0.8, 0.04, 0.07, a))
+	var good: bool = boss.kind == "megasadie"                                          # HER intro is golden — subverts the dread
+	var seam := Color(0.95, 0.72, 0.12, a) if good else Color(0.8, 0.04, 0.07, a)
+	draw_rect(Rect2(0, bar_h - 2.0, VIEW.x, 2.0), seam)
+	draw_rect(Rect2(0, VIEW.y - bar_h, VIEW.x, 2.0), seam)
 	var cy := 300.0
 	# TITLE slams up from below, overshoots, settles
 	var ti: float = clampf((t - 0.45) / 0.45, 0.0, 1.0)
 	var ease: float = 1.0 - pow(1.0 - ti, 3.0)
 	var ty: float = cy - (1.0 - ease) * 42.0
 	var tsz: int = int((56 if boss.title.length() < 14 else 44) * (0.82 + 0.18 * ease))
-	_creepy_text(VIEW.x * 0.5, ty, boss.title, tsz)
+	if good:
+		_creepy_text(VIEW.x * 0.5, ty, boss.title, tsz, Color(0.85, 0.6, 0.05), Color(1.0, 0.85, 0.3))
+	else:
+		_creepy_text(VIEW.x * 0.5, ty, boss.title, tsz)
 	# the cinematic line fades in a beat later — parchment-grey, wrapped to fit
 	if t > 0.8:
 		var la: float = clampf((t - 0.8) / 0.55, 0.0, 1.0) * out_a
@@ -13832,6 +14125,7 @@ func _sim_begin() -> void:
 	bot_persona = _arg_val(args, "--persona", "skilled")
 	sim_runs_total = maxi(1, int(_arg_val(args, "--runs", "1")))
 	sim_force_boss = int(_arg_val(args, "--boss", "-1"))
+	sim_force_kind = _arg_val(args, "--kind", "")
 	sim_append = args.has("--append")
 	var sim_seed := _arg_val(args, "--seed", "")
 	if sim_seed != "":
@@ -13857,7 +14151,7 @@ func _sim_start_run() -> void:
 	equipped_wear = _heads[randi() % _heads.size()] if randf() < 0.9 else ""    # scootybooty owns everything
 	equipped_body = _bodies[randi() % _bodies.size()] if randf() < 0.6 else ""
 	if sim_force_boss >= 0:                        # drop straight into a chosen boss fight (isolation testing)
-		_force_boss(sim_force_boss)
+		_force_boss(sim_force_boss, sim_force_kind)
 	bot_mode = true
 	sim_run_t = 0.0; sim_hits = 0; sim_was_alive = true; sim_hop_cd = 0.0; sim_saw_boss = false
 	Engine.time_scale = 6.0
@@ -14053,7 +14347,7 @@ func _sim_death_icon_path(cat: String) -> String:
 		"bongo": f = "bongo_0.png"
 		"beaver": f = "beaver_0.png"
 		"snapz", "snapz_boss", "turtle": f = "wear_turtle.png"
-		"sadie": f = "sadie_greet.png"
+		"sadie", "megasadie": f = "sadie_greet.png"
 		"heron": f = "heron.png"
 		"log": f = "log.png"
 	return ("res://art/" + f) if f != "" else ""
@@ -14063,6 +14357,7 @@ func _sim_pretty_death(cat: String) -> String:
 		"donny": return "Chrissy"
 		"sadie": return "Sadie"
 		"gerald": return "Gerald"
+		"megasadie": return "Mega Sadie"
 		"snapz", "snapz_boss": return "Snapz"
 		"heron": return "Heron"
 		"turtle": return "Snapping Turtle"
