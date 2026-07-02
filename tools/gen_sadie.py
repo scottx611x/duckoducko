@@ -45,9 +45,37 @@ def build_boss(pose="idle", bob=0):
     pounce = pose == "pounce"
     point = pose == "point"
     proud = pose == "proud"
+    run = pose == "run"
+    runph = bob if run else 0                            # gallop phase 0..3: stretch, gather, tuck, drive
+    if run:
+        bob = 0
 
     # ---- body ----
-    if pounce:
+    if run:
+        # full gallop, side-read: one continuous horizontal body (NO segmented lumps — the
+        # old swimming-gait render stacked spheres and read like Pokey at boss scale)
+        stretch = [1.0, 0.4, 0.0, 0.6][runph]            # 1 = full extension, 0 = tucked
+        for zi in range(-14, 15):                         # a single smooth fuselage, nose to rump
+            t = (zi + 14) / 28.0
+            ry = 2.6 + 1.3 * math.sin(t * math.pi)        # deepest through the ribs
+            rx = 2.4 + 1.0 * math.sin(t * math.pi)
+            yc = 2.0 + 0.7 * math.cos(t * 2.6)            # a gentle spine line, not bumps
+            ellip(0, yc, zi * (0.55 + 0.25 * stretch), rx, ry, 0.9, COAT)
+        ellip(0, 4.6, -1, 2.6, 1.4, 5.5 + 2.0 * stretch, COATL)   # one long back highlight
+        ellip(0, 0.6, 4.5 + 2.0 * stretch, 2.4, 2.0, 2.4, CHEST)  # chest into the lead
+        fore_z = 7.0 + 3.5 * stretch
+        hind_z = -7.0 - 3.5 * stretch
+        for s in (1, -1):                                 # forelegs: reaching in the stretch, folded in the tuck
+            for i in range(5):
+                fz = fore_z + i * (0.8 * stretch) - (i * 0.5 * (1.0 - stretch))
+                fy = 0.5 - i * (0.55 + 0.45 * stretch)
+                ellip(s * 2.2, fy, fz, 1.1, 0.9, 1.1, COAT if i < 4 else PAW)
+        for s in (1, -1):                                 # hind legs: driving off behind
+            for i in range(5):
+                hz2 = hind_z - i * (0.9 * stretch) + (i * 0.5 * (1.0 - stretch))
+                hy2 = 0.5 - i * (0.5 + 0.4 * stretch)
+                ellip(s * 2.2, hy2, hz2, 1.2, 0.9, 1.2, COATD if i < 4 else PAW)
+    elif pounce:
         # airborne: body stretched level, legs in clean paired diagonals
         ellip(0, 2, -1, 4.4, 3.2, 7.0, COAT)
         ellip(0, 4.0, -1, 3.2, 1.9, 5.4, COATL)                       # sunlit back
@@ -96,8 +124,8 @@ def build_boss(pose="idle", bob=0):
 
     # ---- head ----
     hb = bob
-    hy = 9.0 + hb + (1 if proud else 0) - (6.5 if crouch else 0) - (4.5 if pounce else 0)
-    hz = 2.2 + (3.8 if crouch or pounce else 0) + (2.8 if point else 0)
+    hy = 9.0 + hb + (1 if proud else 0) - (6.5 if crouch else 0) - (4.5 if pounce else 0) - (4.5 if run else 0)
+    hz = 2.2 + (3.8 if crouch or pounce else 0) + (2.8 if point else 0) + (8.5 if run else 0)
     ellip(0, hy, hz, 3.4, 3.2, 3.2, COAT)                             # skull
     ellip(0, hy + 1.8, hz + 0.4, 2.6, 1.6, 2.6, COATL)                # solid crown light
     for s in (1, -1):                                                 # brow ridges above the eyes
@@ -128,9 +156,9 @@ def build_boss(pose="idle", bob=0):
             put(ex, ey + 1, ez, LID)
             put(ex - s, ey + 1, ez, LID)
             put(ex, ey, ez + 1, PUPIL)
-    # floppy ears: hanging sheets with a darker inner fold (flying when pouncing)
+    # floppy ears: hanging sheets with a darker inner fold (flying when pouncing/running)
     for s in (1, -1):
-        if pounce:
+        if pounce or run:
             for i in range(4):
                 put(s * (3 + i), round(hy + 2 + i), round(hz - 1 - i * 0.4), COATD)
                 put(s * (3 + i), round(hy + 1 + i), round(hz - 1 - i * 0.4), COATD)
@@ -151,7 +179,10 @@ def build_boss(pose="idle", bob=0):
     put(0, round(cy0 - 1.4), round(hz + 2.2), TAG)
     put(0, round(cy0 - 2.2), round(hz + 2.2), TAG)
     # tail: a happy plume (straight back when pointing, up + curled otherwise)
-    if point:
+    if run:
+        for i in range(6):
+            put(0, round(3 + i * 0.35), round(-13 - i * 0.9), COAT if i < 4 else COATL)
+    elif point:
         for i in range(6):
             put(0, round(2 + i * 0.1), -7 - i, COAT if i < 4 else COATL)
     elif not pounce:
@@ -192,7 +223,7 @@ def main():
     save(render(shade(build_boss("pounce")), Y(10), Y(30), out=320, scale=7.6), "sadieboss_pounce.png")
     save(render(shade(build_boss("proud", 0)), Y(12), Y(9), out=320, scale=8.6), "sadieboss_proud.png")
     for f in range(4):
-        save(fit(render(shade(build_sadie_run(f * 2)), Y(90), Y(10), out=210, scale=5.2), 210, 150),
+        save(fit(render(shade(build_boss("run", f)), Y(90), Y(10), out=230, scale=5.4), 230, 160),
              "sadieboss_run_%d.png" % f)
     # ---- WARDROBE replacements (exact existing dimensions) ----
     save(render(shade(build_boss("proud", 0)), Y(18), Y(11), out=110, scale=3.0), "sadie_greet.png")

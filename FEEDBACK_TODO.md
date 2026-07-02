@@ -544,3 +544,4 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - [x] **Barry butt + hind legs** v1.18.3 — a real rump bridging body->paddle-tail (the tail no longer floats), haunches + clawed hind feet. 🟡 all three: in-motion eyeball.
 - [x] **Sadie boss missing from dev menu** v1.18.4 — SADIE button added (proud-portrait icon); panel auto-sizes to the roster now.
 - [x] **"What happened to the fork idea?"** v1.18.4 — it never left: the cadence fix pushed the first split to ~7.2k ft, past where runs were ending — invisible. First fork now ~3.8k ft (before Gerald), later ones stay rare (~every 11k ft).
+- [x] **Sadie face-flip + gallop rebuilt** v1.18.5 — she now mirrors to FACE the duck in every pose (Bongo's fix pattern; zoomies flip by travel direction). Gallop frames rebuilt on the NEW model: one continuous fuselage with a real stretch->tuck cycle, ears pinned, tail streaming — the old swimming-gait render (stacked spheres = "Pokey") is gone.

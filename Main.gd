@@ -11948,7 +11948,16 @@ func _draw_boss_megasadie() -> void:
 	# happy tail thunder: water flecks kicked up behind her while she idles/zooms
 	if st in ["", "skim"] and fmod(anim_t, 0.14) < 0.02:
 		_spawn_parts(boss.x - boss.get("skim_dir", 0.0) * gsz.x * 0.3, gpos.y + gsz.y * 0.3, 2, Color(0.85, 0.93, 1.0), 120.0)
-	draw_set_transform(gpos, 0.0, Vector2(-1.0 if boss.get("skim_dir", 1.0) < 0.0 and st == "skim" else 1.0, 1.0))
+	# SHE FACES THE DUCK (the frames render facing slightly right; mirror when you're left —
+	# same fix Bongo needed). the zoomies flip by travel direction instead.
+	var mface: float = 1.0
+	if st == "skim":
+		mface = -1.0 if boss.get("skim_dir", 1.0) < 0.0 else 1.0
+	elif st == "tele":
+		mface = 1.0                                    # glance frames pick their own side
+	else:
+		mface = 1.0 if duck_x >= boss.x else -1.0
+	draw_set_transform(gpos, 0.0, Vector2(mface, 1.0))
 	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if stuck:
