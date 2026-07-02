@@ -1901,6 +1901,21 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_henmenu.png")
 		get_tree().quit()
+	elif "--codexshot" in OS.get_cmdline_user_args():
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		for _ci2 in ["boon_echo", "boon_phoenix", "boon_pond_karma", "spec_glide", "spec_slowmo"]:
+			if _ci2 not in codex_seen:
+				codex_seen.append(_ci2)
+		_open_codex()
+		var _items := _codex_items()
+		for _ii in _items.size():
+			if String(_items[_ii].key) == "boon_pond_karma":
+				codex_sel = _ii
+				break
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_codexboon.png")
+		get_tree().quit()
 	elif "--bigdayshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		bigday_modal = true; bigday_best = 4210; bigday_date = _today_str()
@@ -10241,6 +10256,8 @@ func _codex_tap_list(pos: Vector2) -> void:
 			return
 
 func _codex_tex(id: String):
+	if id.begins_with("boon_"):                       # shrine boons: their run-icon, writ large
+		return tex_boon.get(id.substr(5))
 	if id == "bongo":
 		return tex_bongo[0] if tex_bongo.size() > 0 else tex_frog
 	match id:
@@ -14564,6 +14581,10 @@ func _bot_should_hop() -> bool:
 			return true
 	if donny != null and sim_donny_react and absf(float(donny.y) - BASE_Y) < 56.0 and absf(float(donny.x) - duck_x) < 36.0:
 		return true                    # JUMP over CHRISSY — airborne = her hull passes under
+	# SADIE is 70lb of joy at the waterline — hoppable, and the bot kept paddling into her
+	if sadie != null and float(sadie.get("t", 0.0)) > 0.0 \
+			and absf(float(sadie.y) - BASE_Y) < 52.0 and absf(float(sadie.x) - duck_x) < 62.0:
+		return true
 	return false
 
 func _sim_duck_icon() -> String:

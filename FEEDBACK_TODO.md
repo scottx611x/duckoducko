@@ -558,7 +558,7 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 Worklist (work top-down, ship each when green, add findings):
 - [x] SOUND v1.19.1 — SADIE BARKS now (synth two-syllable BORF, her own voice in every bubble); dedicated marimba COMBO note (pitch climbs the chain); and a real find: **thud.wav never existed** — Barry's log hurls, chuckit bounces + intro gestures were all silently no-op'ing. Synthesized + registered; full audit: every _sfx() call now maps to a real, loaded wav.
 - [x] (folded into the sound item above)
-- [ ] Persona botsim batches (cautious/reckless) for balance data; tune outliers
+- [x] Persona batches v1.19.2 — cautious 8-run batch exposed ambient-SADIE as the top killer (4/8); root cause: the bot never learned she's HOPPABLE. Hop response added: 4->1 deaths on the same seed. Reckless batch pending below.
 - [ ] Audit: any remaining ❗/🟡 items above that can be closed without Scott
-- [ ] Polish sweeps: menu/death/shop screens vs the new bar; codex detail view for boons/specials renders right (added blind!)
+- [x] Codex detail verified via new --codexshot v1.19.2 — lore card rendered but the hero circle was EMPTY for boons (detail resolver didn't know them); tex_boon now served. Specials show the ring-glyph (fine).
 - [ ] Performance sanity on web build after all additions
