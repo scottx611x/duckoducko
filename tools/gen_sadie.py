@@ -31,7 +31,7 @@ LID = (48, 32, 22)
 NOSE = (34, 26, 22)
 TONGUE = (240, 122, 150)
 TONGUED = (206, 90, 122)
-COLLAR = (176, 138, 84)    # tan
+COLLAR = (196, 58, 52)     # HER red — the muted brick-red of her harness (Scott's photo)
 TAG = (234, 194, 88)
 
 
@@ -75,9 +75,10 @@ def build_boss(pose="idle", bob=0):
     else:
         # seated tall (idle / proud / point)
         chest_up = 1 if proud else 0
-        ellip(0, 1 + chest_up, -1, 4.4, 4.2, 5.6, COAT)               # torso
-        ellip(0, 3.8 + chest_up, -1.5, 3.0, 2.0, 4.0, COATL)          # solid warm shoulder cap
-        ellip(0, 0.5 + chest_up, 3.2, 2.8, 2.8, 2.2, CHEST)           # proud chest, solid
+        # she sits TALL: an upright torso column, chest proud, no humped back (the photo)
+        ellip(0, 2 + chest_up, 0, 4.0, 5.2, 4.0, COAT)                # upright torso
+        ellip(0, 5.5 + chest_up, -0.5, 2.8, 2.4, 2.8, COATL)          # shoulder light, high
+        ellip(0, 1.5 + chest_up, 3.0, 2.8, 3.4, 2.0, CHEST)           # the proud chest column
         ellip(0, -3.5, -3.5, 5.0, 3.4, 4.6, COAT)                     # haunches
         ellip(0, -1.8, -5.2, 3.4, 2.0, 2.8, COATL)
         for s in (1, -1):                                             # front legs
@@ -95,8 +96,8 @@ def build_boss(pose="idle", bob=0):
 
     # ---- head ----
     hb = bob
-    hy = 7.5 + hb + (1 if proud else 0) - (5 if crouch else 0) - (3 if pounce else 0)
-    hz = 3.5 + (2.5 if crouch or pounce else 0) + (1.5 if point else 0)
+    hy = 9.0 + hb + (1 if proud else 0) - (6.5 if crouch else 0) - (4.5 if pounce else 0)
+    hz = 2.2 + (3.8 if crouch or pounce else 0) + (2.8 if point else 0)
     ellip(0, hy, hz, 3.4, 3.2, 3.2, COAT)                             # skull
     ellip(0, hy + 1.8, hz + 0.4, 2.6, 1.6, 2.6, COATL)                # solid crown light
     for s in (1, -1):                                                 # brow ridges above the eyes

@@ -539,3 +539,6 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - [x] **Huge white mid-fight text KILLED** v1.18.2 — enrage/ult calls now show as a slim boss-tinted ribbon under the pips (small text, dark strip, colored edges); "PATCHED UP"/"TAILWIND" became quiet float-texts; the redundant "HIT!" label is gone entirely.
 - [x] **ONE stomp language** v1.18.2 — unified `_draw_stomp_tell`: a soft breathing golden halo + rising sparkles on every vulnerable boss, plus a quiet rising chime the moment the window opens. ALL chevrons + "STOMP!"/"BOOP HER!" banners removed (Gerald keeps his dizzy stars, Barry his star-crosses — those are character, not instruction). Post-stomp text is now a small "boop!".
 - [x] **Hit feedback** v1.18.2 — every boss hit: stronger white flash + comic TEARS springing from the eyes + a golden star-pop + a pained squeak. You always know it landed.
+- [ ] **Sadie: too hunchbacked + collar must be RED** (Scott + reference photo, 2026-07-02) — she sits TALL and straight; collar = the muted brick-red of her harness.
+- [ ] **Bongo has no hind legs** — a frog needs big folded haunches.
+- [ ] **Barry: floating tail, no butt/hind legs.**

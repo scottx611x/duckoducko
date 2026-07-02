@@ -2139,6 +2139,14 @@ def build_beaver(frame=0):
         ellip(5*s,-1,6,1.8,1.6,2.0,FUR)
         for c in range(3):
             put(round((5+c*0.5)*s),-2,7+c,CLAW)
+    # the RUMP: a real seat bridging body -> paddle tail (the tail used to float free)
+    ellip(0,1.0,-8,6.2,4.0,3.6,FUR)
+    ellip(0,4.0,-8.5,4.2,2.4,2.6,FURH,only_empty=True)
+    for s in (1,-1):                                 # big HAUNCHES + webbed hind feet
+        ellip(6*s,0.5,-6,2.6,3.0,3.2,FURD)
+        ellip(6.5*s,-2,-3.0,2.0,1.2,2.6,FUR)
+        for c in range(3):
+            put(round((6+c*0.7)*s),-3,0+c,CLAW)
     return V
 
 def build_bongo(frame=0):
@@ -2192,6 +2200,14 @@ def build_bongo(frame=0):
         ellip(6*s,-2,8,2.0,1.2,2.4,SKIND)
         for c in range(3):
             put(round((5+c)*s),-2,10+c,THROAT)
+    # the great folded HAUNCHES bulging at his rear flanks + long webbed toes tucking forward
+    for s in (1,-1):
+        ellip(8*s,1.5,-5,3.4,3.8,4.4,SKIN)
+        ellip(8*s,3.8,-5,2.4,2.0,3.0,SKINH,only_empty=True)
+        ellip(8.5*s,4.2,-6.5,1.6,1.0,2.0,SPOT,only_empty=True)   # a mottle on each haunch
+        ellip(9*s,-1.5,-1,2.2,1.2,3.0,SKIND)
+        for c in range(3):
+            put(round((8+c*0.8)*s),-2,2+c,THROAT)
     return V
 
 def make_chuckit():
