@@ -553,3 +553,12 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 - [x] **Whimsy gameplay** v1.19.0 — SNACK COMBO: quick chains ring a rising scale, "x5!" pays a golden burst; skill tastes like music.
 - [x] **KEEP-PLAYING hooks** v1.19.0 — death screen shows your NEXT UNLOCK with a live progress bar ("next: SOU'WESTER — 220 more") or "WAITING at the shop!" pulse; menu shows the LIFE LIST ("62% of the river known" — codex completion, birder-style); BIG DAY streaks ("4-day patrol!") tracked + shown on the card.
 - [x] **Art fixups** (this pass + tonight's arc) — egg button art, gallop rebuild, anatomy pass, boss presentation all landed this cycle.
+
+## 🌙🌙 FREE-REIN OVERNIGHT LOOP (Scott, 2026-07-02 night: "do not sit idle... sounds, literally everything... don't stop until usage runs out")
+Worklist (work top-down, ship each when green, add findings):
+- [ ] SOUND: Sadie needs a real BARK (she borrows quack/laugh); consider per-boss voices (snapz hiss-snap, barry gnaw-thud, bongo deep ribbit exists)
+- [ ] SOUND: combo scale uses pitched 'collect' — consider a dedicated marimba-ish note
+- [ ] Persona botsim batches (cautious/reckless) for balance data; tune outliers
+- [ ] Audit: any remaining ❗/🟡 items above that can be closed without Scott
+- [ ] Polish sweeps: menu/death/shop screens vs the new bar; codex detail view for boons/specials renders right (added blind!)
+- [ ] Performance sanity on web build after all additions
