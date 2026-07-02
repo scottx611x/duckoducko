@@ -4650,7 +4650,7 @@ func reset_game() -> void:
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
-	fork = {}; fork_next = randf_range(72000.0, 88000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0
+	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
 	sadie_timer = 40.0
 	hawk = null
