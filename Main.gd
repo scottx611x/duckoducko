@@ -13214,7 +13214,9 @@ func _shop_count() -> int:
 # 2-column card grid: PERKS up top, then the LOFT SPECIALS band below
 const SHOP_PERK_Y := 196.0
 const SHOP_SPEC_Y := 588.0
-const SHOP_WEAR_BTN := Rect2(40.0, 736.0, VIEW.x - 80.0, 50.0)   # opens the WARDROBE (head & body)
+func _shop_wear_btn() -> Rect2:                    # sits below however many tile rows exist
+	var rows := int(ceil(META.size() / 4.0)) + int(ceil((_shop_count() - META.size()) / 4.0))
+	return Rect2(40.0, 238.0 + rows * 106.0 + 74.0, VIEW.x - 80.0, 50.0)
 func _shop_card_rect(i: int) -> Rect2:
 	var cw := 240.0
 	var ch := 80.0
@@ -13235,7 +13237,8 @@ func _shop_press(pos: Vector2) -> void:
 	if in_wardrobe:                                # the wardrobe modal owns input while open
 		_wardrobe_press(pos)
 		return
-	if Rect2(40.0, 800.0, VIEW.x - 80.0, 52.0).has_point(pos):   # open LUCIEN's jukebox screen
+	var _jbp := _shop_wear_btn()
+	if Rect2(_jbp.position + Vector2(0.0, 62.0), Vector2(_jbp.size.x, 54.0)).has_point(pos):   # open LUCIEN's jukebox screen
 		in_jukebox = true; _codex_see("lucien"); _sfx("djdrop", 1.0); return   # Lucien drops a beat as you step up
 	if shop_modal >= 0:                            # a shop detail modal owns input while open
 		var card := Rect2(VIEW.x * 0.5 - 200.0, 280.0, 400.0, 300.0)
@@ -13250,7 +13253,7 @@ func _shop_press(pos: Vector2) -> void:
 		_sfx("click")
 		_enter_menu()
 		return
-	if SHOP_WEAR_BTN.has_point(pos):               # open the wardrobe grid (buy + equip hats)
+	if _shop_wear_btn().has_point(pos):               # open the wardrobe grid (buy + equip hats)
 		in_wardrobe = true
 		wear_modal = -99
 		wardrobe_sel = -1
@@ -13336,7 +13339,7 @@ func _draw_shop() -> void:
 	_otext(Vector2(0, 174), "tap any item for the full story", 12, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	# section headers frame the two bands
 	_shop_header(204.0, "PERKS   ·   permanent upgrades", Color(1.0, 0.86, 0.4))
-	_shop_header(472.0, "LOFT SPECIALS   ·   unleashed at a full meter", Color(0.5, 0.92, 1.0))
+	_shop_header(238.0 + int(ceil(META.size() / 4.0)) * 106.0 + 14.0, "LOFT SPECIALS   ·   unleashed at a full meter", Color(0.5, 0.92, 1.0))
 	# the icon GRID — perks then specials, compact tiles (details live in a tap-up modal)
 	for i in _shop_count():
 		_shop_tile(i)
@@ -13344,13 +13347,14 @@ func _draw_shop() -> void:
 	var wsb := StyleBoxFlat.new()
 	wsb.bg_color = Color(0.15, 0.11, 0.07, 0.97); wsb.set_corner_radius_all(14)
 	wsb.set_border_width_all(2); wsb.border_color = Color(1.0, 0.82, 0.45, 0.8 + 0.18 * sin(anim_t * 3.0))
-	draw_style_box(wsb, SHOP_WEAR_BTN)
+	var _wbr := _shop_wear_btn()
+	draw_style_box(wsb, _wbr)
 	if tex_sadie_greet != null:                          # SADIE tends the wardrobe — she greets from here
 		var sbob := absf(sin(anim_t * 2.2)) * 2.0
-		_blit_modulated(tex_sadie_greet, SHOP_WEAR_BTN.position + Vector2(34.0, 25.0 - sbob), 1.05, Color(1.4, 1.32, 1.22))
-	draw_string(font, SHOP_WEAR_BTN.position + Vector2(70.0, 33.0), "* SADIE'S WARDROBE >", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1.0, 0.92, 0.72))
+		_blit_modulated(tex_sadie_greet, _wbr.position + Vector2(34.0, 25.0 - sbob), 1.05, Color(1.4, 1.32, 1.22))
+	draw_string(font, _wbr.position + Vector2(70.0, 33.0), "* SADIE'S WARDROBE >", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1.0, 0.92, 0.72))
 	# LOONY's JUKEBOX gets its own whimsical screen — this is just the door to it
-	var ljb := Rect2(40.0, 800.0, VIEW.x - 80.0, 52.0)
+	var ljb := Rect2(_wbr.position + Vector2(0.0, 62.0), Vector2(_wbr.size.x, 54.0))
 	var lsb := StyleBoxFlat.new()
 	lsb.bg_color = Color(0.10, 0.08, 0.18, 0.97); lsb.set_corner_radius_all(14)
 	lsb.set_border_width_all(2); lsb.border_color = Color(0.55, 0.8, 1.0, 0.7 + 0.25 * sin(anim_t * 3.5))
@@ -13387,10 +13391,12 @@ func _shop_tile_rect(i: int) -> Rect2:
 	var gx := 8.0
 	var gy := 10.0
 	var x0 := (VIEW.x - (cols * tw + (cols - 1) * gx)) * 0.5
+	var perk_rows := int(ceil(META.size() / float(cols)))
 	if i < META.size():
 		return Rect2(x0 + (i % cols) * (tw + gx), 238.0 + (i / cols) * (th + gy), tw, th)
 	var j: int = i - META.size()
-	return Rect2(x0 + (j % cols) * (tw + gx), 506.0 + (j / cols) * (th + gy), tw, th)
+	var spec_y := 238.0 + perk_rows * (th + gy) + 56.0     # below the LAST perk row + its header
+	return Rect2(x0 + (j % cols) * (tw + gx), spec_y + (j / cols) * (th + gy), tw, th)
 
 # a tidy section-header band for the shop
 func _shop_header(y: float, txt: String, col: Color) -> void:
