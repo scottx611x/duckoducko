@@ -563,3 +563,4 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] Codex detail verified via new --codexshot v1.19.2 — lore card rendered but the hero circle was EMPTY for boons (detail resolver didn't know them); tex_boon now served. Specials show the ring-glyph (fine).
 - [x] Perf sanity — additions since the v1.17.1 trim are all bounded (ribbon/tell/tears/combo floats: <25 draw cmds worst-case, gameplay-gated); headless mem 95MB. Real frame-rate word needs Scott's phone.
 - [x] **The conga SINGS** v1.19.3 — WHIMSY §4 fulfilled: each duckling peeps a rising note as it pops up in sequence behind you; a clean run is a little song.
+- [x] **Menu pond lives + killers attend funerals** v1.19.4 — menu: 48s dawn->dusk light cycle + drifting scenery under the title; death screen: your killer's portrait gloat-sways beside "bested by...". Verified via shots.

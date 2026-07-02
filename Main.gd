@@ -8745,6 +8745,15 @@ func _draw_death() -> void:
 		var _by2: float = ny + font.get_ascent(15)
 		_skull(Vector2(VIEW.x * 0.5 - _tw2 * 0.5 - 14.0, _by2 - 5.0), Color(0.93, 0.91, 0.86))
 		_otext(Vector2(0, _by2), _dtxt2, 15, Color(1, 0.6, 0.55, 0.95), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		# your KILLER attends the funeral: a small smug portrait beside the line
+		var _kp := _sim_death_icon_path(String(dead_cat))
+		if _kp != "" and ResourceLoader.exists(_kp):
+			var _kt: Texture2D = load(_kp)
+			var _ks := minf(44.0 / _kt.get_size().x, 44.0 / _kt.get_size().y)
+			var _kpos := Vector2(VIEW.x * 0.5 + _tw2 * 0.5 + 34.0, _by2 - 8.0)
+			draw_set_transform(_kpos, sin(anim_t * 1.6) * 0.06, Vector2(_ks, _ks))   # a gentle gloat-sway
+			draw_texture_rect(_kt, Rect2(-_kt.get_size() * 0.5, Vector2(_kt.get_size())), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	ny += 30.0
 	var who := duck_name if duck_name != "" else "ducko"
 	_otext(Vector2(0, ny + font.get_ascent(24)), "%s paddled %d ft" % [who, dead_m], 24, Color.WHITE, VIEW.x)
@@ -12921,6 +12930,24 @@ func _draw_menu() -> void:
 	if name_edit != null:                              # name your duck HERE (below "tap to play"), not in select
 		name_edit.visible = in_menu and not booting and not in_settings
 	var cx := VIEW.x * 0.5
+	# the menu pond LIVES: a slow dawn->day->dusk light cycle (~48s) + scenery drifting by.
+	# the storefront should look like the game feels.
+	var _mph := fposmod(anim_t, 48.0) / 48.0
+	var _mwarm: float = pow(maxf(0.0, sin(_mph * TAU)), 2.0)          # warm at the cycle's noon
+	var _mcool: float = pow(maxf(0.0, -sin(_mph * TAU)), 2.0)         # cool blue at its midnight
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(1.0, 0.72, 0.35, 0.10 * _mwarm))
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.25, 0.4, 0.85, 0.10 * _mcool))
+	if not tex_env.is_empty():
+		for _mi in 5:
+			var _mn: String = ["env_lily_0", "env_lily_1", "env_duckweed_0", "env_lilyflower", "env_stone_0"][_mi]
+			if not tex_env.has(_mn):
+				continue
+			var _mt: Texture2D = tex_env[_mn]
+			var _my := fposmod(_mi * 217.0 + anim_t * (9.0 + _mi * 2.5), VIEW.y + 80.0) - 40.0
+			var _mx: float = (BANK_W + 34.0 + (_mi % 3) * 26.0) if _mi % 2 == 0 else (VIEW.x - BANK_W - 34.0 - (_mi % 3) * 22.0)
+			draw_set_transform(Vector2(_mx + sin(anim_t * 0.5 + _mi) * 6.0, _my), sin(anim_t * 0.6 + _mi) * 0.08, Vector2(1.5, 1.5))
+			draw_texture_rect(_mt, Rect2(-_mt.get_size() * 0.5, Vector2(_mt.get_size())), false, Color(0.9, 0.95, 0.97, 0.8))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# title
 	var tbob := sin(anim_t * 2.0) * 6.0
 	_fancy_title("DUCKODUCKO", 182.0, 60, Color(1, 0.9, 0.33), Color(1, 0.55, 0.18), 6.0)
