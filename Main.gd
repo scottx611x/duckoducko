@@ -1835,6 +1835,12 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_river_%d.png" % theme_idx)
 		get_tree().quit()
+	elif "--henmenushot" in OS.get_cmdline_user_args():
+		booting = false; hen_mode = true; last_species = "mallard"
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_henmenu.png")
+		get_tree().quit()
 	elif "--bigdayshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		bigday_modal = true; bigday_best = 4210; bigday_date = _today_str()
@@ -2278,6 +2284,9 @@ func _dev_reset_data() -> void:
 	get_tree().reload_current_scene()
 
 func _save() -> void:
+	if bot_mode:
+		return          # sims NEVER persist — mid-run saves (boss-clear, unlocks) kept
+		                # leaking scootybooty into the save even after the death/win gates
 	var cfg := ConfigFile.new()
 	cfg.set_value("save", "feathers", feathers)
 	cfg.set_value("save", "best_m", best_m)
@@ -12381,6 +12390,13 @@ func _draw_menu() -> void:
 		# the star: whichever duck you last ran, alone on the turntable.
 		# tapping it spins it (easter-egg momentum) AND it QUACKS, beak open.
 		var star := last_species if ducks.has(last_species) else "mallard"
+		# HEN MODE: she owns the menu too (the select screen honored the toggle; the menu didn't)
+		var star_tint := Color(1, 1, 1)
+		if hen_mode:
+			if ducks.has(star + "hen"):
+				star += "hen"
+			else:
+				star_tint = Color(0.9, 0.85, 0.78)     # henless species: the drab fallback tint
 		# beak opens AT the current spin angle — no more snapping to a frozen front pose
 		var quacking := anim_t - menu_quack_t < 0.45
 		var _mspin := anim_t * 0.55 + menu_spin
@@ -12397,7 +12413,7 @@ func _draw_menu() -> void:
 		for _rr in range(2):                            # gentle pond ripples grounding him on the river
 			var _rp := fmod(anim_t * 0.4 + _rr * 0.5, 1.0)
 			draw_arc(Vector2(cx, _wy), 18.0 + _rp * 44.0, 0.0, TAU, 30, Color(0.72, 0.86, 1.0, (1.0 - _rp) * 0.16), 2.0)
-		_blit_centered(hf, hpos, 4.6)
+		_blit_modulated(hf, hpos, 4.6, star_tint)
 		var mwl := _worn_list(); mwl.reverse()         # BODY first, then HEAD on top (hat over the shell — no clipping)
 		for wid in mwl:                                # hat rides the CURRENT facing (matches body during the flap)
 			_blit_centered(_wear3d_spin(wid, _mspin), hpos, 4.6)
@@ -13833,6 +13849,8 @@ func _sim_start_run() -> void:
 		if r.species != "" and ducks.has(r.species):
 			break
 		tries += 1
+	bot_mode = true                               # BEFORE start_game — its last_species _save() was
+	                                              # firing as a "player" and leaking scootybooty
 	start_game()                                  # shrine stays: _sim_watch drafts a boon like a player would
 	var _heads := ["crown", "pirate", "party", "lilypad", "souwester", "chef", "bandana", "goggles", "raccoon", "scarf", "halo", "boombox"]
 	var _bodies := ["turtle", "cape", "vest", "jetpack", "satchel"]
