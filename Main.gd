@@ -13913,7 +13913,12 @@ func _draw_tier_stars(center: Vector2, tier: int, mx: int, r: float) -> void:
 	for s in mx:
 		var c := Vector2(x0 + s * gap, center.y)
 		if s < tier:
-			draw_colored_polygon(_star_pts(c, r), Color(1.0, 0.84, 0.32))
+			if s == 3:                                   # the GILDED star gleams — it cost a hoard
+				var gl := 0.5 + 0.5 * sin(anim_t * 5.0)
+				draw_colored_polygon(_star_pts(c, r * (1.1 + 0.12 * gl)), Color(1.0, 0.95, 0.6, 0.45 * gl))
+				draw_colored_polygon(_star_pts(c, r), Color(1.0, 0.9, 0.45).lerp(Color(1.0, 1.0, 0.85), gl * 0.5))
+			else:
+				draw_colored_polygon(_star_pts(c, r), Color(1.0, 0.84, 0.32))
 		else:
 			draw_colored_polygon(_star_pts(c, r), Color(1, 1, 1, 0.16))
 
