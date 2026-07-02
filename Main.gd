@@ -1113,6 +1113,7 @@ var ev_until := 0.0             # distance where the event ends
 var ev_next := 6500.0           # distance of the next event roll
 var ev_duckling := {}           # LOST DUCKLING raft: {x, y, saved}
 var fork := {}                  # active fork: {y, l:{...}, r:{...}, picked}
+var fork_warned := false        # the "splits ahead!" call, once per fork
 var fork_next := 12000.0        # forks split the river between boss marks
 
 # BIG DAY: the daily seeded river (a birder's Big Day — everyone gets the SAME river today).
@@ -1147,7 +1148,7 @@ const FORK_MODS := [
 	{"id": "calm", "name": "CALM WATER", "desc": "gentle... almost too gentle"},
 	{"id": "junk", "name": "JUNK DRIFT", "desc": "flotsam-rich water"},
 	{"id": "snacks", "name": "SNACK BAR", "desc": "the good stuff floats here"},
-	{"id": "pike", "name": "PIKE'S HOLLOW", "desc": "something big lurks here"},
+	{"id": "golden", "name": "GOLDEN REACH", "desc": "the light! the LIGHT!"},
 ]
 
 func _ev_heron_mult() -> float:
@@ -1155,15 +1156,17 @@ func _ev_heron_mult() -> float:
 		* (1.5 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
 
 func _ev_snack_mult() -> float:
-	return (1.5 if ev_id == "squall" else 1.0) * (2.0 if ev_id == "tailwind" else 1.0) \
-		* (1.6 if stretch_mod == "feathers" else 1.0) * (1.35 if stretch_mod == "heron" else 1.0) \
-		* (0.8 if stretch_mod == "calm" else 1.0) * (1.7 if stretch_mod == "snacks" else 1.0)
+	return (1.3 if ev_id == "squall" else 1.0) * (2.0 if ev_id == "tailwind" else 1.0) \
+		* (1.45 if stretch_mod == "feathers" else 1.0) * (1.3 if stretch_mod == "heron" else 1.0) \
+		* (0.8 if stretch_mod == "calm" else 1.0) * (1.5 if stretch_mod == "snacks" else 1.0)
 
 func _ev_prop_mult() -> float:
 	return (3.0 if ev_id == "flush" else 1.0) * (2.2 if stretch_mod == "junk" else 1.0)
 
 func _ev_speed_mult() -> float:
-	return 1.22 if ev_id == "tailwind" else 1.0
+	# the current EASES through an unpicked split — reading two signs at full flow felt random
+	var fork_slow: float = 0.55 if (not fork.is_empty() and not fork.get("picked", false)) else 1.0
+	return (1.22 if ev_id == "tailwind" else 1.0) * fork_slow
 
 func _update_river_events(delta: float) -> void:
 	if tut_mode or boss != null or not alive:
@@ -1191,7 +1194,7 @@ func _update_river_events(delta: float) -> void:
 		var e: Dictionary = RIVER_EVENTS[randi() % RIVER_EVENTS.size()]
 		ev_id = e.id
 		ev_until = distance + randf_range(5200.0, 7200.0)
-		ev_next = ev_until + randf_range(6000.0, 9500.0)
+		ev_next = ev_until + randf_range(26000.0, 42000.0)
 		_flash(e.name, 2.0)
 		_say(e.desc, 2.4)
 		_sfx("chime", 0.8)
@@ -1199,17 +1202,20 @@ func _update_river_events(delta: float) -> void:
 			ev_duckling = {"x": randf_range(BANK_W + 60.0, VIEW.x - BANK_W - 60.0), "y": -50.0, "saved": false}
 			ev_until = distance + 2600.0               # one pass — catch it or it's gone
 	# FORKS: the river splits; your side of the wedge picks the branch
+	if fork.is_empty() and not fork_warned and distance >= fork_next - 8000.0:
+		fork_warned = true
+		_flash("the river SPLITS ahead!", 2.4)
+		_say("two channels coming up — pick a side!", 2.8)
+		_sfx("chime", 0.65)
 	if fork.is_empty() and distance >= fork_next and ev_id == "" and not drafting:
 		_bigday_reseed(500 + int(fork_next / 1000.0))   # Big Day: same fork choices today
 		var mods: Array = FORK_MODS.duplicate()
-		if endless or next_boss_idx >= BOSS_MARKS.size():
-			mods = mods.filter(func(m): return String(m.id) != "pike")   # no Hollow after the Eternal
 		mods.shuffle()
 		var lmod: Dictionary = mods[0]
 		var rmod: Dictionary = mods[1]
-		if String(lmod.id) == "pike":                  # the Hollow is rare — reroll it half the time
+		if String(lmod.id) == "golden":                # the Reach is rare — reroll it half the time
 			if randf() < 0.5: lmod = mods[2]
-		elif String(rmod.id) == "pike":
+		elif String(rmod.id) == "golden":
 			if randf() < 0.5: rmod = mods[2]
 		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
 		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
@@ -1248,13 +1254,12 @@ func _update_river_events(delta: float) -> void:
 			_say(String(m.desc), 2.6)
 			_sfx("chime", 0.9)
 			_st("forks_taken")
-			if stretch_mod == "pike":                   # PIKE'S HOLLOW: the lurker ambushes this stretch
-				_force_boss(next_boss_idx, "pike")
-				if boss != null:
-					boss.bonus = true                   # branch duel: spoils only, no campaign-slot advance
+			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
+				golden_t = GOLDEN_DUR
 		if float(fork.y) > VIEW.y + 260.0:
 			fork = {}
-			fork_next = distance + randf_range(9000.0, 12000.0)
+			fork_warned = false
+			fork_next = distance + randf_range(105000.0, 135000.0)
 	if stretch_mod != "" and distance >= stretch_until:
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
@@ -2094,6 +2099,11 @@ func _ready() -> void:
 # headless CI-style pass over the whole loop: select/unlock -> play -> theme
 # change -> mega -> laser -> death/save. Run: godot --headless --path . -- --smoke
 func _smoke() -> void:
+	# the smoke loop deliberately mangles progress (buys, unlocks, fake deaths) — snapshot the
+	# REAL save first and restore it at the end, so a test run never rewrites Scott's history
+	if FileAccess.file_exists("user://save.cfg"):
+		DirAccess.copy_absolute(ProjectSettings.globalize_path("user://save.cfg"),
+			ProjectSettings.globalize_path("user://save_presmoke.cfg"))
 	await get_tree().create_timer(0.3).timeout
 	print("SMOKE menu ok, has_art=", has_art, " sfx=", sfx.size())
 	feathers = 500
@@ -2167,6 +2177,10 @@ func _smoke() -> void:
 	die("smoke")
 	print("SMOKE dead ok, best_m=", best_m, " feathers=", feathers)
 	reset_game()
+	if FileAccess.file_exists("user://save_presmoke.cfg"):   # put the real save back
+		DirAccess.copy_absolute(ProjectSettings.globalize_path("user://save_presmoke.cfg"),
+			ProjectSettings.globalize_path("user://save.cfg"))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://save_presmoke.cfg"))
 	print("SMOKE reset ok")
 	get_tree().quit()
 
@@ -2217,19 +2231,21 @@ func _load_save() -> void:
 		specials_owned = cfg.get_value("save", "specials_owned", ["mega", "wild"])
 		equipped_special = cfg.get_value("save", "equipped_special", "wild")
 		wear_owned = cfg.get_value("save", "wear_owned", [])
-		for _wid in wear_owned:
-			if not codex_seen.has("wear_" + str(_wid)):
-				codex_seen.append("wear_" + str(_wid))
 		equipped_wear = cfg.get_value("save", "equipped_wear", "")
 		equipped_body = cfg.get_value("save", "equipped_body", "")
 		hen_mode = bool(cfg.get_value("save", "hen_mode", false))
 		wear_tier = cfg.get_value("save", "wear_tier", {})
-		if asc_breads > 0 and not codex_seen.has("bread_magic"):   # already ascended -> reveal the artifact
-			codex_seen.append("bread_magic")
 		lifetime = cfg.get_value("save", "lifetime", {})
 		run_history = cfg.get_value("save", "run_history", [])
 		codex_seen = cfg.get_value("save", "codex_seen", [])
 		codex_viewed = cfg.get_value("save", "codex_viewed", [])
+		# BACKFILLS must come AFTER codex_seen loads — they used to run BEFORE it and were
+		# silently wiped by the load two lines later ("still missing some codex records")
+		for _wid in wear_owned:                            # every owned wearable has a record
+			if not codex_seen.has("wear_" + str(_wid)):
+				codex_seen.append("wear_" + str(_wid))
+		if asc_breads > 0 and not codex_seen.has("bread_magic"):   # already ascended -> reveal the artifact
+			codex_seen.append("bread_magic")
 		# backfill the CODEX from saved run history: reveal every power-up you've used
 		for r in run_history:
 			for uid in r.get("picked", {}):
@@ -4578,8 +4594,8 @@ func reset_game() -> void:
 	env_scenery.clear()
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
-	ev_id = ""; ev_until = 0.0; ev_next = randf_range(6000.0, 8000.0); ev_duckling = {}
-	fork = {}; fork_next = randf_range(11000.0, 13000.0); stretch_mod = ""; stretch_until = 0.0
+	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
+	fork = {}; fork_next = randf_range(72000.0, 88000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0
 	sadie = null
 	sadie_timer = 40.0
 	hawk = null
@@ -5354,6 +5370,7 @@ func _record_run() -> void:
 		"stats": run_stats.duplicate(true),        # the run's full silly tally
 		"picked": picked.duplicate(), "boons": run_boons.duplicate(), "special": equipped_special, "wear": equipped_wear,
 		"weartier": (_wtier(equipped_wear) if equipped_wear != "" else 0),
+		"wearb": equipped_body,                       # the BODY item was never recorded — logbook ducks looked underdressed
 		"endless": endless})
 	if run_history.size() > 40:
 		run_history.resize(40)
@@ -6085,7 +6102,6 @@ func _finish_ascend() -> void:
 		run_feathers *= 2
 	if _wear("crown"):
 		run_feathers = int(run_feathers * (1.0 + 0.25 * _wf("crown")))
-	feathers += run_feathers
 	run_won = true
 	alive = false
 	dead_t = anim_t
@@ -6093,11 +6109,19 @@ func _finish_ascend() -> void:
 	dead_cat = "ascend"
 	dead_sub = ""
 	dead_m = int(distance / 10.0)
-	dead_record = dead_m > best_m
-	best_m = maxi(best_m, dead_m)
-	prev_run_bosses = next_boss_idx
-	_record_run()
-	_save()
+	if bot_mode:
+		dead_record = false      # sim VICTORIES don't count either — the win path was the
+		                         # leak that banked scootybooty's 4,936-feather bread run
+	else:
+		feathers += run_feathers
+		if bigday and dead_m > bigday_best:
+			bigday_best = dead_m
+			bigday_date = _today_str()
+		dead_record = dead_m > best_m
+		best_m = maxi(best_m, dead_m)
+		prev_run_bosses = next_boss_idx
+		_record_run()
+		_save()
 	_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.32, 50, Color(1.0, 0.86, 0.35), 320.0)
 	_spawn_parts(VIEW.x * 0.5, VIEW.y * 0.32, 30, Color(0.6, 0.85, 1.0), 280.0)
 	_sfx("unlock", 1.0); _sfx("chime", 1.2)
@@ -8636,7 +8660,7 @@ func _draw_run_detail(rec: Dictionary) -> void:
 		if d.species == sp:
 			dname = d.name
 	# the little duck that ran it (wearing that run's hat), tucked in the panel's top-left corner
-	_duck_icon(sp, Vector2(74.0, 184.0), 0.95, 0.8 + sin(anim_t * 2.5) * 0.3, str(rec.get("wear", "")))
+	_duck_icon(sp, Vector2(74.0, 184.0), 0.95, 0.8 + sin(anim_t * 2.5) * 0.3, str(rec.get("wear", "")), str(rec.get("wearb", "")))
 	# the duck's CUSTOM name headlines, with its breed beneath
 	var pet: String = str(rec.get("name", "")).strip_edges()
 	if pet != "":
@@ -8692,6 +8716,9 @@ func _draw_run_detail(rec: Dictionary) -> void:
 	var rwear := str(rec.get("wear", ""))           # the hat this run wore, shown with its star tier
 	if rwear != "":
 		relics.append({"id": rwear, "rarity": 3, "n": 1, "glow": false, "wear": true, "tier": int(rec.get("weartier", 1))})
+	var rwearb := str(rec.get("wearb", ""))         # ...and the body item (vest/cape/satchel), same treatment
+	if rwearb != "":
+		relics.append({"id": rwearb, "rarity": 3, "n": 1, "glow": false, "wear": true, "tier": _wtier(rwearb)})
 	_otext(Vector2(0, 348), "POWERS · tap for info", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	var dbs := 36.0
 	var per := int((panel.size.x - 24.0) / (dbs + 8.0))
@@ -8847,12 +8874,14 @@ func _log10(x: float) -> float:
 	return log(maxf(x, 1.0)) / log(10.0)
 
 # a tiny slowly-turning duck for the species that ran a given bar
-func _duck_icon(sp: String, center: Vector2, scale: float, yaw := 0.8, wear := "") -> void:
+func _duck_icon(sp: String, center: Vector2, scale: float, yaw := 0.8, wear := "", wearb := "") -> void:
 	var fr = _spin_frame(sp, yaw)
 	if fr == null:
 		return
 	_blit_centered(fr, center, scale)
-	if wear != "":                                  # the hat this run wore, on its little icon
+	if wearb != "":                                 # body first (vest/cape/satchel)...
+		_blit_centered(_wear3d_spin(wearb, yaw), center, scale)
+	if wear != "":                                  # ...then the hat on top
 		_blit_centered(_wear3d_spin(wear, yaw), center, scale)
 
 # run_history indices in DISPLAY order — chronological, or best-first by the current metric
@@ -8925,7 +8954,7 @@ func _stats_bars(area: Rect2) -> void:
 			_otext(Vector2(bx + bw * 0.5 - 34.0, area.position.y + 2.0), _fmt_metric(float(v), STAT_METRICS[0]), 11, Color(0.75, 1.0, 0.88), 68, HORIZONTAL_ALIGNMENT_CENTER, 2)
 		# the perched ducks all wiggle together — a gentle synchronized shimmy
 		var iyaw := 0.8 + sin(anim_t * 3.2) * 0.34
-		_duck_icon(str(rec.get("sp", "mallard")), Vector2(bx + bw * 0.5, by - 9.0), minf(1.05, bw * 0.062), iyaw, str(rec.get("wear", "")))
+		_duck_icon(str(rec.get("sp", "mallard")), Vector2(bx + bw * 0.5, by - 9.0), minf(1.05, bw * 0.062), iyaw, str(rec.get("wear", "")), str(rec.get("wearb", "")))
 		stats_bar_rects.append({"rect": Rect2(bx, area.position.y, bw, area.size.y), "idx": hidx})
 	var barhint := "distance · log · tap a bar" + ("  ·  pinch <> zoom" if total > 5 else "")
 	draw_string(font, area.position + Vector2(36, 14), barhint, HORIZONTAL_ALIGNMENT_LEFT, 320, 11, Color(1, 1, 1, 0.4))
@@ -9335,7 +9364,7 @@ func _stats_scatter(area: Rect2) -> void:
 		var best: bool = int(r.get("ft", 0)) == maxft
 		if best:
 			draw_arc(Vector2(px, py), 13.0, 0, TAU, 18, Color(1.0, 0.84, 0.35, 0.9), 2.0)
-		_duck_icon(str(r.get("sp", "mallard")), Vector2(px, py), 0.62 if best else 0.5, wig, str(r.get("wear", "")))
+		_duck_icon(str(r.get("sp", "mallard")), Vector2(px, py), 0.62 if best else 0.5, wig, str(r.get("wear", "")), str(r.get("wearb", "")))
 		stats_bar_rects.append({"rect": Rect2(px - 11.0, py - 11.0, 22.0, 22.0), "idx": i})
 
 # ---- SETTINGS ----------------------------------------------------------------
@@ -12244,10 +12273,14 @@ func _draw_duck() -> void:
 				if state != St.MEGA:                           # the melded items share the duck transform
 					var gwl := _worn_list(); gwl.reverse()      # BODY first, HEAD (hat) drawn on top
 					for wid in gwl:
-						var hf3 = _pick_wear3d(wid, h)
+						# GLIDE banks the whole duck via the shared rot transform (sprite stays the
+						# wings-out front pose) — so the wearable must stay FRONT too, or it banks
+						# TWICE (view-frame + transform) and rips off the head on quick maneuvers
+						var hf3 = _wear3d_idle(wid) if glide_t > 0.0 else _pick_wear3d(wid, h)
 						if hf3 != null: draw_texture_rect(hf3, Rect2(-ds * 0.5, ds), false)
 						if wid == "prop":
-							var pb = _pose_frame(_propblade_now(), h)
+							var pbd: Dictionary = _propblade_now()
+							var pb = (pbd.get("idle") if glide_t > 0.0 else _pose_frame(pbd, h))
 							if pb != null: draw_texture_rect(pb, Rect2(-ds * 0.5, ds), false)
 				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			else:
