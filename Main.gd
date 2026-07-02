@@ -1139,6 +1139,8 @@ var prop_timer := 5.0
 # difference is what makes the water read as DEEP instead of a flat scrolling card.
 var env_scenery: Array = []
 var env_timer := 0.0
+var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
+const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", "hero_cochichewick"]
 var tex_env := {}
 
 # ---- RIVER EVENTS + FORKS: the replay engine. Events make a stretch of river briefly
@@ -1666,7 +1668,9 @@ func _ready() -> void:
 				tex_env[en] = load("res://art/%s.png" % en)
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
-			"bank_pine", "bank_snowduck", "bank_cow"]:
+			"bank_pine", "bank_snowduck", "bank_cow",
+			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
+			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
 			tex_env[bn] = load("res://art/%s.png" % bn)
 	for kind in ITEM_DEFS:
@@ -4701,6 +4705,7 @@ func reset_game() -> void:
 	env_scenery.clear()
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
+	hero_next = randf_range(6000.0, 9000.0)
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -5717,6 +5722,11 @@ func _update_play(delta: float) -> void:
 					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
 						"phase": randf() * TAU, "flip": randf() < 0.5})
 					break
+	# a HERO landmark drifts through, rare enough to be an event
+	if distance >= hero_next and boss == null and tex_env.has(HERO_NAMES[theme_idx]):
+		hero_next = distance + randf_range(7000.0, 9500.0)
+		env_scenery.append({"n": HERO_NAMES[theme_idx], "x": (BANK_W + randf_range(56.0, 96.0)) if randf() < 0.5 else (VIEW.x - BANK_W - randf_range(56.0, 96.0)),
+			"y": -110.0, "rooted": true, "hero": true, "phase": randf() * TAU, "flip": randf() < 0.5})
 	for es in env_scenery:
 		es.y += speed * delta * (1.0 if es.rooted else 0.85)
 		if not es.rooted:
@@ -11078,10 +11088,12 @@ func _draw() -> void:
 			continue
 		var esway: float = 0.0 if es.rooted else sin(anim_t * 0.9 + es.phase) * 0.09
 		var ebob: float = 0.0 if es.rooted else sin(anim_t * 1.6 + es.phase) * 1.6
-		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-1.6 if es.flip else 1.6, 1.6))
+		var _hsc: float = 2.0 if es.get("hero", false) else 1.6
+		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-_hsc if es.flip else _hsc, _hsc))
 		var esz: Vector2 = etex.get_size()
-		# sunk INTO the water a touch (cool + translucent) so it reads background, never pickup
-		draw_texture_rect(etex, Rect2(-esz * 0.5, esz), false, Color(0.86, 0.93, 0.96, 0.88))
+		# landmarks stand PROUD; small scenery sinks translucent so it never reads as pickup
+		draw_texture_rect(etex, Rect2(-esz * 0.5, esz), false,
+			Color(1, 1, 1) if es.get("hero", false) else Color(0.86, 0.93, 0.96, 0.88))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	_draw_river_events()
