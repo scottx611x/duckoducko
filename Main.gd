@@ -607,7 +607,8 @@ const DEV_BOSS_BTNS := [
 const DEV_MENU := [
 	{"name": "GERALD", "act": "gerald"}, {"name": "BONGO", "act": "bongo"},
 	{"name": "SNAPZ", "act": "snapz"}, {"name": "BARRY", "act": "beaver"},
-	{"name": "ETERNAL", "act": "eternal"}, {"name": "BREAD", "act": "bread"},
+	{"name": "ETERNAL", "act": "eternal"}, {"name": "SADIE", "act": "megasadie"},
+	{"name": "BREAD", "act": "bread"},
 	{"name": "+5000 FT", "act": "warp"}, {"name": "+500 FTHR", "act": "feathers"},
 	{"name": "FILL LOFT", "act": "loft"}, {"name": "+3 SHIELD", "act": "shield"},
 ]
@@ -2561,7 +2562,8 @@ func _dev_btn_rect() -> Rect2:
 	return Rect2(VIEW.x - 84.0, 898.0, 64.0, 38.0)   # the single DEV button (bottom-right)
 
 func _dev_menu_panel() -> Rect2:
-	return Rect2(40.0, 286.0, VIEW.x - 80.0, 392.0)
+	var rows := int(ceil(DEV_MENU.size() / 2.0))       # the panel grows with the roster
+	return Rect2(40.0, 256.0, VIEW.x - 80.0, 72.0 + rows * 62.0)
 
 func _dev_menu_rect(i: int) -> Rect2:
 	var p := _dev_menu_panel()
@@ -2580,6 +2582,7 @@ func _dev_do(act: String) -> void:
 		"snapz": _force_boss(1)
 		"beaver": _force_boss(0, "beaver")
 		"eternal": _force_boss(2)
+		"megasadie": _force_boss(2, "megasadie")
 		"bread": _force_boss(-1)
 		"warp": distance += 50000.0; _flash("WARP +5000 ft")
 		"feathers": run_feathers += 500; _flash("+500 feathers")
@@ -11287,6 +11290,7 @@ func _dev_icon(act: String):
 		"bongo": return tex_bongo[0] if tex_bongo.size() > 0 else null
 		"snapz": return tex_snapz[0] if tex_snapz.size() > 0 else null
 		"beaver": return tex_beaver[0] if tex_beaver.size() > 0 else null
+		"megasadie": return tex_sadieboss.get("proud", tex_sadie_greet) if not tex_sadieboss.is_empty() else tex_sadie_greet
 		"bread": return tex_bread
 	return null
 
