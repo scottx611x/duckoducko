@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""SADIE THE BOUNDLESS — the dedicated render (Scott: "my Sadie girl").
+
+One upgraded voxel model of Sadie (chocolate lab: rich dark-chocolate coat, AMBER
+eyes, floppy ears, tan collar, happy pink tongue), rendered two ways:
+  - sadieboss_*  : high-res final-boss set (~320px canvas)
+  - sadie_greet / sadie_p0..p4 / sadie_spin_00..15 : wardrobe + codex replacements
+    at their EXACT existing dimensions (Main.gd anchors depend on them)
+
+Run from repo root:  python3 tools/gen_sadie.py
+"""
+import math
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+from voxel_duck import shade, render, _vox_helpers, build_sadie_run  # noqa: E402
+from PIL import Image  # noqa: E402
+
+ART = os.path.join(os.path.dirname(__file__), "..", "art")
+
+# the real Sadie's palette — dry, warm, loved
+COAT = (86, 54, 36)
+COATL = (126, 86, 58)      # warm top-light zones
+COATD = (56, 36, 24)
+CHEST = (112, 74, 50)      # slightly lighter chest (still all-brown — NO white)
+PAW = (104, 72, 50)
+AMBER = (198, 142, 58)     # her signature eyes
+PUPIL = (30, 24, 20)
+LID = (48, 32, 22)
+NOSE = (34, 26, 22)
+TONGUE = (240, 122, 150)
+TONGUED = (206, 90, 122)
+COLLAR = (176, 138, 84)    # tan
+TAG = (234, 194, 88)
+
+
+def build_boss(pose="idle", bob=0):
+    """Seated (or posed) full-body Sadie, ~1.6x the density of the old greeter.
+    poses: idle | proud (eyes-closed happy arcs, tongue way out) | crouch (play-bow)
+           | pounce (airborne, paws spread) | point (rigid, one paw up)"""
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    crouch = pose == "crouch"
+    pounce = pose == "pounce"
+    point = pose == "point"
+    proud = pose == "proud"
+
+    # ---- body ----
+    if pounce:
+        # airborne: body stretched level, legs in clean paired diagonals
+        ellip(0, 2, -1, 4.4, 3.2, 7.0, COAT)
+        ellip(0, 4.0, -1, 3.2, 1.9, 5.4, COATL)                       # sunlit back
+        ellip(0, 0.2, 2.5, 3.2, 2.2, 3.8, CHEST, only_empty=True)     # chest
+        for sx in (1, -1):                                            # forelegs: reaching forward-down
+            for i in range(5):
+                ellip(sx * 2.6, 0.5 - i * 0.9, 5.5 + i * 0.7, 1.2, 0.9, 1.2, COAT if i < 4 else PAW)
+        for sx in (1, -1):                                            # hind legs: trailing back-down
+            for i in range(5):
+                ellip(sx * 2.6, 0.5 - i * 0.7, -6.5 - i * 0.8, 1.3, 0.9, 1.3, COATD if i < 4 else PAW)
+    elif crouch:
+        # play-bow: chest DOWN at the front, rump HIGH at the back, tail flag up
+        ellip(0, 6.0, -5, 4.0, 3.2, 3.8, COAT)                        # raised rump, high + back
+        ellip(0, 8.0, -5, 2.8, 1.6, 2.8, COATL)
+        ellip(0, 3.0, -1, 3.6, 2.6, 3.6, COAT)                        # sloping back
+        ellip(0, -1.0, 3, 3.8, 2.4, 4.2, COAT)                        # chest low + forward
+        ellip(0, -2.0, 4.5, 2.8, 1.6, 2.8, CHEST, only_empty=True)
+        for s in (1, -1):                                             # forelegs stretched flat on the water
+            for zz in range(5, 10):
+                ellip(s * 2.4, -3.4, zz, 1.2, 0.8, 1.0, COAT if zz < 8 else PAW)
+        for s in (1, -1):                                             # hind legs planted under the rump
+            for yy in range(0, 5):
+                ellip(s * 2.6, yy, -7, 1.3, 1.0, 1.4, COATD)
+            ellip(s * 2.6, -0.5, -6.2, 1.4, 0.8, 1.5, PAW)
+    else:
+        # seated tall (idle / proud / point)
+        chest_up = 1 if proud else 0
+        ellip(0, 1 + chest_up, -1, 4.4, 4.2, 5.6, COAT)               # torso
+        ellip(0, 3.8 + chest_up, -1.5, 3.0, 2.0, 4.0, COATL)          # solid warm shoulder cap
+        ellip(0, 0.5 + chest_up, 3.2, 2.8, 2.8, 2.2, CHEST)           # proud chest, solid
+        ellip(0, -3.5, -3.5, 5.0, 3.4, 4.6, COAT)                     # haunches
+        ellip(0, -1.8, -5.2, 3.4, 2.0, 2.8, COATL)
+        for s in (1, -1):                                             # front legs
+            raised = point and s == 1
+            top = 1 if raised else -1
+            for yy in range(-7, top + 1):
+                zz = 4.6 if not raised else 4.6 + (top - yy) * 0.25
+                ellip(s * 2.6, yy, zz, 1.4, 1.0, 1.5, COAT if yy > -5 else COATD)
+            if raised:
+                ellip(s * 2.6, top + 0.5, 6.2, 1.4, 0.9, 1.6, PAW)    # the pointing paw, tucked up
+            else:
+                ellip(s * 2.6, -7.2, 5.0, 1.5, 0.9, 1.7, PAW)
+        for s in (1, -1):
+            ellip(s * 3.4, -6.6, -5.0, 1.2, 0.9, 1.4, PAW, only_empty=True)  # rear paws peeking
+
+    # ---- head ----
+    hb = bob
+    hy = 7.5 + hb + (1 if proud else 0) - (5 if crouch else 0) - (3 if pounce else 0)
+    hz = 3.5 + (2.5 if crouch or pounce else 0) + (1.5 if point else 0)
+    ellip(0, hy, hz, 3.4, 3.2, 3.2, COAT)                             # skull
+    ellip(0, hy + 1.8, hz + 0.4, 2.6, 1.6, 2.6, COATL)                # solid crown light
+    for s in (1, -1):                                                 # brow ridges above the eyes
+        put(s * 2, round(hy + 2.6), round(hz + 2.8), COATL)
+        put(s * 1, round(hy + 2.8), round(hz + 2.8), COATL)
+    # muzzle: blockier lab snout, lighter snoot bridge
+    box(-2, 2, round(hy - 1.5), round(hy + 0.8), round(hz + 3), round(hz + 6), COAT)
+    for zz in range(round(hz + 3), round(hz + 6)):
+        put(0, round(hy + 1.0), zz, COATL, only_empty=True)           # snoot bridge
+    box(-1, 1, round(hy + 0.2), round(hy + 1.0), round(hz + 6), round(hz + 6), NOSE)
+    put(0, round(hy + 0.6), round(hz + 7), NOSE)                      # nose tip
+    # mouth open + the happy tongue (longer when proud)
+    tl = 4 if proud else 2
+    for i in range(tl):
+        ty = round(hy - 2.2 - i * 0.8)
+        put(0, ty, round(hz + 5 + (0 if i < 2 else -0.0)), TONGUE if i % 2 == 0 else TONGUED)
+        put(-1 if i % 2 else 1, ty, round(hz + 5), TONGUE)
+    # eyes: AMBER iris, dark pupil, grounded lower lid — or happy-closed arcs when proud
+    for s in (1, -1):
+        ex, ey, ez = s * 2, round(hy + 1.6), round(hz + 3.1)
+        if proud:
+            put(ex, ey, ez, LID)
+            put(ex + (0 if s == 1 else 0), ey - 1, ez, LID)           # a little closed arc
+            put(ex - s, ey, ez, LID)
+        else:
+            put(ex, ey, ez, AMBER)
+            put(ex - s, ey, ez, AMBER)
+            put(ex, ey + 1, ez, LID)
+            put(ex - s, ey + 1, ez, LID)
+            put(ex, ey, ez + 1, PUPIL)
+    # floppy ears: hanging sheets with a darker inner fold (flying when pouncing)
+    for s in (1, -1):
+        if pounce:
+            for i in range(4):
+                put(s * (3 + i), round(hy + 2 + i), round(hz - 1 - i * 0.4), COATD)
+                put(s * (3 + i), round(hy + 1 + i), round(hz - 1 - i * 0.4), COATD)
+        else:
+            for yy in range(round(hy - 2), round(hy + 3)):
+                put(s * 3, yy, round(hz - 0.5), COATD)
+                put(s * 4, yy, round(hz - 1.2), COATD)
+                if yy < hy:
+                    put(s * 3, yy, round(hz + 0.4), (46, 30, 20))     # inner fold shadow
+            put(s * 3, round(hy - 3), round(hz), COATD)               # the droopy tip
+    # tan collar + a glinting tag
+    cy0 = hy - 4.2
+    for a in range(0, 360, 12):
+        x = round(2.4 * math.cos(math.radians(a)))
+        y = round(cy0 + 1.1 * math.sin(math.radians(a)))
+        if (x, y, 4) in V or (x, y, 3) in V or abs(x) <= 2:
+            put(x, y, round(hz + 1.2), COLLAR, only_empty=False)
+    put(0, round(cy0 - 1.4), round(hz + 2.2), TAG)
+    put(0, round(cy0 - 2.2), round(hz + 2.2), TAG)
+    # tail: a happy plume (straight back when pointing, up + curled otherwise)
+    if point:
+        for i in range(6):
+            put(0, round(2 + i * 0.1), -7 - i, COAT if i < 4 else COATL)
+    elif not pounce:
+        for i in range(7):
+            put(round(i * 0.3) * (1 if bob else -1) if i > 3 else 0,
+                round(-2 + i * 1.1), round(-6.5 - i * 0.55), COAT if i < 5 else COATL)
+    else:
+        for i in range(5):
+            put(0, round(3 + i * 0.4), -8 - i, COAT if i < 3 else COATL)
+    return V
+
+
+def fit(img, w, h):
+    """center-crop/pad a render onto an exact w x h transparent canvas."""
+    bb = img.getbbox()
+    if bb:
+        img = img.crop(bb)
+    if img.width > w or img.height > h:
+        img.thumbnail((w, h), Image.NEAREST)
+    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    canvas.paste(img, ((w - img.width) // 2, (h - img.height) // 2 + (h - img.height) % 2))
+    return canvas
+
+
+def save(img, name):
+    img.save(os.path.join(ART, name))
+    print("  ", name, img.size)
+
+
+def main():
+    Y = math.radians
+    # ---- BOSS SET (hi-res: the model is rendered LARGE, detail is real) ----
+    save(render(shade(build_boss("idle", 0)), Y(14), Y(10), out=320, scale=8.6), "sadieboss_idle_0.png")
+    save(render(shade(build_boss("idle", 1)), Y(22), Y(10), out=320, scale=8.6), "sadieboss_idle_1.png")
+    save(render(shade(build_boss("point")), Y(-38), Y(8), out=320, scale=8.2), "sadieboss_glance_l.png")
+    save(render(shade(build_boss("point")), Y(38), Y(8), out=320, scale=8.2), "sadieboss_glance_r.png")
+    save(render(shade(build_boss("crouch")), Y(16), Y(16), out=320, scale=8.2), "sadieboss_crouch.png")
+    save(render(shade(build_boss("pounce")), Y(10), Y(30), out=320, scale=7.6), "sadieboss_pounce.png")
+    save(render(shade(build_boss("proud", 0)), Y(12), Y(9), out=320, scale=8.6), "sadieboss_proud.png")
+    for f in range(4):
+        save(fit(render(shade(build_sadie_run(f * 2)), Y(90), Y(10), out=210, scale=5.2), 210, 150),
+             "sadieboss_run_%d.png" % f)
+    # ---- WARDROBE replacements (exact existing dimensions) ----
+    save(render(shade(build_boss("proud", 0)), Y(18), Y(11), out=110, scale=3.0), "sadie_greet.png")
+    save(render(shade(build_boss("idle", 0)), Y(18), Y(11), out=110, scale=3.0), "sadie_p0.png")
+    save(render(shade(build_boss("idle", 1)), Y(18), Y(11), out=110, scale=3.0), "sadie_p1.png")
+    save(render(shade(build_boss("idle", 0)), Y(4), Y(11), out=110, scale=3.0), "sadie_p2.png")
+    save(render(shade(build_boss("idle", 0)), Y(34), Y(11), out=110, scale=3.0), "sadie_p3.png")
+    save(render(shade(build_boss("idle", 0)), Y(18), Y(11), out=110, scale=3.0), "sadie_p4.png")
+    # ---- CODEX spin (16 yaws, exact 56x40) ----
+    SH = shade(build_boss("idle", 0))
+    for i in range(16):
+        save(fit(render(SH, Y(i * 22.5), Y(30), out=80, scale=1.55), 56, 40), "sadie_spin_%02d.png" % i)
+    print("done.")
+
+
+if __name__ == "__main__":
+    main()

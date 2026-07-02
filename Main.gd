@@ -1056,6 +1056,7 @@ var tex_sadie_greet: Texture2D         # ball-less friendly SADIE, the wardrobe 
 var tex_sadie_anim: Array = []         # SADIE pose set: 0 idle, 1 head-bob, 2 glance-left, 3 glance-right, 4 mouth-free
 var tex_sadie_ball: Texture2D          # her voxel chuckit (for the drop/catch)
 var tex_sadie_run: Array = []          # 4-frame gallop cycle for the fetch run
+var tex_sadieboss := {}          # SADIE THE BOUNDLESS: dedicated hi-res boss render set
 var sadie_idle_t := 0.0
 const SADIE_PLAY_DUR := 1.9
 var sadie_line := ""
@@ -1585,6 +1586,10 @@ func _ready() -> void:
 			tex_sadie_greet = load("res://art/sadie_greet.png")   # ball-less friendly SADIE — wardrobe greeter
 	tex_sadie_anim = [load("res://art/sadie_p0.png"), load("res://art/sadie_p1.png"), load("res://art/sadie_p2.png"), load("res://art/sadie_p3.png"), load("res://art/sadie_p4.png")]
 	tex_sadie_ball = load("res://art/sadie_ball.png")
+	for _sb in ["idle_0", "idle_1", "glance_l", "glance_r", "crouch", "pounce", "run_0", "run_1", "run_2", "run_3", "proud"]:
+		var _sbp := "res://art/sadieboss_%s.png" % _sb
+		if ResourceLoader.exists(_sbp):
+			tex_sadieboss[_sb] = load(_sbp)
 	tex_sadie_run = []
 	for _rfi in range(8): tex_sadie_run.append(load("res://art/sadie_run_%d.png" % _rfi))
 	if ResourceLoader.exists("res://art/hawk_0.png"):
@@ -11834,17 +11839,29 @@ func _draw_boss_megasadie() -> void:
 	var st: String = boss.dive_stage
 	# her 16-frame turntable tracks the duck; gallop frames take over during the ZOOMIES
 	var gt: Texture2D = null
-	if st == "skim" and not tex_sadie_run.is_empty():
-		gt = tex_sadie_run[int(anim_t * 14.0) % tex_sadie_run.size()]
-	elif st == "dazed" and tex_sadie_greet != null:
-		gt = tex_sadie_greet                        # sitting, tongue out, SO proud
-	elif not tex_sadie_anim.is_empty():             # front-facing pose set: SHE looks at YOU
+	var hasb: bool = not tex_sadieboss.is_empty()
+	if st == "skim":                                # ZOOMIES: the gallop, ears streaming
+		if hasb and tex_sadieboss.has("run_0"):
+			gt = tex_sadieboss["run_%d" % (int(anim_t * 14.0) % 4)]
+		elif not tex_sadie_run.is_empty():
+			gt = tex_sadie_run[int(anim_t * 14.0) % tex_sadie_run.size()]
+	elif st == "dazed":                             # sitting, tongue ALL the way out, SO proud
+		gt = tex_sadieboss.get("proud", tex_sadie_greet) if hasb else tex_sadie_greet
+	elif st == "tele" and hasb and tex_sadieboss.has("glance_l"):   # THE POINT: rigid bird-dog lock
+		gt = tex_sadieboss["glance_l" if boss.dive_x < boss.x else "glance_r"]
+	elif st == "hopwarn" and hasb and tex_sadieboss.has("crouch"):
+		gt = tex_sadieboss["crouch"]                # the play-bow before the launch
+	elif st in ["hop", "down"] and hasb and tex_sadieboss.has("pounce"):
+		gt = tex_sadieboss["pounce"]                # airborne, forepaws spread, ears flying
+	elif hasb and tex_sadieboss.has("idle_0"):
+		gt = tex_sadieboss["idle_0" if int(anim_t * 2.4) % 2 == 0 else "idle_1"]
+	elif not tex_sadie_anim.is_empty():             # fallback: the wardrobe pose set
 		if st == "tele":
-			gt = tex_sadie_anim[2 if boss.dive_x < boss.x else 3]   # THE POINT: locked glance at your lane
+			gt = tex_sadie_anim[2 if boss.dive_x < boss.x else 3]
 		elif st in ["hopwarn", "hop", "down"]:
 			gt = tex_sadie_anim[4 if tex_sadie_anim.size() > 4 else 0]
 		else:
-			gt = tex_sadie_anim[1 if int(anim_t * 2.4) % 2 == 0 else 0]   # happy head-bob idle
+			gt = tex_sadie_anim[1 if int(anim_t * 2.4) % 2 == 0 else 0]
 	elif not tex_sadie.is_empty():
 		gt = tex_sadie[0]
 	if gt == null:
