@@ -58,7 +58,7 @@ def _limb3(V, p0, p1, p2, r0, r1, col, taper=1.0):
 def build_rowboat():
     HULL = (140, 112, 80); HULLD = (104, 82, 58); HULLL = (174, 146, 108)
     PAINT = (172, 62, 50); PAINTD = (130, 44, 38)
-    FLOOR = (116, 92, 64); RIB = (88, 70, 48)
+    FLOOR = (92, 72, 50); RIB = (70, 54, 38)
     SEAT = (198, 172, 130); SEATD = (160, 136, 98)
     BILGE = (46, 90, 102); BILGEL = (98, 152, 162)
     WET = (64, 66, 58)
@@ -77,7 +77,7 @@ def build_rowboat():
         t = (zi + L) / (2.0 * L)              # 0 = stern, 1 = bow
         w = halfw(t)
         yk = int(round(3.5 * max(0.0, (t - 0.72) / 0.28) ** 1.6))   # keel sweeps up at the bow
-        ytop = yk + 7 + int(round(2.0 * max(0.0, (t - 0.70) / 0.30) ** 1.2))
+        ytop = yk + 9 + int(round(2.0 * max(0.0, (t - 0.70) / 0.30) ** 1.2))
         for y in range(yk, ytop + 1):
             frac = (y - yk) / max(1.0, float(ytop - yk))
             xs = int(round(w * (0.30 + 0.70 * frac ** 0.65)))
@@ -93,9 +93,9 @@ def build_rowboat():
             if y == yk + 1 and abs(zi) < L - 1:                # interior floorboards
                 for x in range(-max(0, xs - 1), max(0, xs - 1) + 1):
                     put(x, y, zi, RIB if zi % 6 == 0 else FLOOR, only_empty=True)
-    for y in range(0, 10):                                     # transom plate
+    for y in range(0, 12):                                     # transom plate
         for x in range(-5, 6):
-            put(x, y, -L, PAINT if y >= 8 else HULLD, only_empty=True)
+            put(x, y, -L, PAINT if y >= 10 else HULLD, only_empty=True)
     for z0, z1 in ((-8, -5), (8, 11)):                         # two thwart seats
         for zi in range(z0, z1 + 1):
             t = (zi + L) / (2.0 * L)
@@ -115,7 +115,7 @@ def build_rowboat():
     for zi in range(-L + 1, 10):
         t = (zi + L) / (2.0 * L)
         tilt = int(round((zi + L) * 0.30)) - 11
-        if tilt + 7 < 2:                       # gunwale underwater here: open pond
+        if tilt + 9 < 2:                       # gunwale underwater here: open pond
             continue
         xs = int(round(halfw(t) * 0.72))
         for x in range(-xs, xs + 1):
@@ -251,66 +251,74 @@ def build_buoy():
     GBILL = (230, 168, 52); GLEG = (226, 160, 60)
     V = {}
     put, ellip, box = _vox_helpers(V)
-    # the sandbar: dry hump, wet dark rim at the water
-    for x in range(-15, 20):
-        for z in range(-10, 12):
-            r = math.hypot((x - 2) / 16.0, (z - 1) / 10.5)
+    # the sandbar, off to port: a proper DOMED hump, wet dark rim at the water
+    for x in range(-25, 1):
+        for z in range(-9, 10):
+            r = math.hypot((x + 13) / 11.5, (z - 1) / 8.5)
             if r > 1.0:
                 continue
             put(x, 0, z, SANDW)
+            h = (x * 67 + z * 101) % 9
+            c = SANDD if h == 0 else SAND
             if r < 0.80:
-                h = (x * 67 + z * 101) % 9
-                put(x, 1, z, SANDD if h == 0 else SAND)
-    put(9, 2, 6, SHELL); put(-8, 2, -4, SHELL)                    # shells
-    for i in range(4):                                            # a dune-grass tuft
-        put(-11 + (i % 2), 2 + i, -6 + (1 if i > 2 else 0), GRASS)
+                put(x, 1, z, c)
+            if r < 0.52:
+                put(x, 2, z, c)
+            if r < 0.28:
+                put(x, 3, z, SAND if h else SANDD)
+    put(-9, 2, 4, SHELL); put(-18, 2, -4, SHELL)                  # shells
+    for i in range(5):                                            # a dune-grass tuft on the crown
+        put(-13 + (i % 2), 4 + i, 1 + (1 if i > 2 else 0), GRASS)
+        if i in (1, 3):
+            put(-15 + i, 4 + i - 1, 2, GRASS)
 
-    def lean(y):                                                  # the list to starboard
-        return int(round(y * 0.20))
-    for y in range(2, 32):                                        # striped can body
-        if y < 6:
-            rr = 6.5
-        elif y < 18:
-            rr = 5.6
-        else:
-            rr = 5.6 - 3.2 * (y - 18) / 13.0
-        band_red = (y // 5) % 2 == 0
+    def lean(y):                                                  # a proper drunken list
+        return int(round(y * 0.30))
+    BX = 6                                                        # buoy floats OFF the bar
+
+    def disc(y, rr, c_of):
         for x in range(-int(rr) - 1, int(rr) + 2):
             for z in range(-int(rr) - 1, int(rr) + 2):
-                if math.hypot(x, z) > rr:
-                    continue
-                c = RED if band_red else WHT
-                h = (x * 43 + y * 29 + z * 7) % 12
-                if h == 0:
-                    c = REDD if band_red else WHTD
-                if not band_red and y < 12 and (x * 7 + z * 3) % 13 == 0:
-                    c = RUST                                       # rust weeping down
-                put(x - 4 + lean(y), y, z, c)
-    for x in range(-7, 4):                                        # wet skirt at the water
-        for z in range(-7, 8):
-            if math.hypot(x + 4, z) <= 6.8:
-                put(x, 1, z, WETB); put(x, 2, z, WETB, only_empty=True)
-    lx = -4 + lean(33)
+                if math.hypot(x, z) <= rr:
+                    put(x + BX + lean(y), y, z, c_of(x, y, z))
+    for y in range(0, 25):                                        # FAT can body, 3 wide bands
+        if y < 4:
+            rr = 8.6                                              # flared skirt at the water
+        elif y < 16:
+            rr = 7.6
+        else:
+            rr = 7.6 - 4.4 * (y - 16) / 9.0                       # cone shoulder
+        band_red = (y // 8) % 2 == 0
+
+        def col(x, yy, z, band_red=band_red):
+            if yy <= 1:
+                return WETB
+            c = RED if band_red else WHT
+            h = (x * 43 + yy * 29 + z * 7) % 12
+            if h == 0:
+                c = REDD if band_red else WHTD
+            if not band_red and (x * 7 + z * 3) % 13 == 0 and yy < 14:
+                c = RUST                                          # rust weeping down
+            return c
+        disc(y, rr, col)
     for (cx, cz) in ((-2, -2), (2, -2), (-2, 2), (2, 2)):         # lamp cage posts
-        for y in range(32, 38):
-            put(lx + cx, y, cz, CAGE if y % 2 else CAGEL)
-    box(lx - 1, lx + 1, 33, 35, -1, 1, LIGHT)                     # the lamp
-    put(lx, 34, 0, LIGHTL); put(lx, 34, 1, LIGHTL)
-    for x in range(-3, 4):                                        # cap plate
-        for z in range(-3, 4):
-            if math.hypot(x, z) <= 3.0:
-                put(lx + x, 38, z, CAGE)
-    # the gull, riding the cap
-    gx = lx
-    ellip(gx, 41.0, -0.5, 2.0, 1.8, 3.2, GULL)
-    for (x, y, z) in list(V):                                     # grey mantle on top
-        if V[(x, y, z)] == GULL and y >= 42 and abs(z + 0.5) < 2:
+        for y in range(25, 29):
+            put(BX + cx + lean(y), y, cz, CAGE if y % 2 else CAGEL)
+    for y in range(28, 32):                                       # the beacon ON TOP: it glows
+        box(BX + lean(y) - 2, BX + lean(y) + 2, y, y, -2, 2,
+            LIGHTL if y == 31 else LIGHT)
+    put(BX + lean(31), 31, 0, LIGHTL)
+    # the gull, perched on the warm lamp: white, grey saddle, dark wingtips
+    gx, gy = BX + lean(32), 32
+    ellip(gx, gy + 2.6, -0.5, 2.6, 2.2, 3.9, GULL)
+    for (x, y, z) in list(V):                                     # grey saddle, BODY only
+        if V[(x, y, z)] == GULL and gy + 4 <= y <= gy + 5 and -3 <= z <= 0:
             V[(x, y, z)] = GULLM
-    box(gx - 1, gx + 1, 41, 42, -5, -4, GULLD)                    # dark wingtips + tail
-    ellip(gx, 43.6, 2.4, 1.3, 1.4, 1.5, GULL)                     # head
-    put(gx, 43, 4, GBILL); put(gx, 43, 5, GBILL)                  # bill
-    put(gx + 1, 44, 3, (32, 32, 36))                              # eye
-    put(gx - 1, 39, 0, GLEG); put(gx + 1, 39, 0, GLEG)            # legs
+    box(gx - 1, gx + 1, gy + 3, gy + 4, -6, -4, GULLD)            # dark wingtips + tail
+    ellip(gx, gy + 6.6, 2.8, 1.6, 1.7, 1.9, GULL)                 # head
+    box(gx, gx, gy + 5, gy + 6, 5, 6, GBILL)                      # stout yellow bill
+    put(gx + 1, gy + 6, 4, (32, 32, 36)); put(gx - 1, gy + 6, 4, (32, 32, 36))
+    put(gx - 1, gy, 0, GLEG); put(gx + 1, gy, 0, GLEG)            # legs
     return V
 
 
@@ -334,23 +342,23 @@ def build_fountain():
         if x < -4 and h in (2, 3):
             c = MOSS if h == 2 else MOSSD                        # mossy shaded side
         put(x, y, z, c)
-    R0, R1 = 18.5, 22.5
-    for x in range(-23, 24):                                     # pool wall + rim cap
-        for z in range(-23, 24):
+    R0, R1 = 18.0, 22.5
+    for x in range(-24, 25):                                     # pool wall + fat rim cap
+        for z in range(-24, 25):
             r = math.hypot(x, z)
             if R0 <= r <= R1:
-                for y in range(0, 6):
+                for y in range(0, 8):
                     if y <= 1:
                         put(x, y, z, WET)
                     else:
                         stone(x, y, z)
-            if R0 - 0.5 <= r <= R1 + 0.5:
-                stone(x, 6, z)
+            if R0 - 0.6 <= r <= R1 + 0.8:
+                stone(x, 8, z)
                 if hash3(x, 1, z) in (4, 5) and x < 2:
-                    put(x, 6, z, MOSS)                           # moss creeping over the rim
+                    put(x, 8, z, MOSS)                           # moss creeping over the rim
             if r < R0:                                           # pool water
-                c = WATL if int(r * 2) % 5 == 0 else WAT
-                put(x, 5, z, c)
+                c = WATL if int(r * 2) % 7 == 0 else WAT
+                put(x, 6, z, c)
     for y in range(5, 18):                                       # pedestal column
         rr = 4.4 if y in (8, 16) else 3.8
         for x in range(-5, 6):
@@ -366,10 +374,10 @@ def build_fountain():
     for x in range(-14, 15):                                     # lower rim + water
         for z in range(-14, 15):
             r = math.hypot(x, z)
-            if 11.4 <= r <= 13.2:
+            if 10.6 <= r <= 13.2:
                 stone(x, 22, z)
-            elif r < 11.4:
-                put(x, 21, z, WATL if int(r * 2) % 4 == 0 else WAT)
+            elif r < 10.6:
+                put(x, 21, z, WATL if int(r * 2) % 6 == 0 else WAT)
     for y in range(21, 31):                                      # upper column
         for x in range(-4, 5):
             for z in range(-4, 5):
@@ -384,10 +392,10 @@ def build_fountain():
     for x in range(-9, 10):
         for z in range(-9, 10):
             r = math.hypot(x, z)
-            if 7.0 <= r <= 8.6:
+            if 6.2 <= r <= 8.6:
                 stone(x, 34, z)
-            elif r < 7.0:
-                put(x, 33, z, WATL if int(r * 2) % 4 == 0 else WAT)
+            elif r < 6.2:
+                put(x, 33, z, WATL if int(r * 2) % 6 == 0 else WAT)
     ellip(0, 36.5, 0, 2.4, 2.8, 2.4, ST)                         # carved finial
     put(0, 39, 0, STL); put(0, 40, 0, STL)
 
@@ -397,22 +405,24 @@ def build_fountain():
         for i in range(n + 1):
             t = i / float(n)
             rr = r_start + (r_land - r_start) * t
-            x, z = int(round(ca * rr)), int(round(sa * rr))
+            x, z = ca * rr, sa * rr
             y = y_top - i
-            c = FOAM if i in (0, n) else (WATL if y % 2 else WAT)
-            put(x, y, z, c)
+            c = FOAM if (i <= 1 or i == n or y % 3 == 0) else WATL
+            put(int(round(x)), y, int(round(z)), c)              # 2-wide, so it READS
+            put(int(round(x + abs(sa))), y, int(round(z + abs(ca))), WATL if c == FOAM else c,
+                only_empty=True)
             if i == n:                                           # splash
-                put(x + 1, y, z, FOAM, only_empty=True)
-                put(x, y, z + 1, FOAM, only_empty=True)
+                put(int(round(x)) + 1, y, int(round(z)), FOAM, only_empty=True)
+                put(int(round(x)), y, int(round(z)) + 1, FOAM, only_empty=True)
     for a in (35, 155, 275):                                     # upper -> lower basin
         spill(a, 8.0, 33, 9.5, 21)
     for a in (95, 215, 335):                                     # lower basin -> pool
-        spill(a, 12.6, 21, 14.5, 5)
+        spill(a, 12.8, 21, 15.5, 6)
     for x in range(-23, 24):                                     # ripple ring in the pool
         for z in range(-23, 24):
             r = math.hypot(x, z)
-            if 15.0 <= r <= 15.9 and (x + z) % 3 == 0:
-                put(x, 5, z, WATL)
+            if 16.2 <= r <= 17.1 and (x + z) % 3 == 0:
+                put(x, 6, z, WATL)
     return V
 
 
@@ -449,51 +459,58 @@ def build_emeraldrock():
             V[(cx, tops[(cx, cz)], cz)] = CRACK
         cx += 1
         cz += rng.randint(-1, 1)
-    for (x, z), top in tops.items():                             # the moss carpet
-        if top < 3:
+    for (x, z), top in tops.items():                             # moss in PATCHES, not a pelt
+        if top < 6:
             continue
         h = (x * 67 + z * 101) % 10
-        if h < 6:
-            V[(x, top, z)] = (MOSS, MOSSL, MOSSD, MOSS, MOSSL, MOSS)[h]
-        if h in (0, 1) and (x - 1, z) in tops and tops[(x - 1, z)] < top:
-            V[(x - 1, tops[(x - 1, z)], z)] = MOSSD              # draping the shade side
-    for (fx, fz, seed) in ((-8, 4, 5), (12, -2, 9)):             # fern clumps on top
+        blob = math.hypot(x + 8, z - 3) < 6.5 or math.hypot(x - 6, z + 5) < 5.0 \
+            or math.hypot(x - 16, z - 6) < 4.0
+        if blob and h < 8:
+            V[(x, top, z)] = (MOSS, MOSSL, MOSSD, MOSS, MOSSL, MOSS, MOSSD, MOSS)[h]
+        elif h == 0:
+            V[(x, top, z)] = MOSSD                               # stray lichen flecks
+    for (fx, fz, seed) in ((-8, 3, 5), (13, -1, 9)):             # fern clumps on top
         base = tops.get((fx, fz), 10)
         frng = random.Random(seed)
         for i in range(5):
             a = math.radians(i * 72 + frng.uniform(-14, 14))
-            reach = frng.uniform(6.5, 9.0)
-            for t in range(0, 11):
-                tt = t / 10.0
+            reach = frng.uniform(7.5, 10.5)
+            for t in range(0, 12):
+                tt = t / 11.0
                 r = reach * tt
-                y = base + 1 + 4.5 * math.sin(tt * 2.2) * (1 - 0.35 * tt)
+                y = base + 1 + 6.5 * math.sin(tt * 2.2) * (1 - 0.35 * tt)
                 x = int(round(fx + r * math.cos(a)))
                 z = int(round(fz + r * math.sin(a)))
-                put(x, int(round(y)), z, FERND if t % 3 == 0 else FERN)
+                put(x, int(round(y)), z, FERND if t % 3 == 0 else FERNL)
                 if t >= 3:
                     for s in (1, -1):
                         lx = int(round(x - math.sin(a) * s))
                         lz = int(round(z + math.cos(a) * s))
                         put(lx, int(round(y)), lz,
                             FERNL if (t + s) % 3 == 0 else FERN, only_empty=True)
-    # glowing shrooms along the waterline base (the front face)
-    for (sx, sh, sr) in ((-7, 5, 3.2), (0, 3, 2.4), (6, 6, 3.6), (12, 3, 2.2)):
+    # BIG glowing shrooms along the waterline base (the front face)
+    for (sx, sh, sr) in ((-8, 6, 4.4), (-1, 3, 2.8), (7, 8, 5.0), (14, 4, 2.6)):
         sz = 0
-        for z in range(20, 5, -1):                               # find the rock face
+        for z in range(22, 4, -1):                               # find the rock face
             if (sx, 1, z) in V:
-                sz = z + int(sr * 0.7)
+                sz = z + int(sr * 0.8)
                 break
         for y in range(0, sh):
             put(sx, y, sz, STEM)
-        ellip(sx, sh + 0.5, sz, sr, sr * 0.6, sr, CAP)
+            if sr > 3.5:
+                put(sx + 1, y, sz, STEM, only_empty=True)
+        ellip(sx, sh + 0.6, sz, sr, sr * 0.62, sr, CAP)
         for (x, y, z) in list(V):
             if abs(x - sx) <= sr and abs(z - sz) <= sr and y == sh and V[(x, y, z)] == CAP:
                 V[(x, y, z)] = GILL
         for (x, y, z) in list(V):
-            if V[(x, y, z)] == CAP and (x * 47 + y * 13 + z * 89) % 6 == 0:
+            if V[(x, y, z)] == CAP and (x * 47 + y * 13 + z * 89) % 5 == 0:
                 V[(x, y, z)] = CAPL
-        put(sx, sh + int(sr * 0.6) + 1, sz, CAPL, only_empty=True)
+        put(sx, sh + int(sr * 0.62) + 1, sz, CAPL, only_empty=True)
         put(sx - 1, 1, sz + int(sr), CAPD, only_empty=True)      # glow kissing the water
+        for gy in range(sh, sh + 3):                             # teal glow ON the rock face
+            if (sx, gy, sz - int(sr) - 1) in V:
+                V[(sx, gy, sz - int(sr) - 1)] = CAPD
     for (x, y, z) in list(V):                                    # wet band on the granite
         if y <= 1 and V[(x, y, z)] in (GR, GRD, GRL, CRACK):
             V[(x, y, z)] = WET
@@ -560,10 +577,10 @@ def gen_loon():
     for i in range(3):                                           # the white necklace
         dl.rectangle([(44 + i * 2.6) * FS, (14 + i * 1.2) * FS,
                       (45 + i * 2.6) * FS, (17.4 + i * 1.2) * FS], fill=NECK)
-    for row, y0 in ((0, 21.6), (1, 23.8)):                       # back checker rows
-        for k in range(5):
-            x0 = 58 + k * 7 + (3 if row else 0)
-            dl.rectangle([x0 * FS, y0 * FS, (x0 + 1.6) * FS, (y0 + 1) * FS], fill=CHK)
+    for row, y0 in ((0, 22.0), (1, 24.6)):                       # back checker rows: fine dots
+        for k in range(6):
+            x0 = 58 + k * 6.5 + (3 if row else 0)
+            dl.rectangle([x0 * FS, y0 * FS, (x0 + 1.1) * FS, (y0 + 0.9) * FS], fill=CHK)
     dl.rectangle([44 * FS, 8 * FS, 45.6 * FS, 9.4 * FS], fill=EYE)   # the red eye
 
     streak = _crisp(hi_a, W, H)                                  # light: NO outline

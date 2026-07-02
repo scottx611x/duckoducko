@@ -1864,6 +1864,9 @@ func _ready() -> void:
 		var _rth := int(_arg_val(OS.get_cmdline_user_args(), "--theme", "0"))
 		distance = 6000.0; biome_progress = float(_rth) * THEME_LEN + 800.0
 		theme_idx = _rth; theme_prev = _rth; theme_sweep = 1.0
+		if tex_env.has(HERO_NAMES[theme_idx]):          # the biome's LANDMARK anchors the shot
+			env_scenery.append({"n": HERO_NAMES[theme_idx], "x": BANK_W + 86.0, "y": 300.0,
+				"rooted": true, "hero": true, "phase": 0.0, "flip": false})
 		for _ri in 16:                                  # pre-seed the scenery the run would have streamed in
 			var _rtbl: Array = ENV_TABLE[theme_idx].filter(func(e): return tex_env.has(e[0]))
 			if _rtbl.is_empty(): break
