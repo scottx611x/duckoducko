@@ -1080,6 +1080,7 @@ var tex_sadie_run: Array = []          # 4-frame gallop cycle for the fetch run
 var tex_sadieboss := {}          # SADIE THE BOUNDLESS: dedicated hi-res boss render set
 var sadie_idle_t := 0.0
 const SADIE_PLAY_DUR := 1.9
+var sadie_play_kind := 0        # her fetch repertoire: 0 classic · 1 sky toss · 2 keep-away · 3 dig
 var sadie_line := ""
 var sadie_line_t := -10.0
 var sadie_fetch_t := 0.0
@@ -5527,6 +5528,7 @@ func _process(delta: float) -> void:
 		sadie_idle_t += delta
 		if sadie_idle_t > 8.5:
 			sadie_idle_t = 0.0; sadie_fetch_t = SADIE_PLAY_DUR
+			sadie_play_kind = randi() % 4
 	if sadie_fetch_t > 0.0:
 		sadie_fetch_t = maxf(0.0, sadie_fetch_t - delta)
 	# BOOMBOX: the tune bumps anywhere it's equipped — menu, loading, gameplay — but NOT the graphs
@@ -13988,12 +13990,48 @@ func _draw_wardrobe() -> void:
 		var ball_pos := Vector2.ZERO
 		var bounce: float = absf(sin(anim_t * 2.2)) * 4.0
 		var sd_off := Vector2.ZERO
-		if playing:                                       # she plays with her chuckit IN PLACE (her real model, no eerie run)
+		if playing:                                       # her fetch REPERTOIRE — a different act each time
 			var fp := 1.0 - sadie_fetch_t / SADIE_PLAY_DUR
 			var mouth := spos + Vector2(22.0, 6.0)
 			var drop := spos + Vector2(78.0, 46.0)        # her chuckit lands just ahead
 			bounce = 0.0
-			if fp < 0.28:                                 # DROP — she noses the ball out, eyeing it
+			if sadie_play_kind == 1:                      # SKY TOSS: flick it HIGH... leap and snag it
+				if fp < 0.3:
+					ball_pos = mouth + Vector2(6.0, 0.0) - Vector2(0, sin(fp / 0.3 * PI * 0.5) * 96.0)
+					held = false; fi = 1
+				elif fp < 0.62:
+					var dp := (fp - 0.3) / 0.32
+					ball_pos = mouth + Vector2(6.0, -96.0 + dp * dp * 74.0)
+					held = false; fi = 4
+					sd_off.y = 2.0
+					sq = 1.0 - 0.1 * dp                   # coiling to jump
+				else:
+					var jp := (fp - 0.62) / 0.38
+					sd_off.y = -sin(jp * PI) * 30.0       # the LEAP
+					sq = 1.0 + 0.2 * sin(jp * PI)
+					fi = 0; held = true
+			elif sadie_play_kind == 2:                    # KEEP-AWAY: zoomies — you can't have it
+				held = true; fi = 0
+				var zx := sin(fp * TAU * 2.0) * 34.0
+				sd_off = Vector2(zx, -absf(sin(fp * TAU * 4.0)) * 6.0)
+				sq = 1.0 + 0.06 * sin(fp * TAU * 4.0)
+			elif sadie_play_kind == 3:                    # THE DIG: it's GONE... no wait she's got it
+				if fp < 0.25:                             # drops it behind her
+					ball_pos = mouth.lerp(spos + Vector2(-30.0, 40.0), fp / 0.25)
+					held = false; fi = 2
+				elif fp < 0.7:                            # DIGS, furiously (dust flies)
+					held = false; ball_pos = Vector2(-999, -999)
+					fi = 4
+					sd_off = Vector2(-10.0, 3.0)
+					sq = 1.0 + 0.1 * sin(fp * 60.0)       # fast little dig wiggle
+					if randf() < 0.3:
+						parts.append({"x": spos.x - 26.0 + randf_range(-8, 8), "y": spos.y + 40.0,
+							"vx": randf_range(-70, -20), "vy": randf_range(-90, -30),
+							"t": 0.0, "life": 0.35, "col": Color(0.62, 0.5, 0.36)})
+				else:                                     # POPS UP with it, triumphant
+					fi = 0; held = true
+					sq = 1.0 + 0.18 * sin((fp - 0.7) / 0.3 * PI)
+			elif fp < 0.28:                               # CLASSIC — she noses the ball out, eyeing it
 				ball_pos = mouth.lerp(drop, fp / 0.28) - Vector2(0, sin(fp / 0.28 * PI) * 40.0)
 				held = false; fi = 4
 			elif fp < 0.5:                                # PLAY-BOW — a little dip, tail up
@@ -14087,6 +14125,7 @@ func _draw_wear_modal(idx: int) -> void:
 func _wardrobe_press(pos: Vector2) -> void:
 	if wear_modal < 0 and wardrobe_sadie_rect.has_point(pos):   # tap SADIE -> she plays FETCH with her chuckit + barks
 		sadie_fetch_t = SADIE_PLAY_DUR; sadie_idle_t = 0.0
+		sadie_play_kind = randi() % 4
 		sadie_line = SADIE_LINES[randi() % SADIE_LINES.size()]; sadie_line_t = anim_t
 		_sfx("ribbit", randf_range(0.58, 0.72), 4.0)        # a low woof-ish bark
 		return

@@ -169,15 +169,22 @@ def build_boss(pose="idle", bob=0):
                 if yy < hy:
                     put(s * 3, yy, round(hz + 0.4), (46, 30, 20))     # inner fold shadow
             put(s * 3, round(hy - 3), round(hz), COATD)               # the droopy tip
-    # tan collar + a glinting tag
-    cy0 = hy - 4.2
-    for a in range(0, 360, 12):
-        x = round(2.4 * math.cos(math.radians(a)))
-        y = round(cy0 + 1.1 * math.sin(math.radians(a)))
-        if (x, y, 4) in V or (x, y, 3) in V or abs(x) <= 2:
-            put(x, y, round(hz + 1.2), COLLAR, only_empty=False)
-    put(0, round(cy0 - 1.4), round(hz + 2.2), TAG)
-    put(0, round(cy0 - 2.2), round(hz + 2.2), TAG)
+    # HER red collar: recolor the actual neck SURFACE at collar height, so it wraps the
+    # body it's on — the old free-floating ring was built for pre-rebuild geometry and
+    # clipped straight through her throat
+    cy0 = round(hy - 3.6)
+    front_z = None
+    for (vx, vy, vz) in list(V.keys()):
+        if vy in (cy0, cy0 + 1) and abs(vx) <= 4 and hz - 4.0 < vz < hz + 4.0:
+            exposed = any((vx + dx, vy + dy, vz + dz) not in V
+                          for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1)))
+            if exposed:
+                V[(vx, vy, vz)] = COLLAR
+                if vx == 0 and vy == cy0 and (front_z is None or vz > front_z):
+                    front_z = vz
+    if front_z is not None:                                # the tag hangs from the collar's FRONT
+        put(0, cy0 - 1, front_z, TAG)
+        put(0, cy0 - 2, front_z, TAG)
     # tail: a happy plume (straight back when pointing, up + curled otherwise)
     if run:
         for i in range(6):
