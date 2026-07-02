@@ -36,6 +36,8 @@ const DUCKLING_LOST_DECK := ["(they're fine. probably.)", "(off to duckling camp
 	"(they'll walk it off.)", "(brave little soul.)", "(noble sacrifice.)",
 	"(they knew the risks.)", "(gone fishin'.)", "(it's just a flesh wound.)"]
 var nearmiss_cd := 0.0          # cooldown so a flurry of herons doesn't spam the callout
+var combo_n := 0                # SNACK COMBO chain length
+var combo_t := 0.0              # seconds left to keep the chain alive
 var nearmiss_flash := 0.0       # brief juicy flourish timer for a near miss (speed-lines + glint)
 var nearmiss_x := 0.0           # where the last near miss happened (for the swoosh)
 const SADIE_DECK := ["you bonked the good girl.", "SADIE?! no!!", "she forgives you. (you don't.)",
@@ -282,7 +284,10 @@ const MENU_BIGDAY_BTN := Rect2(276.0, 886.0, 214.0, 30.0)   # BIG DAY: today's s
 const SEL_BACK_BTN := Rect2(18.0, 28.0, 120.0, 52.0)
 const SEL_PLAY_BTN := Rect2(160.0, 596.0, 220.0, 62.0)
 const SEL_PACK_BTN := Rect2(388.0, 598.0, 142.0, 58.0)   # MYSTERY EGG: gacha-unlock a random locked duck
-const PACK_COST := 500
+const PACK_COST := 500                 # base — the egg APPRECIATES as your roster grows
+func _egg_cost() -> int:
+	var hatched: int = int(lifetime.get("eggs_hatched", 0))
+	return PACK_COST + 250 * hatched
 const SEL_HEN_BTN := Rect2(VIEW.x * 0.5 - 172.0, 662.0, 166.0, 34.0)   # SEX toggle: run the drake as his HEN
 const SEL_RANDOM_BTN := Rect2(VIEW.x * 0.5 + 6.0, 662.0, 166.0, 34.0)  # roll a random duck + outfit
 # hop/steer are 0..1 flavor stats -> ±15% gameplay multipliers (see start_game)
@@ -513,6 +518,9 @@ const BOONS := [
 	# TIER 3 — only for ducks who've bested ALL THREE bosses (Gerald, Snapz, the Eternal)
 	{"id": "apex",       "tier": 3, "name": "APEX PREDATOR", "desc": "begin with TWO legendaries — but every boss gains +2 HP", "deal": true},
 	{"id": "phoenix",    "tier": 3, "name": "PHOENIX",       "desc": "cheat death TWICE, reborn ablaze each time", "deal": false},
+	{"id": "pond_karma", "tier": 0, "name": "POND KARMA",    "desc": "every NEAR MISS ripples back: +6% LOFT and a feather", "deal": false},
+	{"id": "midnight_snack", "tier": 1, "name": "MIDNIGHT SNACK", "desc": "during GOLDEN HOUR every snack tips an extra feather", "deal": false},
+	{"id": "pied_piper", "tier": 2, "name": "PIED PIPER",    "desc": "every duckling that joins you brings a friend", "deal": false},
 	{"id": "warlord",    "tier": 3, "name": "WAR LORD",      "desc": "+35% pace AND triple feathers — but the whole flock hunts you", "deal": true},
 	{"id": "echo",       "tier": 3, "name": "ECHO",         "desc": "your LOFT special fires a second, weaker time", "deal": false},
 ]
@@ -760,14 +768,17 @@ const SADIE_LINES := ["welcome! sniff around.", "*tail thumps the dock*", "ooh, 
 	"*nudges her chuckit toward you*", "i'll trade ya... for ONE throw of the chuckit."]
 const BODY_WEAR := ["scarf", "turtle", "cape", "vest", "jetpack", "satchel"]   # boombox is a HEAD piece
 var wear_tier := {}                    # wearable id -> star tier (1..WEAR_TIER_MAX); the feather sink
-const WEAR_TIER_MAX := 3
+const WEAR_TIER_MAX := 4               # ★4 = GILDED: the hoard-drainer
 # upgrade price for taking `id` from its current tier to the next (scales off its base cost)
 func _wear_upgrade_cost(id: String) -> int:
 	var base := 400
 	for w in WEARABLES:
 		if w.id == id:
 			base = int(w.cost); break
-	return int(round(base * (0.6 + 0.4 * _wtier(id))))   # ★1->★2 ~ cost, ★2->★3 ~ 1.4x cost
+	var t := _wtier(id)
+	if t >= 3:
+		return base * 4                                  # ★3->★4 GILDED: a true splurge
+	return int(round(base * (0.6 + 0.4 * t)))            # ★1->★2 ~ cost, ★2->★3 ~ 1.4x cost
 
 # per-duck gameplay multipliers, set from ROSTER stats in start_game
 var duck_hop_mul := 1.0         # scales hop lift + duration (floaty vs snappy)
@@ -1046,7 +1057,7 @@ const PROP_TIERS := {
 	"boat": 2, "noodle": 2, "umbrella": 2,
 	"gnome": 3, "rubberduck": 3,
 }
-const PROP_RARITY_W := [6.0, 3.0, 1.4, 0.5]   # spawn weight per tier (commons everywhere, legends scarce)
+const PROP_RARITY_W := [7.0, 2.6, 0.7, 0.12]  # spawn weight per tier — legends are an EVENT now (~1 in 90), rares earn their name
 var codex_seen: Array = []      # ids of characters the player has ENCOUNTERED (persisted)
 var codex_viewed: Array = []    # ids already seen IN the compendium (for the NEW badge)
 var in_codex := false
@@ -1146,7 +1157,9 @@ var bigday := false
 var bigday_seed := 0
 var bigday_best := 0
 var bigday_date := ""
-var bigday_modal := false       # the "what IS this?" card (Scott: mode shipped unexplained)
+var bigday_modal := false
+var bigday_streak := 0          # consecutive days flown — the dawn patrol habit
+var bigday_lastdayn := 0        # unix day number of the last Big Day flight       # the "what IS this?" card (Scott: mode shipped unexplained)
 const BIGDAY_PLAY_BTN := Rect2(120.0, 560.0, 300.0, 56.0)
 
 func _today_str() -> String:
@@ -1334,6 +1347,9 @@ func _st(key: String, n := 1) -> void:
 # the NEAR MISS flourish: a quick glint, swoosh-lines, sparkle + a layered whoosh/chime.
 # the duck also calls it out ("close!") via _say. tuned to feel earned, not spammy.
 func _near_miss_fx(x: float) -> void:
+	if run_boons.has("pond_karma"):
+		_add_loft(0.06)
+		run_feathers += 1
 	_st("nearmiss")
 	tut_nearmiss = true                            # tutorial: the NEAR MISS beat is satisfied
 	nearmiss_cd = 1.0
@@ -2254,6 +2270,10 @@ func _load_save() -> void:
 		best_m = cfg.get_value("save", "best_m", 0)
 		bigday_best = cfg.get_value("save", "bigday_best", 0)
 		bigday_date = cfg.get_value("save", "bigday_date", "")
+		bigday_streak = cfg.get_value("save", "bigday_streak", 0)
+		bigday_lastdayn = cfg.get_value("save", "bigday_lastdayn", 0)
+		if bigday_lastdayn < int(Time.get_unix_time_from_system() / 86400.0) - 1:
+			bigday_streak = 0                          # the patrol lapsed
 		if bigday_date != _today_str():                # a new day dawns — fresh Big Day board
 			bigday_best = 0
 			bigday_date = ""
@@ -2301,9 +2321,15 @@ func _load_save() -> void:
 			for uid in r.get("picked", {}):
 				if uid not in codex_seen:
 					codex_seen.append(uid)
+			for bid in r.get("boons", []):
+				if ("boon_" + str(bid)) not in codex_seen:
+					codex_seen.append("boon_" + str(bid))
 			var rsp: String = str(r.get("sp", ""))         # ...and every duck you've run
 			if rsp != "" and ("duck_" + rsp) not in codex_seen:
 				codex_seen.append("duck_" + rsp)
+		for spid in specials_owned:
+			if spid != "wild" and ("spec_" + str(spid)) not in codex_seen:
+				codex_seen.append("spec_" + str(spid))
 		for di in ROSTER.size():                            # reveal ducks you've already unlocked
 			if _is_unlocked(di) and ("duck_" + str(ROSTER[di].species)) not in codex_seen:
 				codex_seen.append("duck_" + str(ROSTER[di].species))
@@ -2336,6 +2362,8 @@ func _save() -> void:
 	cfg.set_value("save", "best_m", best_m)
 	cfg.set_value("save", "bigday_best", bigday_best)
 	cfg.set_value("save", "bigday_date", bigday_date)
+	cfg.set_value("save", "bigday_streak", bigday_streak)
+	cfg.set_value("save", "bigday_lastdayn", bigday_lastdayn)
 	cfg.set_value("save", "unlocked", unlocked_extra)
 	cfg.set_value("save", "duck_name", duck_name)
 	cfg.set_value("save", "meta", meta_owned)
@@ -3282,6 +3310,8 @@ func _shrine_rect(i: int) -> Rect2:
 	return Rect2(60.0, 356.0 + i * 130.0, VIEW.x - 120.0, 116.0)
 
 func _pick_boon(b: Dictionary) -> void:
+	_codex_see("boon_" + b.id)
+	lifetime["boon_" + b.id] = int(lifetime.get("boon_" + b.id, 0)) + 1
 	_st("boons")
 	match b.id:
 		"clutch": _add_ducklings(4)
@@ -3620,6 +3650,8 @@ func _pick_upgrade(u: Dictionary) -> void:
 		_flash(u.name + "!")
 
 func _add_ducklings(n: int) -> void:
+	if run_boons.has("pied_piper"):
+		n += 1
 	var before := ducklings_n
 	ducklings_n = mini(ducklings_n + n, MAX_DUCKLINGS)
 	_st("ducklings", ducklings_n - before)          # count only those that ACTUALLY joined (not capped overflow)
@@ -4786,6 +4818,12 @@ func _on_press(pos: Vector2) -> void:
 			if BIGDAY_PLAY_BTN.grow(8.0).has_point(pos):
 				bigday_modal = false
 				bigday = true
+				var _dayn := int(Time.get_unix_time_from_system() / 86400.0)
+				if _dayn == bigday_lastdayn + 1:
+					bigday_streak += 1                 # dawn patrol continues
+				elif _dayn != bigday_lastdayn:
+					bigday_streak = 1                  # a fresh streak begins
+				bigday_lastdayn = _dayn
 				bigday_date = _today_str()
 				var ds := Time.get_date_dict_from_system()
 				bigday_seed = ds.year * 10000 + ds.month * 100 + ds.day
@@ -4979,6 +5017,19 @@ func _select_press(pos: Vector2) -> void:
 		return
 	if slot_t > 0.0:
 		return                                   # reels still spinning — wait
+	if SEL_PACK_BTN.grow(6.0).has_point(pos) and anim_t - slot_msg_t > 2.6:
+		if _packable_ducks().is_empty():
+			select_line = "the nest is empty — every egg has hatched."; select_line_t = anim_t
+			_sfx("bonk", 1.1, -8.0)
+		elif feathers < _egg_cost():
+			select_line = "the egg wants %d feathers." % _egg_cost(); select_line_t = anim_t
+			_sfx("bonk", 1.1, -8.0)
+		else:
+			feathers -= _egg_cost()
+			_save()
+			_start_slot_spin()
+			_sfx("chime", 0.9)
+		return
 	if anim_t - slot_msg_t < 2.6:
 		slot_msg_t = -10.0; _sfx("click"); return   # tap clears the result
 	spin_prev_x = pos.x
@@ -5596,8 +5647,9 @@ func _update_play(delta: float) -> void:
 			"y": -30.0, "kind": _pick_flotsam(), "phase": randf() * TAU})
 		var _fpn: String = PROP_NAMES[props[props.size() - 1].kind]
 		lifetime["flotsam_" + _fpn] = int(lifetime.get("flotsam_" + _fpn, 0)) + 1   # lifetime tally
-		if int(lifetime["flotsam_" + _fpn]) >= 3:  # catalogue only once you've truly NOTICED it a few times
-			_codex_see("trash_" + _fpn)            # (so rare junk like the gnome stays a real discovery)
+		var _fthr: int = [3, 4, 5, 2][int(PROP_TIERS.get(_fpn, 0))]   # tiered: commons 3x, uncommons 4x, rares 5x — but a LEGEND counts from its 2nd sighting (you don't forget a gnome)
+		if int(lifetime["flotsam_" + _fpn]) >= _fthr:  # catalogue only once you've truly NOTICED it
+			_codex_see("trash_" + _fpn)
 		_st("flotsam_" + _fpn)                     # ...and this run's tally (for the run detail)
 		prop_timer = (randf_range(1.7, 3.4) if junkboon else randf_range(4.5, 9.0)) / _ev_prop_mult()   # MORE trash once you can grab it
 	for pr in props:
@@ -5876,6 +5928,10 @@ func _update_play(delta: float) -> void:
 		duck_shake = maxf(0.0, duck_shake - delta)
 	if nearmiss_cd > 0.0:
 		nearmiss_cd -= delta
+		if combo_t > 0.0:
+			combo_t -= delta
+			if combo_t <= 0.0:
+				combo_n = 0
 	if nearmiss_flash > 0.0:
 		nearmiss_flash -= delta
 
@@ -7767,6 +7823,18 @@ func _collide() -> void:
 			return
 
 func _collect(it: Dictionary) -> void:
+	# SNACK COMBO: quick chains ring a rising scale — skill tastes like music
+	combo_n = (combo_n + 1) if combo_t > 0.0 else 1
+	combo_t = 2.2
+	if combo_n >= 3:
+		_sfx("collect", 0.9 + 0.12 * minf(combo_n - 2, 8.0), -4.0)
+		_float_text(duck_x, BASE_Y - 128.0, "x%d!" % combo_n, Color(1.0, 0.85, 0.3) if combo_n >= 5 else Color(0.8, 0.95, 1.0))
+	if combo_n == 5 or combo_n == 10:
+		run_feathers += combo_n                       # a taste of gold for keeping the chain
+		_spawn_parts(duck_x, BASE_Y - 40.0, 10, Color(1.0, 0.85, 0.3), 220.0)
+		_sfx("chime", 1.2 + 0.2 * (combo_n / 10.0))
+	if run_boons.has("midnight_snack") and golden_t > 0.0:
+		run_feathers += 1
 	it.got = true
 	if run_boons.has("dabbler"):                     # DABBLER: each snack also drops a feather + a sliver of LOFT
 		run_feathers += 1
@@ -8561,6 +8629,31 @@ func _draw_pause() -> void:
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
+	# NEXT UNLOCK: the death screen answers "why fly again?" with a name and a number
+	var _nu_name := ""
+	var _nu_cost := 999999
+	for _rd in ROSTER:
+		if not _rd.get("secret", false) and not _is_unlocked(ROSTER.find(_rd)) and int(_rd.get("cost", 999999)) < _nu_cost:
+			_nu_name = String(_rd.name); _nu_cost = int(_rd.cost)
+	for _wu in WEARABLES:
+		if not _owns_wear(_wu.id) and int(_wu.cost) < _nu_cost:
+			_nu_name = String(_wu.name); _nu_cost = int(_wu.cost)
+	for _su in SPECIALS:
+		if int(_su.get("cost", 0)) > 0 and not _owns_special(_su.id) and int(_su.cost) < _nu_cost:
+			_nu_name = String(_su.name); _nu_cost = int(_su.cost)
+	if _nu_name != "" and feathers < _nu_cost:
+		var _nu_t := "next: %s — %d more" % [_nu_name, _nu_cost - feathers]
+		var _nu_w := font.get_string_size(_nu_t, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		draw_string(font, Vector2(VIEW.x * 0.5 - _nu_w * 0.5, VIEW.y - 96.0), _nu_t,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1.0, 0.92, 0.55, 0.85))
+		var _pb := Rect2(VIEW.x * 0.5 - 110.0, VIEW.y - 88.0, 220.0, 7.0)
+		draw_rect(_pb, Color(1, 1, 1, 0.12))
+		draw_rect(Rect2(_pb.position, Vector2(_pb.size.x * clampf(float(feathers) / _nu_cost, 0.0, 1.0), _pb.size.y)), Color(1.0, 0.85, 0.3, 0.8))
+	elif _nu_name != "":
+		var _nu_t2 := "%s is WAITING at the shop!" % _nu_name
+		var _nu_w2 := font.get_string_size(_nu_t2, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+		draw_string(font, Vector2(VIEW.x * 0.5 - _nu_w2 * 0.5, VIEW.y - 92.0), _nu_t2,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.65, 1.0, 0.7, 0.55 + 0.35 * sin(anim_t * 4.0)))
 	if bigday:                                     # this run rode today's river
 		var _bdt := "BIG DAY · %s" % _today_str()
 		var _bdw := font.get_string_size(_bdt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
@@ -10019,6 +10112,28 @@ func _codex_items() -> Array:
 		"sub": "legendary artifact · devoured %s" % _commas(asc_breads),
 		"lore": "It isn't baked — it simply IS, risen from the river the very instant GERALD THE ETERNAL falls at 30,000 ft. One bite and the world tilts: you ASCEND, the current remembers your name, and tomorrow's river runs meaner for it.\n\nNobody knows what's inside. Everybody agrees it's worth it.\n\nYou have devoured %s." % _commas(asc_breads),
 		"type": "bread", "ref": null})
+	var bns := BOONS.duplicate()                        # shrine boons: the elder's whole menu, tiered
+	bns.sort_custom(func(a, b): return int(a.get("tier", 0)) < int(b.get("tier", 0)))
+	for b in bns:
+		var btaken: int = int(lifetime.get("boon_" + b.id, 0))
+		out.append({"key": "boon_" + b.id, "cat": "relic", "name": String(b.name).to_upper(),
+			"sub": "%s boon · taken %s" % [["humble", "seasoned", "storied"][clampi(int(b.get("tier", 0)), 0, 2)], _commas(btaken)],
+			"lore": "%s
+
+%s
+
+The Ancient Duck has dealt you this %s times." % [String(b.desc),
+				("A RISKY DEAL — power now, trouble later." if b.get("deal", false) else "A gentle gift of the shrine."), _commas(btaken)],
+			"type": "boon", "ref": b})
+	for sp2 in SPECIALS:                                # specials: the moves themselves
+		if sp2.id == "wild":
+			continue
+		out.append({"key": "spec_" + sp2.id, "cat": "relic", "name": String(sp2.name),
+			"sub": "special · " + ("innate" if int(sp2.get("cost", 0)) == 0 else "%d * at the shop" % int(sp2.cost)),
+			"lore": String(sp2.desc) + "
+
+Equip it before a run — the LOFT meter is its trigger.",
+			"type": "spec", "ref": sp2})
 	var ups := UPGRADES.duplicate()                     # power-ups, ordered common -> legendary
 	ups.sort_custom(func(a, b): return int(a.rarity) < int(b.rarity))
 	for u in ups:
@@ -10170,6 +10285,16 @@ func _codex_icon(it: Dictionary, box: Rect2) -> void:
 	match it.type:
 		"bread":
 			_draw_loaf(box.get_center(), minf(box.size.x, box.size.y) / 92.0, false)
+		"boon":
+			if tex_boon.has(it.ref.id):
+				var bt2: Texture2D = tex_boon[it.ref.id]
+				_blit_centered(bt2, box.get_center(), minf((box.size.x - 10.0) / bt2.get_size().x, (box.size.y - 10.0) / bt2.get_size().y))
+			else:
+				draw_circle(box.get_center(), box.size.y * 0.3, Color(0.85, 0.7, 0.3, 0.5))
+		"spec":
+			draw_circle(box.get_center(), box.size.y * 0.32, Color(0.5, 0.85, 1.0, 0.2))
+			draw_arc(box.get_center(), box.size.y * 0.32, 0, TAU, 22, Color(0.5, 0.85, 1.0, 0.8), 2.0)
+			_otext(Vector2(box.position.x, box.get_center().y + 7.0), String(it.ref.name).left(1), 22, Color(0.8, 0.95, 1.0), box.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		"duck":
 			var dsp: String = it.ref.species
 			var dfr = _spin_frame(dsp, 0.8)
@@ -12824,9 +12949,17 @@ func _draw_menu() -> void:
 			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
 
-	# wallet + best run
+	# wallet + best run + the LIFE LIST (a birder keeps a list; this one wants finishing)
 	if feathers > 0 or best_m > 0:
 		_feather_text(Vector2(VIEW.x * 0.5, 640), "%d   ·   best %d ft" % [feathers, best_m], 22, Color(1, 0.92, 0.45, 0.9), "center")
+		var _cx_all := _codex_items()
+		var _cx_seen := 0
+		for _ci in _cx_all:
+			if String(_ci.key) in codex_seen:
+				_cx_seen += 1
+		if _cx_all.size() > 0 and _cx_seen > 0:
+			_otext(Vector2(0, 662), "life list: %d%% of the river known" % int(100.0 * _cx_seen / _cx_all.size()),
+				14, Color(0.8, 0.92, 1.0, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 	# tap-to-play, pulsing
 	var pulse := 0.55 + 0.45 * sin(anim_t * 4.0)
@@ -12895,6 +13028,8 @@ func _draw_menu() -> void:
 				lines[li], 16, Color(0.92, 0.95, 1.0, 0.9), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		var bd_line: String = ("today's best: %d ft — beat it!" % bigday_best) \
 			if (bigday_best > 0 and bigday_date == _today_str()) else "your best today goes on the board."
+		if bigday_streak >= 2:
+			bd_line += "   ·   %d-day patrol!" % bigday_streak
 		_otext(Vector2(card.position.x, card.position.y + 128.0 + 6 * 22.0),
 			bd_line, 15, Color(1.0, 0.88, 0.5), card.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		_draw_button(BIGDAY_PLAY_BTN, "FLY TODAY'S RIVER", 20, true)
@@ -13355,6 +13490,7 @@ func _resolve_slot() -> void:
 			if not pool.is_empty():
 				var pick: int = pool[randi() % pool.size()]
 				unlocked_extra.append(ROSTER[pick].species)
+				lifetime["eggs_hatched"] = int(lifetime.get("eggs_hatched", 0)) + 1
 				sel_index = pick
 				slot_msg = "JACKPOT!  %s!" % ROSTER[pick].name
 				_sfx("unlock", 1.3); _sfx("chime", 1.7)
@@ -13550,6 +13686,19 @@ func _draw_select() -> void:
 
 	if unlocked:
 		_draw_button(SEL_PLAY_BTN, "PLAY  >", 28, true)
+		# the MYSTERY EGG: hatch a random locked duck (the reels were built long ago —
+		# the BUTTON had come unwired in a refactor; the whole gacha was unreachable)
+		if not _packable_ducks().is_empty():
+			_draw_button(SEL_PACK_BTN, "", 16)
+			var _ec := SEL_PACK_BTN.get_center()
+			draw_set_transform(Vector2(_ec.x - 34.0, _ec.y), sin(anim_t * 3.0) * 0.14, Vector2.ONE)
+			_fill_ellipse(Vector2.ZERO, 11.0, 14.0, Color(0.97, 0.93, 0.82))          # the egg, wobbling
+			_fill_ellipse(Vector2(-3.0, -4.0), 3.5, 4.5, Color(1.0, 1.0, 0.98))
+			for _sp3 in 3:
+				draw_circle(Vector2(-6.0 + _sp3 * 6.0, 2.0 + (_sp3 % 2) * 4.0), 1.4, Color(0.72, 0.62, 0.5))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_otext(Vector2(SEL_PACK_BTN.position.x + 24.0, _ec.y - 2.0), "EGG", 16, Color(1.0, 0.95, 0.82), SEL_PACK_BTN.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+			_feather_text(Vector2(_ec.x + 12.0, _ec.y + 18.0), "%d" % _egg_cost(), 14, Color(1.0, 0.92, 0.45, 0.9), "center")
 	elif is_secret:
 		_otext(Vector2(0, SEL_PLAY_BTN.position.y + 38), "a hidden duck. you'll know when.",
 			20, Color(1, 1, 1, 0.6), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
@@ -13639,6 +13788,8 @@ func _draw_select() -> void:
 		_draw_asc_info()
 
 # the WARDROBE: one tidy grid that BOTH buys and equips head cosmetics (no shop clutter)
+	_draw_slot()                                   # the reels overlay everything when spinning
+
 func _wardrobe_tile(i: int) -> Rect2:
 	# 0..N-1 -> the wearables, 4 across, centred (the HEAD/BODY slots live in the outfit bar up top)
 	var cols := 4
