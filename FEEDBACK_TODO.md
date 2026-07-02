@@ -566,3 +566,4 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] **Menu pond lives + killers attend funerals** v1.19.4 — menu: 48s dawn->dusk light cycle + drifting scenery under the title; death screen: your killer's portrait gloat-sways beside "bested by...". Verified via shots.
 - [x] **Lake Cochichewick SINGS + SPARKLE WAKE** v1.19.5 — finale-biome hops chime up a pentatonic scale (WHIMSY §6 payoff); new 900-feather SPARKLE WAKE meta: hops trail stardust forever (flair sink).
 - [x] **"again?" + bot leads Sadie** v1.19.6 — retry prompt is now the duck itself, hopeful eyes, asking "again?" (WHIMSY §9); bot hop-timing for ambient Sadie now LEADS her crossing (same-seed Sadie deaths 4->0).
+- [x] **SADIE HAS HER OWN BOSS THEME** v1.19.7 — the only boss music in a HAPPY key: C major, 160 BPM, composed to feel like the biggest game of fetch ever played (gen_music.py, 12s seamless loop). Gerald keeps his dread; she gets joy.

@@ -326,6 +326,19 @@ MELODY_ETERNAL = [
 ]
 render_track(150, PROG_ETERNAL, MELODY_ETERNAL, "boss_eternal.wav", drive=1.85, lead_vol=0.14)
 
+# SADIE THE BOUNDLESS — C MAJOR, 160 BPM: the only boss theme in a HAPPY key.
+# It should feel like the biggest game of fetch ever played, not a battle.
+Cmaj4 = [C4, E4, G4]; Fmaj4 = [F4, A4, C5]; Gmaj4 = [G4, B3 * 2, D5]; Am4 = [A4, C5, E5]
+PROG_SADIE = [(Cmaj4, C2), (Cmaj4, C2), (Fmaj4, F2), (Gmaj4, G2),
+              (Am4, A2), (Fmaj4, F2), (Gmaj4, G2), (Cmaj4, C2)]
+MELODY_SADIE = [
+    [(0, E5, 1), (1, G5, 1), (2, C5, 1), (4, E5, 1), (6, G5, 2)],
+    [(0, G5, 1), (2, E5, 1), (4, C5, 1), (6, D5, 1)],
+    [(0, F4 * 2, 1), (2, A4 * 2 / 2 * 2, 1), (4, C5, 2)],
+    [(0, D5, 1), (2, B3 * 4 / 2, 1), (4, G4 * 2, 2)],
+]
+render_track(160, PROG_SADIE, MELODY_SADIE, "boss_sadie.wav", drive=1.6, lead_vol=0.16)
+
 
 # ---- AMBIENT BIOME THEMES --------------------------------------------------------
 # Looping background variants so different scenery areas get their own mood.

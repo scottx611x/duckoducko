@@ -1760,7 +1760,7 @@ func _ready() -> void:
 	boss_player = AudioStreamPlayer.new()
 	boss_player.volume_db = -40.0
 	add_child(boss_player)
-	for nm in ["boss_music", "boss_eternal"]:
+	for nm in ["boss_music", "boss_eternal", "boss_sadie"]:
 		if ResourceLoader.exists("res://sfx/%s.wav" % nm):
 			var bm: AudioStreamWAV = load("res://sfx/%s.wav" % nm)
 			bm.loop_mode = AudioStreamWAV.LOOP_FORWARD
@@ -6392,7 +6392,9 @@ func _start_boss(force_kind := "") -> void:
 	if music_player != null:
 		music_player.volume_db = -45.0       # silence the river theme for the duel
 	if boss_player != null:                  # ...and strike up the BOSS battle music
-		var track = boss_tracks.get("boss_eternal" if (final_gerald or kind == "megasadie") else "boss_music")
+		var track = boss_tracks.get("boss_sadie" if kind == "megasadie" else ("boss_eternal" if final_gerald else "boss_music"))
+		if track == null and kind == "megasadie":
+			track = boss_tracks.get("boss_eternal")    # fallback if her theme is missing
 		if track != null:
 			boss_player.stream = track
 			boss_player.volume_db = _music_vol_eff()   # match the river / honour the settings volume toggle
