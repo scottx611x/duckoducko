@@ -8797,7 +8797,12 @@ func _draw_death() -> void:
 	if run_won:                                    # the bread triumph: a big PADDLE ON -> endless invite
 		_draw_button(DEATH_ENDLESS_BTN, "PADDLE ON  >  endless waters", 20, true)
 	elif death_power_sel < 0 or death_power_sel >= rrects.size():
-		_otext(Vector2(0, 614.0), "tap empty space to retry", 22, Color(1, 1, 1, 0.5 + 0.4 * sin(anim_t * 4.0)))
+		# WHIMSY §9: no GAME OVER here — just the duck, hopeful eyes, offering a tiny "again?"
+		var _af = _spin_frame(species if ducks.has(species) else "mallard", 0.05 + sin(anim_t * 0.8) * 0.06)
+		if _af != null:
+			_blit_centered(_af, Vector2(VIEW.x * 0.5 - 64.0, 606.0 + sin(anim_t * 2.2) * 3.0), 0.62)
+		_otext(Vector2(40, 614.0), "again?", 26, Color(1, 1, 1, 0.55 + 0.4 * sin(anim_t * 4.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
+		_otext(Vector2(0, 638.0), "(tap empty space)", 13, Color(1, 1, 1, 0.35), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_draw_button(DEATH_MENU_BTN, "menu", 18)
 	_draw_button(DEATH_STATS_BTN, "logbook", 18)
 	# inspected power's explanation — drawn LAST so it floats ON TOP of the buttons,
@@ -14628,10 +14633,13 @@ func _bot_should_hop() -> bool:
 			return true
 	if donny != null and sim_donny_react and absf(float(donny.y) - BASE_Y) < 56.0 and absf(float(donny.x) - duck_x) < 36.0:
 		return true                    # JUMP over CHRISSY — airborne = her hull passes under
-	# SADIE is 70lb of joy at the waterline — hoppable, and the bot kept paddling into her
-	if sadie != null and float(sadie.get("t", 0.0)) > 0.0 \
-			and absf(float(sadie.y) - BASE_Y) < 52.0 and absf(float(sadie.x) - duck_x) < 62.0:
-		return true
+	# SADIE is 70lb of joy at the waterline — hoppable. She CROSSES fast, so lead her:
+	# react inside a wide window on her APPROACH side, not a tight circle she's already through
+	if sadie != null and float(sadie.get("t", 0.0)) > 0.0 and absf(float(sadie.y) - BASE_Y) < 56.0:
+		var _svx: float = float(sadie.get("vx", sadie.get("dir", 1.0) * 300.0))
+		var _lead: float = (duck_x - float(sadie.x)) * signf(_svx)
+		if _lead > -40.0 and _lead < 150.0:
+			return true
 	return false
 
 func _sim_duck_icon() -> String:

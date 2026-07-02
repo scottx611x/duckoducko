@@ -565,3 +565,4 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] **The conga SINGS** v1.19.3 — WHIMSY §4 fulfilled: each duckling peeps a rising note as it pops up in sequence behind you; a clean run is a little song.
 - [x] **Menu pond lives + killers attend funerals** v1.19.4 — menu: 48s dawn->dusk light cycle + drifting scenery under the title; death screen: your killer's portrait gloat-sways beside "bested by...". Verified via shots.
 - [x] **Lake Cochichewick SINGS + SPARKLE WAKE** v1.19.5 — finale-biome hops chime up a pentatonic scale (WHIMSY §6 payoff); new 900-feather SPARKLE WAKE meta: hops trail stardust forever (flair sink).
+- [x] **"again?" + bot leads Sadie** v1.19.6 — retry prompt is now the duck itself, hopeful eyes, asking "again?" (WHIMSY §9); bot hop-timing for ambient Sadie now LEADS her crossing (same-seed Sadie deaths 4->0).
