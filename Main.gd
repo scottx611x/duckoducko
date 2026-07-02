@@ -704,6 +704,14 @@ var boss_globs: Array = []  # muck globs Gerald spits — dodge them: {x, y, vx,
 var boss_tides: Array = []  # SNAPZ TIDAL SLAM: full-width foam waves you HOP: {y, hit}
 var boss_flash := 0.0       # white hit-flash on Gerald
 var boss_stomp_flash := 0.0 # screen pop when you land a stomp
+var boss_banner := ""        # slim mid-fight ribbon (enrage/ult calls) — never the huge white label
+var boss_banner_t := -9.0
+var boss_banner_col := Color(1, 0.4, 0.4)
+
+func _boss_banner_show(txt: String, col := Color(1.0, 0.45, 0.42)) -> void:
+	boss_banner = txt
+	boss_banner_t = anim_t
+	boss_banner_col = col
 
 var menu_enter_t := -10.0       # brief tap-grace after landing on the menu
 var meta_owned: Array = []      # persistent shop purchases (ids)
@@ -6269,6 +6277,15 @@ func _start_boss(force_kind := "") -> void:
 		"enter_side": (1.0 if randf() < 0.5 else -1.0),   # GERALD swoops in from a random side
 		"swoop_x": duck_x,                                 # remembers where the player was for the low pass
 	}
+	# the duck REACTS — an intro is a scene, not a loading screen
+	match kind:
+		"snapz": _say("that is a BIG turt.", 2.6)
+		"beaver": _say("do WE have a permit?!", 2.6)
+		"bongo": _say("he looks... unimpressed.", 2.6)
+		"pike": _say("something's down there.", 2.6)
+		"megasadie": _say("SADIE?! you're ENORMOUS!", 2.8)
+		_:
+			_say("oh no. oh NO." if final_gerald else "the landlord cometh.", 2.6)
 	# the name is shown big by the intro band (_draw_boss_intro) — no redundant flash
 	if kind == "snapz":
 		_sfx("laugh", 1.0)                    # a big guttural laugh from the deep
@@ -6308,7 +6325,7 @@ func _boss_leave() -> void:
 	var reward: int = 15 + 10 * int(boss.idx)
 	run_feathers += reward
 	shield_charges += 1                             # BOSS HEAL: a hard-won patch-up — +1 shield for the road
-	_flash("PATCHED UP — +1 SHIELD", 1.8)
+	_float_text(duck_x, BASE_Y - 96.0, "patched up! +1 shield", Color(0.6, 0.95, 0.7))
 	for i in 26:
 		_spawn_parts(randf_range(60, VIEW.x - 60), randf_range(120, 360), 1, Color(1, 0.9, 0.4), 130.0)
 	# the SPOILS OF WAR: a prominent PICK-YOUR-REWARD screen (high-tier powers)
@@ -6383,10 +6400,17 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		_sfx("bonk", 0.7, -4.0)
 		return
 	boss.hp -= n
-	boss_flash = 0.35
+	boss_flash = 0.5
 	duck_shake = maxf(duck_shake, 0.3)
 	_sfx("crunch", 0.7)
 	_spawn_parts(boss.x, boss.y, 16, Color(0.85, 0.9, 1.0), 220.0)
+	# HE FELT THAT: comic tears spring from the eyes + a little star pop — you always KNOW a hit landed
+	for _td in 6:
+		parts.append({"x": boss.x + randf_range(-26.0, 26.0), "y": boss.y - 24.0,
+			"vx": randf_range(-90.0, 90.0), "vy": randf_range(-160.0, -40.0),
+			"t": 0.0, "life": randf_range(0.4, 0.7), "col": Color(0.55, 0.78, 1.0)})
+	_spawn_parts(boss.x, boss.y - 10.0, 5, Color(1.0, 0.92, 0.4), 300.0)
+	_sfx("squeak", randf_range(1.2, 1.45), -6.0)
 	if boss.hp <= 0:
 		if ascension >= 9 and not boss.get("revived", false):   # UNDYING BOSSES: he cheats death once
 			boss.revived = true
@@ -6395,7 +6419,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 			boss.dive_gap *= 0.7                        # and comes back FURIOUS
 			boss_flash = 0.6
 			duck_shake = maxf(duck_shake, 0.5)
-			_flash("IT WON'T STAY DOWN", 1.8)
+			_boss_banner_show("IT WON'T STAY DOWN")
 			_gerald_say("still SNAPPING." if boss.kind == "snapz" else ("the DAM\nHOLDS." if boss.kind == "beaver" else ("ugh.\nSTILL here." if boss.kind == "bongo" else ("she brought\nthe ball BACK." if boss.kind == "megasadie" else "death is for\nLESSER birds."))))
 			_sfx("laugh", 0.9); _sfx("mega", 0.5)
 			_spawn_parts(boss.x, boss.y, 28, Color(1.0, 0.4, 0.42), 280.0)
@@ -6403,7 +6427,7 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		_st("bosses")
 		if run_boons.has("tailwind"):                  # TAILWIND climbs LIVE with each boss you stomp
 			boon_pace += 0.04
-			_flash("TAILWIND SURGES!")
+			_float_text(duck_x, BASE_Y - 120.0, "tailwind surges!", Color(0.65, 0.9, 1.0))
 		if boss.get("bonus", false):                   # PIKE'S HOLLOW: a branch-only duel — full spoils, but
 			_boss_leave()                              # the campaign ladder doesn't move (Snapz still waits)
 			return
@@ -6423,30 +6447,28 @@ func _hit_boss(n: int, bypass_armor := false) -> void:
 		boss.phase2 = true
 		boss.dive_gap *= 0.62
 		if boss.kind == "megasadie":
-			_flash("SADIE WANTS DOUBLES", 1.6)
+			_boss_banner_show("SADIE WANTS DOUBLES", Color(1.0, 0.82, 0.3))
 			_gerald_say("best of\nTHREE!!")
 			_sfx("laugh", 1.25)
 			boss.ult = true                         # queue THE POINT (triple pounce)
 		elif boss.kind == "snapz":
-			_flash("SNAPZ IS ENRAGED", 1.6)
+			_boss_banner_show("SNAPZ IS ENRAGED", Color(0.55, 0.85, 0.6))
 			_gerald_say("RRRAAGH. SNAP SNAP.")
 			_sfx("laugh", 0.85)
 			boss.ult = true                         # queue his TIDAL SLAM ultimate
 		elif boss.kind == "beaver":
-			_flash("BARRY IS FURIOUS", 1.6)
+			_boss_banner_show("BARRY IS FURIOUS", Color(0.95, 0.66, 0.35))
 			_gerald_say("DAM you to\nSPLINTERS!")
 			_sfx("laugh", 0.85)
 		elif boss.kind == "bongo":
-			_flash("BONGO IS CRANKY", 1.6)
+			_boss_banner_show("BONGO IS CRANKY", Color(0.6, 0.9, 0.5))
 			_gerald_say("okay. OKAY.\nyou want THIS?")
 			_sfx("ribbit", 0.9)
 		else:
-			_flash("GERALD IS FURIOUS", 1.6)
+			_boss_banner_show("GERALD IS FURIOUS")
 			_gerald_say("NOW you've done it.")
 			_sfx("quack", 0.6, 1.0)
 			boss.ult = true                         # queue his once-per-fight FEATHER STORM
-	else:
-		_flash("HIT!")
 
 func _update_boss(delta: float) -> void:
 	boss_flash = maxf(0.0, boss_flash - delta * 2.5)
@@ -6516,6 +6538,28 @@ func _update_boss(delta: float) -> void:
 					var f: float = 1.0 - pow(1.0 - clampf((et - 3.0) / 2.0, 0.0, 1.0), 2.2)
 					boss.x = lerpf(VIEW.x * 0.5 - side * 150.0, VIEW.x * 0.5, f)
 					boss.y = lerpf(BASE_Y - 58.0, 150.0, f)
+			if not boss.get("gestured", false) and boss.t >= 1.15:   # the signature gesture as the name lands
+				boss.gestured = true
+				match boss.kind:
+					"snapz":
+						for _gb in 8:
+							ripples.append({"x": boss.x + randf_range(-60.0, 60.0), "y": boss.y + 30.0, "t": 0.0, "max": randf_range(20.0, 54.0)})
+						_sfx("crunch", 0.8); _sfx("splash_big", 0.6)
+					"beaver":
+						_spawn_parts(boss.x, boss.y, 18, Color(0.78, 0.62, 0.38), 240.0)   # a proud spray of woodchips
+						_sfx("thud", 0.9, -2.0)
+					"bongo":
+						_spawn_parts(boss.x, boss.y + 20.0, 10, Color(0.66, 0.9, 0.5), 160.0)
+						_sfx("ribbit", 0.7, -2.0)                  # one slow, unimpressed ribbit
+					"megasadie":
+						_spawn_parts(boss.x, boss.y + 40.0, 22, Color(0.85, 0.93, 1.0), 280.0)   # tail-thunder spray
+						_sfx("laugh", 1.3); _sfx("splash_big", 0.5)
+					"pike":
+						ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 120.0})
+						_sfx("fwoosh", 0.6, -4.0)
+					_:
+						_spawn_parts(boss.x, boss.y, 26, Color(0.85, 0.3, 0.32) if boss.get("eternal", false) else Color(0.9, 0.92, 1.0), 260.0)
+						_sfx("screech", 0.9 if boss.get("eternal", false) else 1.1)   # a wing-spread flourish of feathers
 			if not boss.get("introspoke", false) and boss.t >= (1.8 if boss.kind in ["snapz", "beaver", "bongo", "megasadie"] else 3.8):   # speaks once settled
 				boss.introspoke = true
 				var tpool: Array = BOSS_INTRO_TAUNTS.get(boss.get("intro_pool", "gerald"), MEGASADIE_TAUNTS if boss.kind == "megasadie" else [])
@@ -6615,6 +6659,7 @@ func _boss_fight(delta: float) -> void:
 				_gerald_say("AGAIN.")
 			else:
 				boss.dive_stage = "dazed"; boss.t = 0.0
+				_sfx("chime", 1.5, -10.0)
 				# the stomp window; ASCENSION shortens his woozy recovery (clamped fair)
 				boss.daze_t = maxf(0.62, (1.5 - 0.15 * boss.idx) / (1.0 + 0.09 * ascension))
 				boss.stomped = false
@@ -6825,6 +6870,7 @@ func _beaver_fight(delta: float) -> void:
 
 func _beaver_recover() -> void:
 	boss.dive_stage = "dazed"; boss.t = 0.0
+	_sfx("chime", 1.5, -10.0)
 	boss.daze_t = maxf(0.7, (1.5 - 0.12 * boss.idx) / (1.0 + 0.08 * ascension))
 	boss.stomped = false
 
@@ -6930,6 +6976,7 @@ func _bongo_fight(delta: float) -> void:
 
 func _bongo_recover(daze_mul: float) -> void:
 	boss.dive_stage = "dazed"; boss.t = 0.0
+	_sfx("chime", 1.5, -10.0)
 	boss.daze_t = maxf(0.7, daze_mul * (1.5 - 0.12 * boss.idx) / (1.0 + 0.08 * ascension))
 	boss.stomped = false
 	boss.throat = 0.0; boss.tongue_len = 0.0
@@ -6985,6 +7032,7 @@ func _megasadie_fight(delta: float) -> void:
 	elif st == "throw":
 		if boss.t >= 0.45:                         # ...then she WATCHES them fly, panting, proud —
 			boss.dive_stage = "dazed"; boss.t = 0.0    # a short window: every game has a lull
+			_sfx("chime", 1.5, -10.0)
 			boss.daze_t = maxf(0.6, 0.95 / (1.0 + 0.09 * ascension))
 			boss.stomped = false
 	elif st == "skimwarn":                             # ZOOMIES wind-up: she coils to one side, tail going
@@ -7035,6 +7083,7 @@ func _megasadie_fight(delta: float) -> void:
 				boss.hit_cool = 1.0
 				_boss_hits_player()
 			boss.dive_stage = "dazed"; boss.t = 0.0    # winded + SO proud of that one
+			_sfx("chime", 1.5, -10.0)
 			boss.daze_t = maxf(0.8, 1.6 / (1.0 + 0.09 * ascension))
 			boss.stomped = false
 	elif st == "tele":                                 # THE POINT: frozen bird-dog stance at your lane
@@ -7061,6 +7110,7 @@ func _megasadie_fight(delta: float) -> void:
 				_gerald_say("AGAIN!")
 			else:                                      # three pounces leave her flopped + delighted
 				boss.dive_stage = "dazed"; boss.t = 0.0
+				_sfx("chime", 1.5, -10.0)
 				boss.daze_t = maxf(0.9, 1.7 / (1.0 + 0.09 * ascension))
 				boss.stomped = false
 	elif st == "dazed":                                # sitting, tongue out, tail sweeping — STOMP window
@@ -7109,7 +7159,7 @@ func _snapz_fight(delta: float) -> void:
 				boss.dive_x = _snapz_lane_x(boss.chomp_lane)
 				boss.chomp_combo = 3                # FRENZY: this chomp + 3 more, swept across lanes
 				duck_shake = maxf(duck_shake, 0.5)
-				_flash("FEEDING FRENZY!", 1.4)
+				_boss_banner_show("FEEDING FRENZY!", Color(0.55, 0.85, 0.6))
 				_gerald_say("FEEDING... FRENZY!")
 				_sfx("laugh", 0.95); _sfx("fwoosh", 0.85, 3.0)
 				return
@@ -7211,6 +7261,7 @@ func _snapz_fight(delta: float) -> void:
 					boss.dive_x = _snapz_lane_x(boss.chomp_lane)
 				else:                                     # last chomp -> beached + VULNERABLE
 					boss.dive_stage = "stuck"; boss.t = 0.0
+					_sfx("chime", 1.5, -10.0)
 					boss.daze_t = 1.05; boss.stomped = false
 		"stuck":   # jaws agape, beached — VULNERABLE: hop on his skull to STOMP
 			boss.y = BASE_Y - 14.0 + sin(anim_t * 3.0) * 3.0
@@ -7245,7 +7296,7 @@ func _boss_stomped() -> void:
 	_spawn_parts(boss.x, boss.y - 20.0, 22, Color(1, 0.95, 0.7), 280.0)
 	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 200.0})
 	_sfx("mega", 1.1)
-	_float_text(boss.x, boss.y - 90.0, "STOMP!", Color(1, 0.85, 0.3))
+	_float_text(boss.x, boss.y - 90.0, "boop!", Color(1, 0.85, 0.3))
 	var lines: Array = SNAPZ_STOMP_LINES if boss.kind == "snapz" else (BEAVER_STOMP_LINES if boss.kind == "beaver" else (BONGO_STOMP_LINES if boss.kind == "bongo" else (MEGASADIE_STOMP_LINES if boss.kind == "megasadie" else GERALD_STOMP_LINES)))
 	_gerald_say(lines[randi() % lines.size()], true)   # post-stomp pain: this one squirms
 	_hit_boss(1)
@@ -11541,7 +11592,7 @@ func _draw_boss_gerald() -> void:
 		var gt: Texture2D = tex_gerald[fr]
 		if (talking or boss_stomp_flash > 0.25) and tex_gerald_open != null:
 			gt = tex_gerald_open
-		var gsz: Vector2 = gt.get_size() * 1.7 * boss.scale
+		var gsz: Vector2 = gt.get_size() * 1.7 * boss.scale * _bpulse()
 		# shadow he casts on the water — races beneath him during the swoop ENTRANCE, grows as he dives
 		var sh := clampf((boss.y - 100.0) / (BASE_Y - 100.0), 0.0, 1.0)
 		if tex_shadow != null and boss.phase in ["fight", "enter"]:
@@ -11587,12 +11638,7 @@ func _draw_boss_gerald() -> void:
 		else:
 			draw_texture_rect(gt, Rect2(gpos - gsz * 0.5, gsz), false, mod)
 		if dazed:
-			# a bouncing chevron + prompt over his head so the window is unmissable
-			var by := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
-			var c := Color(1, 0.9, 0.35)
-			draw_line(Vector2(boss.x - 16, by), Vector2(boss.x, by + 16), c, 5.0)
-			draw_line(Vector2(boss.x + 16, by), Vector2(boss.x, by + 16), c, 5.0)
-			_otext(Vector2(0, by - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+			_draw_stomp_tell(gpos, gsz.x * 0.5)
 			# dizzy stars circling his head
 			for s in 3:
 				var sa := anim_t * 5.0 + s * TAU / 3.0
@@ -11693,7 +11739,7 @@ func _draw_boss_beaver() -> void:
 		draw_arc(Vector2(boss.dive_x, BASE_Y), 16.0 + wt * 30.0, 0.0, TAU, 26, Color(1.0, 0.7, 0.3, 0.55 + 0.3 * wp), 3.0)
 	var fi: int = 0 if dazed else (2 if (open_jaw or talking) else int(anim_t * 4.0) % 2)   # gnaw-cycle / open / shut
 	var gt: Texture2D = tex_beaver[fi]
-	var gsz := gt.get_size() * 1.8
+	var gsz := gt.get_size() * 1.8 * _bpulse()
 	var bob: float = sin(anim_t * 3.0) * 4.0
 	var gpos := Vector2(boss.x, boss.y + bob)
 	var lean: float = clampf((boss.dive_x - boss.x) / 320.0, -0.32, 0.32) if st in ["throwwarn", "throw"] else sin(anim_t * 1.4) * 0.05
@@ -11703,7 +11749,7 @@ func _draw_boss_beaver() -> void:
 	var mod := Color(1, 1, 1)
 	if dazed:                                          # SEEING STARS - the consistent stomp cue
 		var gl: float = 0.5 + 0.5 * sin(anim_t * 9.0)
-		draw_circle(gpos, gsz.x * 0.4, Color(1.0, 0.85, 0.3, 0.14 + 0.12 * gl))
+		_draw_stomp_tell(gpos, gsz.x * 0.42)
 		mod = Color(1, 1, 1).lerp(Color(1.3, 1.15, 0.7), 0.3 + 0.3 * gl)
 		for sk in 3:
 			var sa: float = anim_t * 3.0 + sk * TAU / 3.0
@@ -11778,14 +11824,15 @@ func _draw_boss_bongo() -> void:
 	elif st == "belch":
 		sx = 0.9; sy = 1.12                           # snaps thin as he spits
 	var base: float = boss.scale * (1.1 if hires else 3.0) * swell
-	var gsz := gt.get_size() * Vector2(base * sx, base * sy)
+	var gsz := gt.get_size() * Vector2(base * sx, base * sy) * _bpulse()
 	var gpos := Vector2(boss.x, boss.y + bob)
 	if tex_shadow != null:
 		var shs := tex_shadow.get_size() * 5.0 * swell
 		draw_texture_rect(tex_shadow, Rect2(Vector2(boss.x, boss.y + gsz.y * 0.42) - shs * 0.5, shs), false, Color(0, 0, 0, 0.2))
 	var mod: Color = boss.tint
 	if dazed:
-		mod = mod * Color(0.7, 0.8, 1.1)               # winded, woozy blue
+		_draw_stomp_tell(gpos, gsz.x * 0.42)
+		mod = mod * Color(0.85, 0.9, 1.05)             # winded, woozy blue (lighter — the tell carries it now)
 	elif boss.get("hit_flash", 0.0) > 0.0:
 		mod = Color(1.6, 1.4, 1.4)
 	var face: float = 1.0 if duck_x >= boss.x else -1.0    # BONGO turns to FACE the duck (was locked looking right)
@@ -11868,7 +11915,7 @@ func _draw_boss_megasadie() -> void:
 		return
 	# BOUNDLESS: scale to a true final-boss footprint regardless of source frame size
 	# (her turntable frames are codex-sized — a fixed multiplier left her looking like a pup)
-	var gsz: Vector2 = gt.get_size() * (330.0 / maxf(1.0, gt.get_size().x))
+	var gsz: Vector2 = gt.get_size() * (330.0 / maxf(1.0, gt.get_size().x)) * _bpulse()
 	# lane telegraphs: the chuckit rain lanes + THE POINT reticle (warm, not blood-red — she plays)
 	if st == "throwwarn":
 		var _wp := 0.5 + 0.5 * sin(anim_t * 14.0)
@@ -11901,11 +11948,7 @@ func _draw_boss_megasadie() -> void:
 	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if stuck:
-		var by2 := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
-		var c := Color(1, 0.9, 0.35)
-		draw_line(Vector2(boss.x - 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
-		draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
-		_otext(Vector2(0, by2 - 34.0), "BOOP HER!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		_draw_stomp_tell(gpos, gsz.x * 0.42)
 	# she speaks in a WARM bubble — she is the only boss who is happy to see you
 	if boss.say != "" and anim_t - boss.say_t < 1.9 and boss.phase != "enter":
 		var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 112.0, BASE_Y - 60.0)
@@ -11929,7 +11972,7 @@ func _draw_boss_snapz() -> void:
 		else:
 			var n: int = turn.size()
 			gt = turn[int(floor(fposmod(float(boss.get("yaw", 0.0)), TAU) / TAU * n)) % n]
-		var gsz := gt.get_size() * 3.1          # COLOSSAL
+		var gsz := gt.get_size() * 3.1 * _bpulse()          # COLOSSAL
 		if st == "warn":                        # CHOMP telegraph: a danger ring at the strike LANE — read it, dodge to a safe lane
 			var _wt: float = clampf(boss.t / (0.46 if boss.phase2 else 0.66), 0.0, 1.0)
 			var _wp: float = 0.5 + 0.5 * sin(anim_t * 16.0)
@@ -11966,11 +12009,7 @@ func _draw_boss_snapz() -> void:
 				draw_arc(Vector2(boss.x, gpos.y + gsz.y * 0.1), rr, PI * 0.12, PI * 0.88, 18,
 					Color(0.5, 0.72, 0.66, 0.32 * sub), 3.0)
 		if stuck:
-			var by2 := gpos.y - gsz.y * 0.5 - 30.0 - absf(sin(anim_t * 6.0)) * 12.0
-			var c := Color(1, 0.9, 0.35)
-			draw_line(Vector2(boss.x - 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
-			draw_line(Vector2(boss.x + 16, by2), Vector2(boss.x, by2 + 16), c, 5.0)
-			_otext(Vector2(0, by2 - 34.0), "STOMP!", 24, c, VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+			_draw_stomp_tell(gpos, gsz.x * 0.4)
 		# SNAPZ speaks — the same CrEePY jittery red as Gerald (boss text stays red)
 		if boss.say != "" and anim_t - boss.say_t < 1.9 and sub < 0.5 and boss.phase != "enter":
 			var s_by: float = clampf(gpos.y - gsz.y * 0.5 - 22.0, 92.0, BASE_Y - 60.0)
@@ -11995,7 +12034,13 @@ func _draw_boss_intro() -> void:
 	draw_rect(Rect2(0, 0, VIEW.x, bar_h), Color(0, 0, 0, 0.93 * a))                    # top bar
 	draw_rect(Rect2(0, VIEW.y - bar_h, VIEW.x, bar_h), Color(0, 0, 0, 0.93 * a))       # bottom bar
 	var good: bool = boss.kind == "megasadie"                                          # HER intro is golden — subverts the dread
-	var seam := Color(0.95, 0.72, 0.12, a) if good else Color(0.8, 0.04, 0.07, a)
+	var seam := Color(0.8, 0.04, 0.07, a)                                              # each boss signs the letterbox in his own ink
+	match boss.kind:
+		"megasadie": seam = Color(0.95, 0.72, 0.12, a)
+		"snapz":     seam = Color(0.25, 0.62, 0.38, a)
+		"beaver":    seam = Color(0.78, 0.48, 0.16, a)
+		"bongo":     seam = Color(0.42, 0.72, 0.28, a)
+		"pike":      seam = Color(0.24, 0.45, 0.78, a)
 	draw_rect(Rect2(0, bar_h - 2.0, VIEW.x, 2.0), seam)
 	draw_rect(Rect2(0, VIEW.y - bar_h, VIEW.x, 2.0), seam)
 	var cy := 300.0
@@ -12021,7 +12066,40 @@ func _draw_boss_intro() -> void:
 			draw_string(font, Vector2(VIEW.x * 0.5 - lw * 0.5, sy), lines[li],
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(0.88, 0.8, 0.74, la))
 
+# the POSE PULSE: as the intro title slams up, the boss FLEXES — a quick proud swell.
+# one heartbeat of theater that makes the letterbox feel alive instead of a loading screen
+func _bpulse() -> float:
+	if boss == null or boss.phase != "enter":
+		return 1.0
+	var tt: float = boss.t - 0.9
+	if tt < 0.0 or tt > 0.5:
+		return 1.0
+	return 1.0 + 0.14 * sin(tt / 0.5 * PI)
+
+# the unified STOMP TELL: every vulnerable boss breathes the same soft golden halo with
+# a few rising sparkles — wordless, consistent, learned once. (chevrons + STOMP!/BOOP HER!
+# banners were hand-holdy and different on every boss)
+func _draw_stomp_tell(pos: Vector2, r: float) -> void:
+	var gl := 0.5 + 0.5 * sin(anim_t * 7.0)
+	draw_circle(pos, r * (1.02 + 0.05 * gl), Color(1.0, 0.86, 0.35, 0.08 + 0.07 * gl))
+	draw_arc(pos, r * (1.06 + 0.07 * gl), 0.0, TAU, 40, Color(1.0, 0.88, 0.4, 0.30 + 0.25 * gl), 2.5)
+	for k in 3:
+		var sy2 := fposmod(anim_t * 34.0 + k * 43.0, r * 1.25)
+		var sxo := sin(anim_t * 2.2 + k * 2.1) * r * 0.4
+		draw_circle(pos + Vector2(sxo, r * 0.45 - sy2), 2.2, Color(1.0, 0.92, 0.55, 0.75 * (1.0 - sy2 / (r * 1.25))))
+
 func _draw_boss_pips() -> void:
+	# the slim mid-fight ribbon (enrage/ult) — boss-tinted, small caps, never a wall of white
+	var bage := anim_t - boss_banner_t
+	if boss_banner != "" and bage < 2.2 and boss != null:
+		var ba: float = clampf(bage / 0.15, 0.0, 1.0) * clampf((2.2 - bage) / 0.45, 0.0, 1.0)
+		var bw2 := font.get_string_size(boss_banner, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x
+		var brect := Rect2(VIEW.x * 0.5 - bw2 * 0.5 - 18.0, 118.0, bw2 + 36.0, 34.0)
+		draw_rect(brect, Color(0.02, 0.04, 0.08, 0.72 * ba))
+		draw_rect(Rect2(brect.position.x, brect.position.y, 3.0, brect.size.y), Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
+		draw_rect(Rect2(brect.end.x - 3.0, brect.position.y, 3.0, brect.size.y), Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
+		draw_string(font, Vector2(brect.position.x + 18.0, brect.position.y + 24.0), boss_banner,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
 	var pips: int = boss.max_hp
 	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
 	var pr: float = clampf(pw * 0.37, 5.0, 11.0)
