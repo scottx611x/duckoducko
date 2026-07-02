@@ -228,6 +228,7 @@ const META := [
 	{"id": "basket", "name": "BREAD BASKET", "desc": "snacks fall ~18% more often", "cost": 480},
 	{"id": "flyer", "name": "FREQUENT FLYER", "desc": "upgrade drafts arrive sooner", "cost": 440},
 	{"id": "thermal", "name": "THERMAL VENT", "desc": "a permanent +5% pace, every run", "cost": 600},
+	{"id": "stardust", "name": "SPARKLE WAKE", "desc": "your hops trail STARDUST, forever (pure flair)", "cost": 900},
 ]
 # LOFT specials: fire when your meter fills. MEGA is the starter (always owned),
 # LASER the first unlock, then two heavier hitters. Buy in the shop, swap at duck-select.
@@ -5157,6 +5158,8 @@ func hop() -> void:
 		hop_count += 1
 		_st("hops")
 		hop_events.append(anim_t)                  # the ducklings are watching
+		if _meta("stardust"):                      # SPARKLE WAKE: flair bought with a hoard
+			_spawn_parts(duck_x, BASE_Y - 8.0, 5, Color(1.0, 0.92, 0.55), 130.0)
 		_pick_hop_style()
 		# little milestones so the counter always has a next treat in sight
 		if hop_count in [25, 50, 100, 250]:
@@ -5193,6 +5196,11 @@ func _pick_hop_style() -> void:
 	else:
 		hop_style = HOP_FANCY[randi() % HOP_FANCY.size()]   # one of the showy tricks — now a rare treat
 	fancy = hop_style != "" and hop_style not in ["wobble", "boing"]
+	# LAKE COCHICHEWICK (the finale water) is enchanted: every hop chimes a note up a
+	# pentatonic scale — WHIMSY §6's "pretty payoff theme", finally sung
+	if theme_idx == 6 and boss == null:
+		var _pent := [1.0, 1.125, 1.266, 1.5, 1.688, 2.0]
+		_sfx("combo", _pent[hop_count % 6], -10.0)
 	match hop_style:
 		"":
 			_sfx("hop", randf_range(0.95, 1.1))
@@ -5943,6 +5951,10 @@ func _update_play(delta: float) -> void:
 		duck_shake = maxf(0.0, duck_shake - delta)
 	if nearmiss_cd > 0.0:
 		nearmiss_cd -= delta
+		if _meta("stardust") and is_airborne() and randf() < 0.35:   # SPARKLE WAKE mid-air twinkle
+			parts.append({"x": duck_x + randf_range(-14.0, 14.0), "y": BASE_Y - hop_height() * 120.0,
+				"vx": randf_range(-20.0, 20.0), "vy": randf_range(10.0, 50.0),
+				"t": 0.0, "life": randf_range(0.3, 0.55), "col": Color(1.0, 0.94, 0.6)})
 		# WHIMSY §4 fulfilled: the conga peeps a RISING chime as each duckling pops up in
 		# sequence — a clean run literally sings
 		if ducklings_n > 0 and not hop_events.is_empty():
