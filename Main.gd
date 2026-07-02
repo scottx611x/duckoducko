@@ -4541,6 +4541,9 @@ func _float_text(x: float, y: float, txt: String, col := Color(1, 1, 1)) -> void
 
 # ---- particles -----------------------------------------------------------------
 func _spawn_parts(x: float, y: float, n: int, col: Color, spd: float) -> void:
+	if parts.size() > 140:                          # particle BUDGET: heavy moments recycle, never pile up
+		for _tr in mini(n, parts.size()):
+			parts.pop_front()
 	for i in n:
 		var a := randf() * TAU
 		var s := randf_range(spd * 0.35, spd)
@@ -5693,8 +5696,8 @@ func _update_play(delta: float) -> void:
 	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide).
 	# CALM rules (Scott: "lilypads distracting"): sparse, bank-hugging, capped, never during bosses.
 	env_timer -= delta
-	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 9:
-		env_timer = randf_range(1.0, 1.9)
+	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 6:
+		env_timer = randf_range(1.8, 3.4)          # MODERATE density (Scott's call): ~half, calmer + cheaper
 		var tbl: Array = ENV_TABLE[theme_idx]
 		var tot := 0.0
 		for entry in tbl:
@@ -8801,12 +8804,10 @@ func _draw_death() -> void:
 	if run_won:                                    # the bread triumph: a big PADDLE ON -> endless invite
 		_draw_button(DEATH_ENDLESS_BTN, "PADDLE ON  >  endless waters", 20, true)
 	elif death_power_sel < 0 or death_power_sel >= rrects.size():
-		# WHIMSY §9: no GAME OVER here — just the duck, hopeful eyes, offering a tiny "again?"
-		var _af = _spin_frame(species if ducks.has(species) else "mallard", 0.05 + sin(anim_t * 0.8) * 0.06)
-		if _af != null:
-			_blit_centered(_af, Vector2(VIEW.x * 0.5 - 64.0, 606.0 + sin(anim_t * 2.2) * 3.0), 0.62)
-		_otext(Vector2(40, 614.0), "again?", 26, Color(1, 1, 1, 0.55 + 0.4 * sin(anim_t * 4.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
-		_otext(Vector2(0, 638.0), "(tap empty space)", 13, Color(1, 1, 1, 0.35), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		# WHIMSY §9: no GAME OVER — the duck floats BELOW the panel on open water, hopeful
+		# eyes, offering a tiny "again?" (it used to crowd the tooltip + button row inside)
+		# the dead duck itself sits right here — IT asks. no extra portrait needed
+		_otext(Vector2(0, 736.0), "again?", 26, Color(1, 1, 1, 0.55 + 0.4 * sin(anim_t * 4.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
 	_draw_button(DEATH_MENU_BTN, "menu", 18)
 	_draw_button(DEATH_STATS_BTN, "logbook", 18)
 	# inspected power's explanation — drawn LAST so it floats ON TOP of the buttons,
@@ -12451,7 +12452,7 @@ func _draw_bank_decor() -> void:
 		return
 	var pair: Array = BANK_PROPS[theme_idx]
 	var have_tex: bool = tex_env.has(pair[0]) and tex_env.has(pair[1])
-	var nslots: int = 9 if have_tex else 6
+	var nslots: int = 7 if have_tex else 6
 	for k in nslots:
 		var span := VIEW.y + 200.0
 		var sy: float = fposmod(k * (span / nslots) + distance, span) - 100.0
