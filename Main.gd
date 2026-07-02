@@ -5943,6 +5943,14 @@ func _update_play(delta: float) -> void:
 		duck_shake = maxf(0.0, duck_shake - delta)
 	if nearmiss_cd > 0.0:
 		nearmiss_cd -= delta
+		# WHIMSY §4 fulfilled: the conga peeps a RISING chime as each duckling pops up in
+		# sequence — a clean run literally sings
+		if ducklings_n > 0 and not hop_events.is_empty():
+			var _he: float = hop_events[hop_events.size() - 1]
+			for _di in mini(ducklings_n, 6):
+				var _pd: float = anim_t - _he - 0.04 * (_di + 1)
+				if _pd >= 0.0 and _pd < delta + 0.0001:
+					_sfx("peep", 1.0 + 0.09 * _di, -12.0)
 		if combo_t > 0.0:
 			combo_t -= delta
 			if combo_t <= 0.0:
