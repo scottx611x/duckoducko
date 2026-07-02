@@ -1724,7 +1724,7 @@ func _ready() -> void:
 
 	_log("[boot] 3 art loaded; loading audio")
 	for n in ["hop", "splash", "splash_big", "bonk", "collect", "chime",
-			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh", "screech", "scratch", "djdrop"]:
+			"mega", "laser", "quack", "unlock", "click", "peep", "crunch", "ribbit", "fwoosh", "squeak", "laugh", "screech", "scratch", "djdrop", "bark", "combo", "thud"]:
 		var p := "res://sfx/%s.wav" % n
 		if ResourceLoader.exists(p):
 			sfx[n] = load(p)
@@ -6370,7 +6370,10 @@ func _gerald_say(line: String, wiggle := false) -> void:
 	boss.say = line
 	boss.say_t = anim_t
 	boss.say_wiggle = wiggle          # jeers stay static red; only stomp-pain squirms
-	_sfx("quack", randf_range(0.55, 0.7), -3.0)
+	if boss.kind == "megasadie":
+		_sfx("bark", randf_range(0.9, 1.15), -2.0)   # she has her OWN voice
+	else:
+		_sfx("quack", randf_range(0.55, 0.7), -3.0)
 
 func _boss_leave() -> void:
 	if boss.kind == "megasadie":
@@ -7827,7 +7830,7 @@ func _collect(it: Dictionary) -> void:
 	combo_n = (combo_n + 1) if combo_t > 0.0 else 1
 	combo_t = 2.2
 	if combo_n >= 3:
-		_sfx("collect", 0.9 + 0.12 * minf(combo_n - 2, 8.0), -4.0)
+		_sfx("combo", 0.9 + 0.11 * minf(combo_n - 2, 8.0), -5.0)
 		_float_text(duck_x, BASE_Y - 128.0, "x%d!" % combo_n, Color(1.0, 0.85, 0.3) if combo_n >= 5 else Color(0.8, 0.95, 1.0))
 	if combo_n == 5 or combo_n == 10:
 		run_feathers += combo_n                       # a taste of gold for keeping the chain

@@ -556,8 +556,8 @@ Goal: water/scenery too flat ('Pokemon on Gameboy'); make each of the 7 biomes a
 
 ## 🌙🌙 FREE-REIN OVERNIGHT LOOP (Scott, 2026-07-02 night: "do not sit idle... sounds, literally everything... don't stop until usage runs out")
 Worklist (work top-down, ship each when green, add findings):
-- [ ] SOUND: Sadie needs a real BARK (she borrows quack/laugh); consider per-boss voices (snapz hiss-snap, barry gnaw-thud, bongo deep ribbit exists)
-- [ ] SOUND: combo scale uses pitched 'collect' — consider a dedicated marimba-ish note
+- [x] SOUND v1.19.1 — SADIE BARKS now (synth two-syllable BORF, her own voice in every bubble); dedicated marimba COMBO note (pitch climbs the chain); and a real find: **thud.wav never existed** — Barry's log hurls, chuckit bounces + intro gestures were all silently no-op'ing. Synthesized + registered; full audit: every _sfx() call now maps to a real, loaded wav.
+- [x] (folded into the sound item above)
 - [ ] Persona botsim batches (cautious/reckless) for balance data; tune outliers
 - [ ] Audit: any remaining ❗/🟡 items above that can be closed without Scott
 - [ ] Polish sweeps: menu/death/shop screens vs the new bar; codex detail view for boons/specials renders right (added blind!)

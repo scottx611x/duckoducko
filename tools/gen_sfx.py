@@ -174,6 +174,51 @@ def quack():
     return out
 
 
+def bark():
+    """SADIE's happy BORF: a big friendly two-part woof — chesty attack, bright finish."""
+    dur = 0.30
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        p = t / dur
+        # two syllables: BO (low burst) -> RF (brighter, clipped)
+        f = 120.0 + 60.0 * (1.0 if p > 0.45 else 0.0) - 30.0 * max(0.0, p - 0.7)
+        s = 0.0
+        for k in range(1, 6):
+            s += math.sin(TAU * f * k * t + 0.6 * math.sin(TAU * 3.0 * t)) / (k ** 0.8)
+        s *= 0.5
+        s *= 0.55 + 0.45 * math.sin(TAU * 41.0 * t)      # throaty flutter
+        g = env(t, dur, 0.004, 2.2)
+        if 0.38 < p < 0.46:                               # the tiny gap between BO and RF
+            g *= 0.15
+        out.append(s * g * 0.85)
+    return out
+
+
+def combo_note():
+    """A round marimba-ish PLINK for snack combos — pitched up per chain link in-game."""
+    dur = 0.16
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        s = math.sin(TAU * 660.0 * t) + 0.45 * math.sin(TAU * 1320.0 * t) + 0.2 * math.sin(TAU * 1980.0 * t)
+        out.append(s * env(t, dur, 0.002, 4.0) * 0.5)
+    return out
+
+
+def thud():
+    """A heavy wet THUD — hurled log landing, chuckit bounce. Low sine knock + noise slap."""
+    dur = 0.20
+    out = []
+    for i in range(n_samples(dur)):
+        t = i / SR
+        f = 82.0 * (1.0 - 0.35 * (t / dur))
+        s = math.sin(TAU * f * t) * 0.8
+        s += (random.random() * 2.0 - 1.0) * 0.35 * env(t, 0.05, 0.001, 5.0)
+        out.append(s * env(t, dur, 0.002, 3.2) * 0.85)
+    return out
+
+
 def unlock():
     """New duck fanfare: quick ascending major arpeggio."""
     notes = [523.25, 659.25, 783.99, 1046.5]   # C5 E5 G5 C6
@@ -393,4 +438,7 @@ if __name__ == "__main__":
     save("fwoosh.wav", fwoosh())
     save("squeak.wav", squeak())
     save("laugh.wav", gutlaugh())
+    save("bark.wav", bark())
+    save("combo.wav", combo_note())
+    save("thud.wav", thud())
     print("done.")
