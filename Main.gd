@@ -5728,8 +5728,10 @@ func _update_play(delta: float) -> void:
 	# a HERO landmark drifts through, rare enough to be an event
 	if distance >= hero_next and boss == null and tex_env.has(HERO_NAMES[theme_idx]):
 		hero_next = distance + randf_range(7000.0, 9500.0)
-		env_scenery.append({"n": HERO_NAMES[theme_idx], "x": (BANK_W + randf_range(56.0, 96.0)) if randf() < 0.5 else (VIEW.x - BANK_W - randf_range(56.0, 96.0)),
-			"y": -110.0, "rooted": true, "hero": true, "phase": randf() * TAU, "flip": randf() < 0.5})
+		var _hright := randf() < 0.5
+		# landmarks live at the SHORE like real pond things, leaning into the river
+		env_scenery.append({"n": HERO_NAMES[theme_idx], "x": (BANK_W + randf_range(14.0, 40.0)) if not _hright else (VIEW.x - BANK_W - randf_range(14.0, 40.0)),
+			"y": -110.0, "rooted": true, "hero": true, "phase": randf() * TAU, "flip": _hright})
 	for es in env_scenery:
 		es.y += speed * delta * (1.0 if es.rooted else 0.85)
 		if not es.rooted:
@@ -11091,7 +11093,7 @@ func _draw() -> void:
 			continue
 		var esway: float = 0.0 if es.rooted else sin(anim_t * 0.9 + es.phase) * 0.09
 		var ebob: float = 0.0 if es.rooted else sin(anim_t * 1.6 + es.phase) * 1.6
-		var _hsc: float = 2.0 if es.get("hero", false) else 1.6
+		var _hsc: float = 1.6
 		draw_set_transform(Vector2(es.x, es.y + ebob), esway, Vector2(-_hsc if es.flip else _hsc, _hsc))
 		var esz: Vector2 = etex.get_size()
 		# landmarks stand PROUD; small scenery sinks translucent so it never reads as pickup

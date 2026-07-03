@@ -595,13 +595,84 @@ def gen_loon():
 # =================================================================================
 # generate + contact sheet
 # =================================================================================
+def build_turtlelog():
+    """PLEASANT POND: the classic — a half-sunken log with painted turtles stacked
+    on it, sunning. Nothing says New England pond like a turtle traffic jam."""
+    LOG = (116, 84, 52); LOGD = (86, 60, 38); LOGL = (142, 108, 68); WET = (72, 82, 84)
+    SHELL = (52, 74, 40); SHELLD = (36, 54, 30); SHELLL = (88, 112, 58)
+    SKIN = (146, 158, 74); STRIPE = (210, 74, 52); EYE = (24, 20, 18)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    for zi in range(-22, 23):                      # the log, gently arched out of the water
+        t = (zi + 22) / 44.0
+        lift = int(round(5.0 * math.sin(t * math.pi)))
+        r = 4.6 - 1.2 * abs(zi) / 22.0
+        ellip(0, lift, zi, r, r, 1.0, LOGD if zi % 7 == 0 else LOG)
+        if lift > 2:
+            put(0, lift + int(r), zi, LOGL, only_empty=True)
+    for (x, y, z) in list(V):
+        if y < 0:
+            V[(x, y, z)] = WET if y > -2 else V[(x, y, z)]
+        if y < -1:
+            del V[(x, y, z)]
+    def turtle(cz, big):
+        base = 6 + int(round(4.6 * math.sin((cz + 22) / 44.0 * math.pi)))
+        r = 4.6 if big else 3.4
+        ellip(0, base + 2, cz, r, r * 0.7, r, SHELL)              # dome, clearly ON TOP of the log
+        ellip(0, base + 2 + r * 0.45, cz - 0.5, r * 0.55, r * 0.3, r * 0.55, SHELLL)  # sun-hit crown
+        ellip(0, base + 1, cz, r * 1.05, r * 0.2, r * 1.05, SHELLD)   # dark shell rim
+        hz = cz + int(r) + 2
+        for i in range(3):                                        # neck stretched UP toward the sun
+            ellip(0, base + 2 + i, hz + (1 if i > 0 else 0), 1.2, 1.0, 1.3, SKIN)
+        put(1, base + 5, hz + 1, EYE)
+        put(-1, base + 5, hz + 1, EYE)
+        put(1, base + 4, hz + 1, STRIPE)                          # the red ear dash
+        put(-1, base + 4, hz + 1, STRIPE)
+    turtle(-14, True)
+    turtle(0, True)
+    turtle(12, False)                                             # the smol one bringing up the rear
+    return V
+
+
+def build_rootball():
+    """SAND POND: a weathered driftwood ROOT-BALL beached on a little sandbar,
+    the gull moved over from the buoy — wild flotsam, not harbor furniture."""
+    WOOD = (150, 128, 96); WOODD = (112, 92, 66); WOODL = (184, 162, 122)
+    SAND = (216, 190, 138); SANDD = (188, 160, 112); GRASS = (150, 158, 88)
+    GULLW = (238, 238, 232); GULLG = (170, 176, 180); BEAK = (226, 168, 54); EYE = (24, 20, 18)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    ellip(0, -2, 0, 20, 5, 14, SAND)                              # the sandbar dome
+    ellip(-6, -1, 2, 10, 4, 8, SANDD, only_empty=True)
+    for (gx, gz) in ((-16, -6), (14, 8), (12, -9)):               # dune grass tufts
+        for i in range(4):
+            put(gx + (i % 2), 2 + i, gz, GRASS)
+    ellip(2, 3, -1, 7, 6, 6, WOOD)                                # the root-ball heart
+    for (dx, dy, dz) in ((14, 9, -4), (11, 12, 6), (-9, 13, 2), (-13, 7, -7), (6, 15, -8), (-4, 10, 10)):
+        _limb3(V, (2, 3, -1), ((2 + dx) // 2, (3 + dy) // 2 + 2, (-1 + dz) // 2),
+               (2 + dx, 3 + dy, -1 + dz), 2.0, 0.55, WOOD)
+    for (x, y, z) in list(V):
+        if V[(x, y, z)] == WOOD and (x * 7 + y * 3 + z * 11) % 6 == 0:
+            V[(x, y, z)] = WOODD
+        elif V[(x, y, z)] == WOOD and y > 8 and (x + z) % 5 == 0:
+            V[(x, y, z)] = WOODL                                  # sun-bleached tips
+    gx, gy, gz = -9, 14, 2                                        # the gull claims the high root
+    ellip(gx, gy + 1, gz, 2.2, 1.8, 2.8, GULLW)
+    ellip(gx, gy + 1.6, gz - 0.5, 1.8, 1.0, 2.0, GULLG, only_empty=True)
+    ellip(gx, gy + 3.2, gz + 2.2, 1.2, 1.2, 1.2, GULLW)           # head
+    put(gx, gy + 3, gz + 4, BEAK)
+    put(gx + 1, gy + 4, gz + 3, EYE)
+    put(gx - 1, gy + 4, gz + 3, EYE)
+    return V
+
+
 HEROES = [
-    ("hero_buker.png",        build_rowboat,    dict(yaw=34, pitch=44, target=140)),
-    ("hero_woodbury.png",     build_dock,       dict(yaw=24, pitch=40, target=118)),
-    ("hero_purgatory.png",    build_dreadtree,  dict(yaw=18, pitch=30, target=146)),
-    ("hero_sand.png",         build_buoy,       dict(yaw=30, pitch=36, target=110)),
-    ("hero_pleasant.png",     build_fountain,   dict(yaw=22, pitch=34, target=118)),
-    ("hero_emerald.png",      build_emeraldrock, dict(yaw=15, pitch=40, target=124)),
+    ("hero_buker.png",        build_rowboat,    dict(yaw=34, pitch=44, target=118)),
+    ("hero_woodbury.png",     build_dock,       dict(yaw=24, pitch=40, target=102)),
+    ("hero_purgatory.png",    build_dreadtree,  dict(yaw=18, pitch=30, target=126)),
+    ("hero_sand.png",         build_rootball,   dict(yaw=30, pitch=38, target=104)),
+    ("hero_pleasant.png",     build_turtlelog,  dict(yaw=26, pitch=40, target=108)),
+    ("hero_emerald.png",      build_emeraldrock, dict(yaw=15, pitch=40, target=106)),
 ]
 
 
