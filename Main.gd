@@ -1212,9 +1212,15 @@ const FORK_MODS := [
 	{"id": "junk", "name": "JUNK DRIFT", "desc": "flotsam-rich water"},
 	{"id": "snacks", "name": "SNACK BAR", "desc": "the good stuff floats here"},
 	{"id": "golden", "name": "GOLDEN REACH", "desc": "the light! the LIGHT!"},
+	{"id": "rusty",  "name": "RUSTY'S THERMALS", "desc": "no danger — just FLY"},
 ]
+var thermal_rings: Array = []   # RUSTY'S THERMALS: golden hoops to thread — {x, y, hit}
+var thermal_timer := 0.0
+var thermal_chain := 0
 
 func _ev_heron_mult() -> float:
+	if stretch_mod == "rusty":
+		return 0.02                                  # the Thermals are a truce — no hunting
 	return (1.8 if ev_id == "patrol" else 1.0) \
 		* (1.5 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
 
@@ -1276,10 +1282,9 @@ func _update_river_events(delta: float) -> void:
 		mods.shuffle()
 		var lmod: Dictionary = mods[0]
 		var rmod: Dictionary = mods[1]
-		if String(lmod.id) == "golden":                # the Reach is rare — reroll it half the time
-			if randf() < 0.5: lmod = mods[2]
-		elif String(rmod.id) == "golden":
-			if randf() < 0.5: rmod = mods[2]
+		for _mi2 in 2:                                 # the Reach + the Thermals are rare — reroll each half the time
+			if String(lmod.id) in ["golden", "rusty"] and randf() < 0.5: lmod = mods[2]
+			if String(rmod.id) in ["golden", "rusty"] and randf() < 0.5: rmod = mods[3]
 		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
 		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
 		if rth == lth: rth = (rth + 1) % THEMES.size()
@@ -1317,13 +1322,43 @@ func _update_river_events(delta: float) -> void:
 			_say(String(m.desc), 2.6)
 			_sfx("chime", 0.9)
 			_st("forks_taken")
+			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
+				thermal_rings.clear(); thermal_timer = 0.6; thermal_chain = 0
+				hawk_done = false; hawk_timer = 0.5     # Rusty sweeps in to fly the course with you
+				enemies.clear(); logs.clear()
 			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
 				golden_t = GOLDEN_DUR
 		if float(fork.y) > VIEW.y + 260.0:
 			fork = {}
 			fork_warned = false
 			fork_next = distance + randf_range(105000.0, 135000.0)
+	# RUSTY'S THERMALS: hoops drop in ahead, weaving; thread them for feathers + loft
+	if stretch_mod == "rusty":
+		thermal_timer -= delta
+		if thermal_timer <= 0.0:
+			thermal_timer = randf_range(0.55, 0.85)
+			thermal_rings.append({"x": clampf(VIEW.x * 0.5 + sin(distance * 0.0018) * (VIEW.x * 0.3) + randf_range(-40.0, 40.0),
+				BANK_W + 40.0, VIEW.x - BANK_W - 40.0), "y": -40.0, "hit": false})
+		for tr in thermal_rings:
+			tr.y += speed * delta
+			if not tr.hit and absf(float(tr.y) - BASE_Y) < 16.0 and absf(float(tr.x) - duck_x) < 36.0:
+				tr.hit = true
+				thermal_chain += 1
+				run_feathers += 2 + mini(thermal_chain, 8)
+				_add_loft(0.05)
+				_sfx("combo", 0.9 + 0.07 * minf(thermal_chain, 10.0), -6.0)
+				_spawn_parts(tr.x, BASE_Y, 8, Color(1.0, 0.88, 0.4), 160.0)
+				if thermal_chain > 0 and thermal_chain % 5 == 0:
+					_float_text(duck_x, BASE_Y - 110.0, "chain x%d!" % thermal_chain, Color(1.0, 0.85, 0.3))
+			elif not tr.hit and float(tr.y) > BASE_Y + 30.0 and thermal_chain > 0:
+				thermal_chain = 0                       # a missed hoop cools the thermal
+		thermal_rings = thermal_rings.filter(func(tr): return float(tr.y) < VIEW.y + 40.0)
+	elif not thermal_rings.is_empty():
+		thermal_rings.clear()
 	if stretch_mod != "" and distance >= stretch_until:
+		if stretch_mod == "rusty" and hawk != null:     # course over: Rusty reads your run before he goes
+			hawk.line = _rusty_advice() if _rusty_advice() != "" else "GOOD flying, dweeb. same time tomorrow?"
+			hawk.said = false; hawk.say_t = -99.0
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -3794,7 +3829,7 @@ func _update_sadie(delta: float) -> void:
 	if sadie == null:
 		if distance > 3000.0:                      # the dog park is past the 300m bend
 			sadie_timer -= delta
-			if sadie_timer <= 0.0:
+			if sadie_timer <= 0.0 and stretch_mod != "rusty":
 				_spawn_sadie()
 		return
 	sadie.t += delta
@@ -3824,6 +3859,23 @@ func _update_sadie(delta: float) -> void:
 # RUSTY the red-tailed hawk: a friendly know-it-all who SWOOPS across the upper
 # sky, glides to a hover, drops a whimsical tip/cheer in a speech bubble, then
 # wings off. Purely decorative guidance — he never collides with or harms the duck.
+# Rusty looks at what you're actually doing and coaches THAT. Generic tips only
+# when nothing stands out. (Scott: the random flyover tip was annoying.)
+func _rusty_advice() -> String:
+	if _up("shield") == 0 and shield_charges == 0 and distance > 8000.0:
+		return "flying BARE, are we? draft THICK FEATHERS —\none bonk shouldn't end a good story."
+	if int(run_stats.get("specials", 0)) == 0 and distance > 6000.0:
+		return "that LOFT bar is a WEAPON, not a decoration.\nfill it. unleash it."
+	if int(run_stats.get("nearmiss", 0)) == 0 and distance > 9000.0:
+		return "thread a log sometime, featherbrain —\nthe river pays NERVE in loft."
+	if ducklings_n == 0 and int(run_stats.get("ducklings", 0)) == 0 and distance > 9000.0:
+		return "a duckling would take a HIT for you.\nbrave little souls. draft one."
+	if int(run_stats.get("snacks", 0)) < int(distance / 4000.0) and distance > 8000.0:
+		return "you're paddling PAST the snacks.\neat, duckling. loft doesn't fill itself."
+	if combo_n >= 5:
+		return "that snack CHAIN! keep the rhythm —\nthe river sings when you do."
+	return ""
+
 func _spawn_hawk() -> void:
 	if tex_hawk.is_empty():
 		return
@@ -3847,10 +3899,12 @@ func _spawn_hawk() -> void:
 			hawk_tips_seen = []
 			for i in HAWK_LINES.size():
 				fresh.append(i)
-		var li: int = fresh[randi() % fresh.size()]
-		hawk_tips_seen.append(li)
-		_save()
-		line = HAWK_LINES[li]
+		line = _rusty_advice()                      # catered first; the old pool only as filler
+		if line == "":
+			var li: int = fresh[randi() % fresh.size()]
+			hawk_tips_seen.append(li)
+			_save()
+			line = HAWK_LINES[li]
 	# the welcome lingers far longer than a quick tip — it's a wall of how-to-play text
 	var dwell := 6.4 if is_tut else 4.8
 	hawk = {"x": sx, "y": randf_range(120.0, 200.0), "dir": dir, "t": 0.0,
@@ -3951,7 +4005,7 @@ func _update_donny(delta: float) -> void:
 		# a rare treat: only in SAND POND, mid-paddle, no duel
 		if alive and boss == null and state != St.MEGA and not tut_mode and not paused and distance > 1500.0:
 			donny_timer -= delta
-			if donny_timer <= 0.0:
+			if donny_timer <= 0.0 and stretch_mod != "rusty":
 				_spawn_donny()
 		return
 	var d = donny
@@ -4769,6 +4823,7 @@ func reset_game() -> void:
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	hero_next = randf_range(6000.0, 9000.0)
+	thermal_rings.clear(); thermal_chain = 0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -7593,7 +7648,7 @@ func _spawn(delta: float) -> void:
 			item_timer = randf_range(0.5, 1.0)
 		return
 	log_timer -= delta
-	if log_timer <= 0.0 and distance > LOG_START_DIST:
+	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty":
 		# THE GREAT JAM (ascension): a full-width log WALL with a boost log out front to vault it
 		if ascension >= 6 and randf() < 0.05 + 0.012 * (ascension - 6):
 			_spawn_log_jam()
@@ -12482,6 +12537,14 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
+	# RUSTY'S THERMALS: golden hoops shimmer on the water — thread them
+	for tr in thermal_rings:
+		var _ta: float = 0.35 if tr.hit else (0.75 + 0.2 * sin(anim_t * 5.0 + float(tr.x)))
+		var _tc := Color(1.0, 0.86, 0.35, _ta)
+		draw_arc(Vector2(tr.x, tr.y), 30.0, 0.0, TAU, 26, _tc, 3.5)
+		draw_arc(Vector2(tr.x, tr.y), 22.0, 0.0, TAU, 22, Color(1.0, 0.95, 0.7, _ta * 0.5), 1.6)
+		if not tr.hit:
+			draw_circle(Vector2(tr.x, float(tr.y) - 30.0), 2.0, Color(1.0, 0.95, 0.7, _ta))
 	# SQUALL: slanting rain + a grey wash (reads instantly, costs nothing)
 	if ev_id == "squall":
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.36, 0.42, 0.52, 0.14))
