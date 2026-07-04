@@ -1175,7 +1175,42 @@ def build_jetski(alt=False):
     return V
 
 
+def build_osprey():
+    """PURGATORY: an OSPREY roosting on a snag — dark above, WHITE below, the bold
+    dark eye-stripe through a white head. The fish-hawk, resting between hunts."""
+    BACK = (74, 56, 40); BACKD = (54, 40, 30); BACKL = (96, 76, 54)
+    WHITE = (238, 236, 228); WHITED = (208, 204, 192)
+    STRIPE = (44, 34, 26); EYE = (238, 196, 60); PUP = (22, 18, 14)
+    BILL = (30, 28, 26); TALON = (150, 150, 146)
+    SNAG = (96, 78, 58); SNAGD = (70, 56, 42)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    for yy in range(0, 7):                                # the bare snag perch
+        put(0, yy, 0, SNAG); put(1, yy, 0, SNAGD)
+    put(-1, 6, 1, SNAGD); put(2, 5, -1, SNAGD)
+    # body: upright roost posture, dark mantle over white breast
+    ellip(0.5, 10, 0.5, 2.6, 3.6, 2.4, WHITE)             # breast/underparts
+    ellip(0.5, 11, -0.6, 2.7, 3.2, 2.0, BACK)             # dark mantle folded over
+    ellip(0.5, 12.4, -0.8, 2.2, 2.0, 1.6, BACKL)
+    for yy in range(8, 13):                               # folded wing edge line
+        put(-2, yy, 0, BACKD)
+        put(3, yy, 0, BACKD)
+    # white head with THE eye-stripe
+    ellip(0.5, 14.6, 1.2, 1.9, 1.9, 1.8, WHITE)
+    ellip(0.5, 15.6, 0.6, 1.5, 1.0, 1.4, WHITED, only_empty=True)
+    for zx in range(-1, 3):                               # the dark stripe THROUGH the eye
+        put(zx, 14.6, 2, STRIPE)
+    put(-1, 14.6, 3, STRIPE); put(2, 14.6, 3, STRIPE)
+    put(0, 14.6, 3, EYE); put(1, 14.6, 3, EYE)            # fierce yellow eyes
+    put(0, 14.4, 3, PUP)
+    put(0.5, 13.6, 3, BILL); put(0.5, 13.2, 3, BILL)      # the hooked bill
+    for s2 in (0, 1):                                     # talons gripping the snag
+        put(s2, 7, 1, TALON)
+    return V
+
+
 BANKS = [
+    ("bank_osprey.png",       build_osprey,     dict(yaw=14, pitch=22, target=40)),
     ("bank_barredowl.png",    build_barredowl,  dict(yaw=8, pitch=24, target=38)),
     ("bank_lizzie.png",       build_lizzie,     dict(yaw=36, pitch=30, target=30)),
     ("bank_jetski_0.png",     build_jetski,     dict(yaw=28, pitch=30, target=42)),

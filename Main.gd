@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.2"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.3"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1171,7 +1171,7 @@ const SHORE_LORE := {
 	"bank_cattail_1": ["TALL CATTAILS", "The old-growth stand. Rumor says a bittern hides in there, doing its reed impression. Nobody has ever proven otherwise."],
 	"bank_jetski_0": ["THE RED JETSKI", "Parked, gassed, and slightly too loud even at rest. Big water calls for big toys."],
 	"bank_jetski_1": ["THE TEAL JETSKI", "The other one. Its owner swears it's faster. It is not faster."],
-	"bank_grave": ["A CROOKED GRAVESTONE", "'HERE LIES A LOG.' The bog buries its own and labels them honestly."],
+	"bank_osprey": ["OSPREY", "The fish-hawk, roosting between hunts. That dark stripe through the eye is the field mark — and when it leaves the snag, it hits the water TALONS-first."],
 	"bank_deadtree": ["THE GNARLED SNAG", "Dead a hundred years and busier than ever — half the bog's herons learned to loom in its branches."],
 	"bank_bonfire": ["THE CAMP FIRE RING", "Stones stacked by many summers of hands. If you listen past the crackle: grilling, laughing, a dog shaking off lakewater."],
 	"bank_barredowl": ["BARRED OWL", "Who cooks for you? Who cooks for you-all? At camp, the answer drifts down from the pines every dusk."],
@@ -1755,7 +1755,7 @@ func _ready() -> void:
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
-			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1",
+			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
@@ -12696,7 +12696,7 @@ func _draw_living_water(scroll: float) -> void:
 const BANK_PROPS := [
 	["bank_cattail_0", "bank_cattail_1"],
 	["bank_jetski_0", "bank_jetski_1"],    # WOODBURY: big-water toys, parked + ready (picnic gear NUKED)
-	["bank_grave", "bank_deadtree"],
+	["bank_deadtree", "bank_osprey"],      # PURGATORY: the snag + the fish-hawk roosting (graves evicted)
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
 	["bank_lamp", "bank_cattail_0"],
 	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
