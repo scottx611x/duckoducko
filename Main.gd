@@ -1911,7 +1911,34 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_henmenu.png")
 		get_tree().quit()
-	elif "--codexshot" in OS.get_cmdline_user_args():
+	elif "--shotsweep" in OS.get_cmdline_user_args():
+		# ONE windowed run -> every key screen lands in /tmp/sweep_*.png (nightly regression eyeball)
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		_enter_menu()
+		await _sweep_grab("menu")
+		_open_select()
+		await _sweep_grab("select")
+		_open_shop()
+		in_select = false
+		await _sweep_grab("shop")
+		in_shop = false; in_select = true; in_wardrobe = true
+		equipped_wear = "raccoon"; equipped_body = "turtle"
+		await _sweep_grab("wardrobe")
+		in_wardrobe = false; in_select = false
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
+		for _sw in [0, 3, 6]:
+			distance = 6000.0; biome_progress = float(_sw) * THEME_LEN + 800.0
+			theme_idx = _sw; theme_prev = _sw; theme_sweep = 1.0
+			await _sweep_grab("river%d" % _sw)
+		_force_boss(2, "megasadie")
+		if boss != null:
+			boss.phase = "fight"; boss.y = 205.0
+		await _sweep_grab("boss")
+		die("the sweep took you, gently.", "log")
+		await _sweep_grab("death")
+		get_tree().quit()
+	elif "--boonshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		for _ci2 in ["boon_echo", "boon_phoenix", "boon_pond_karma", "spec_glide", "spec_slowmo"]:
 			if _ci2 not in codex_seen:
@@ -14527,6 +14554,11 @@ func _arg_val(args: PackedStringArray, key: String, dflt: String) -> String:
 		if a.begins_with(key + "="):
 			return a.substr(key.length() + 1)
 	return dflt
+
+func _sweep_grab(nm: String) -> void:
+	await get_tree().create_timer(0.45).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("/tmp/sweep_%s.png" % nm)
 
 func _sim_begin() -> void:
 	booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
