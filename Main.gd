@@ -768,6 +768,28 @@ const SADIE_LINES := ["welcome! sniff around.", "*tail thumps the dock*", "ooh, 
 	"my CHUCKIT's right here — throw it after?", "that hat? chef's kiss.", "*happy pant*  take your time.",
 	"*nudges her chuckit toward you*", "i'll trade ya... for ONE throw of the chuckit."]
 const BODY_WEAR := ["scarf", "turtle", "cape", "vest", "jetpack", "satchel"]   # boombox is a HEAD piece
+const SADIE_WEAR_LINES := {
+	"crown":   ["ooooh ROYALTY. do i bow?", "your majesty may throw the chuckit."],
+	"pirate":  ["arrr? ARRR!!", "a pirate! i'll be your first mate."],
+	"party":   ["a PARTY?! where! WHERE!"],
+	"lilypad": ["very sneaky. very froggy.", "i almost pounced. almost."],
+	"souwester": ["rain-ready! i LOVE rain."],
+	"prop":    ["it SPINS. i could watch forever.", "*head tilts at the propeller*"],
+	"chef":    ["you cook?? i eat!! PERFECT."],
+	"bandana": ["rugged. outdoorsy. approve."],
+	"halo":    ["an angel! (i knew it.)"],
+	"boombox": ["*tail wags EXACTLY on beat*", "turn it UP."],
+	"scarf":   ["cozy!! i want one in red."],
+	"goggles": ["so official. so aerodynamic."],
+	"raccoon": ["wait. WAIT. trash bandit?!", "*suspicious sniff* ...oh it's still you."],
+	"heron":   ["that crest... i will allow it."],
+	"turtle":  ["the SHELL! classic. timeless."],
+	"cape":    ["a hero!! i always knew."],
+	"vest":    ["safety first! smart duck."],
+	"jetpack": ["you can FLY?! take me with you!!"],
+	"satchel": ["snacks in there? asking for a friend."],
+	"_doff":   ["aw. i liked that one.", "the natural look! also good."],
+}
 var wear_tier := {}                    # wearable id -> star tier (1..WEAR_TIER_MAX); the feather sink
 const WEAR_TIER_MAX := 4               # ★4 = GILDED: the hoard-drainer
 # upgrade price for taking `id` from its current tier to the next (scales off its base cost)
@@ -1079,7 +1101,8 @@ var tex_sadie_ball: Texture2D          # her voxel chuckit (for the drop/catch)
 var tex_sadie_run: Array = []          # 4-frame gallop cycle for the fetch run
 var tex_sadieboss := {}          # SADIE THE BOUNDLESS: dedicated hi-res boss render set
 var sadie_idle_t := 0.0
-const SADIE_PLAY_DUR := 1.9
+const SADIE_PLAY_DUR := 1.9     # base; per-act durations below (fetch needs ROOM to run)
+var sadie_play_dur := 1.9
 var sadie_play_kind := 0        # her fetch repertoire: 0 classic · 1 sky toss · 2 keep-away · 3 dig
 var sadie_line := ""
 var sadie_line_t := -10.0
@@ -2497,10 +2520,19 @@ func _equip_wear(id: String) -> void:               # slot it into HEAD or BODY,
 		equipped_body = id
 	else:
 		equipped_wear = id
+	if in_wardrobe and SADIE_WEAR_LINES.has(id):    # the shopkeeper has OPINIONS
+		var _swl: Array = SADIE_WEAR_LINES[id]
+		sadie_line = _swl[randi() % _swl.size()]
+		sadie_line_t = anim_t
+		_sfx("bark", randf_range(1.0, 1.2), -8.0)
 
 func _unequip_wear(id: String) -> void:
 	if equipped_wear == id: equipped_wear = ""
 	if equipped_body == id: equipped_body = ""
+	if in_wardrobe:
+		var _sdl: Array = SADIE_WEAR_LINES["_doff"]
+		sadie_line = _sdl[randi() % _sdl.size()]
+		sadie_line_t = anim_t
 
 func _wear(id: String) -> bool:                     # is this wearable's PERK active this run?
 	return _worn(id) and not tut_mode               # tutorial nerfs perks (the item still shows)
@@ -5566,8 +5598,10 @@ func _process(delta: float) -> void:
 	if in_wardrobe and sadie_fetch_t <= 0.0:         # SADIE plays with her ball on her own now and then
 		sadie_idle_t += delta
 		if sadie_idle_t > 8.5:
-			sadie_idle_t = 0.0; sadie_fetch_t = SADIE_PLAY_DUR
+			sadie_idle_t = 0.0
 			sadie_play_kind = randi() % 4
+			sadie_play_dur = [3.4, 2.3, 2.8, 2.5][sadie_play_kind]
+			sadie_fetch_t = sadie_play_dur
 	if sadie_fetch_t > 0.0:
 		sadie_fetch_t = maxf(0.0, sadie_fetch_t - delta)
 	# BOOMBOX: the tune bumps anywhere it's equipped — menu, loading, gameplay — but NOT the graphs
@@ -8814,10 +8848,15 @@ func _draw_death() -> void:
 		var _by2: float = ny + font.get_ascent(15)
 		_skull(Vector2(VIEW.x * 0.5 - _tw2 * 0.5 - 14.0, _by2 - 5.0), Color(0.93, 0.91, 0.86))
 		_otext(Vector2(0, _by2), _dtxt2, 15, Color(1, 0.6, 0.55, 0.95), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-		# your KILLER attends the funeral: a small smug portrait beside the line
-		var _kp := _sim_death_icon_path(String(dead_cat))
-		if _kp != "" and ResourceLoader.exists(_kp):
-			var _kt: Texture2D = load(_kp)
+		# your KILLER attends the funeral — from BOOT-LOADED textures only (a draw-time
+		# load() rendered as a white square on the web export)
+		var _kt = null
+		match String(dead_cat):
+			"log": _kt = tex_log
+			"snapz_boss": _kt = _codex_tex("snapz")
+			"boss": _kt = _codex_tex("gerald")
+			_: _kt = _codex_tex(String(dead_cat))
+		if _kt != null:
 			var _ks := minf(44.0 / _kt.get_size().x, 44.0 / _kt.get_size().y)
 			var _kpos := Vector2(VIEW.x * 0.5 + _tw2 * 0.5 + 34.0, _by2 - 8.0)
 			draw_set_transform(_kpos, sin(anim_t * 1.6) * 0.06, Vector2(_ks, _ks))   # a gentle gloat-sway
@@ -14051,31 +14090,73 @@ func _draw_wardrobe() -> void:
 		var ball_pos := Vector2.ZERO
 		var bounce: float = absf(sin(anim_t * 2.2)) * 4.0
 		var sd_off := Vector2.ZERO
-		if playing:                                       # her fetch REPERTOIRE — a different act each time
-			var fp := 1.0 - sadie_fetch_t / SADIE_PLAY_DUR
+		var running := false                              # gallop frames + facing when she RUNS
+		var run_dir := 1.0
+		if playing:                                       # her fetch REPERTOIRE — real athletics, full stage
+			var fp := 1.0 - sadie_fetch_t / sadie_play_dur
 			var mouth := spos + Vector2(22.0, 6.0)
-			var drop := spos + Vector2(78.0, 46.0)        # her chuckit lands just ahead
+			var far := Vector2(392.0, 30.0)               # deep right field, past the buttons
 			bounce = 0.0
-			if sadie_play_kind == 1:                      # SKY TOSS: flick it HIGH... leap and snag it
+			if sadie_play_kind == 0:                      # THE FULL FETCH: throw far -> GALLOP -> pounce -> gallop home
+				if fp < 0.18:                             # the throw: a real arc into right field
+					var tp := fp / 0.18
+					ball_pos = mouth.lerp(spos + far, tp) - Vector2(0, sin(tp * PI) * 120.0)
+					held = false; fi = 1
+				elif fp < 0.46:                           # the CHASE: ears back, full gallop
+					var cp := (fp - 0.18) / 0.28
+					sd_off = far * cp
+					running = true; run_dir = 1.0
+					ball_pos = spos + far; held = false
+					if randf() < 0.25:                    # kicked-up spray behind her
+						parts.append({"x": spos.x + sd_off.x - 20.0, "y": spos.y + 44.0,
+							"vx": randf_range(-60, -20), "vy": randf_range(-50, -10),
+							"t": 0.0, "life": 0.3, "col": Color(0.75, 0.88, 0.95)})
+				elif fp < 0.56:                           # the POUNCE, with a proper squash
+					var pp := (fp - 0.46) / 0.1
+					sd_off = far + Vector2(0, -sin(pp * PI) * 26.0)
+					sq = 1.0 - 0.24 * sin(pp * PI)
+					ball_pos = spos + far; held = false; fi = 4
+				elif fp < 0.88:                           # the RETURN: gallop home, ball in mouth, SO proud
+					var rp := (fp - 0.56) / 0.32
+					sd_off = far * (1.0 - rp)
+					running = true; run_dir = -1.0
+					held = true
+				else:                                     # skid-stop + drop at your feet
+					var sp2 := (fp - 0.88) / 0.12
+					sq = 1.0 + 0.18 * sin(sp2 * PI)
+					held = false
+					ball_pos = spos + Vector2(46.0, 40.0)
+					fi = 0
+					if fp < 0.9 and randf() < 0.5:        # skid spray
+						parts.append({"x": spos.x + 30.0, "y": spos.y + 46.0,
+							"vx": randf_range(20, 90), "vy": randf_range(-40, -10),
+							"t": 0.0, "life": 0.3, "col": Color(0.75, 0.88, 0.95)})
+			elif sadie_play_kind == 1:                    # SKY TOSS: flick it HIGH... leap and snag it
 				if fp < 0.3:
-					ball_pos = mouth + Vector2(6.0, 0.0) - Vector2(0, sin(fp / 0.3 * PI * 0.5) * 96.0)
+					ball_pos = mouth + Vector2(6.0, 0.0) - Vector2(0, sin(fp / 0.3 * PI * 0.5) * 130.0)
 					held = false; fi = 1
 				elif fp < 0.62:
 					var dp := (fp - 0.3) / 0.32
-					ball_pos = mouth + Vector2(6.0, -96.0 + dp * dp * 74.0)
+					ball_pos = mouth + Vector2(6.0, -130.0 + dp * dp * 104.0)
 					held = false; fi = 4
 					sd_off.y = 2.0
-					sq = 1.0 - 0.1 * dp                   # coiling to jump
+					sq = 1.0 - 0.12 * dp                  # coiling to jump
 				else:
 					var jp := (fp - 0.62) / 0.38
-					sd_off.y = -sin(jp * PI) * 30.0       # the LEAP
-					sq = 1.0 + 0.2 * sin(jp * PI)
+					sd_off.y = -sin(jp * PI) * 52.0       # a REAL leap
+					sq = 1.0 + 0.22 * sin(jp * PI)
 					fi = 0; held = true
-			elif sadie_play_kind == 2:                    # KEEP-AWAY: zoomies — you can't have it
-				held = true; fi = 0
-				var zx := sin(fp * TAU * 2.0) * 34.0
-				sd_off = Vector2(zx, -absf(sin(fp * TAU * 4.0)) * 6.0)
-				sq = 1.0 + 0.06 * sin(fp * TAU * 4.0)
+			elif sadie_play_kind == 2:                    # KEEP-AWAY: full-width zoomie LAPS — you can't have it
+				held = true
+				var lap := fposmod(fp * 2.0, 1.0)         # two full laps
+				var lx := sin(lap * PI) * 380.0           # out to right field and back
+				sd_off = Vector2(lx, -absf(sin(fp * TAU * 5.0)) * 5.0)
+				running = true
+				run_dir = 1.0 if cos(lap * PI) >= 0.0 else -1.0
+				if randf() < 0.2:
+					parts.append({"x": spos.x + sd_off.x - run_dir * 22.0, "y": spos.y + 44.0,
+						"vx": -run_dir * randf_range(20, 70), "vy": randf_range(-40, -10),
+						"t": 0.0, "life": 0.28, "col": Color(0.75, 0.88, 0.95)})
 			elif sadie_play_kind == 3:                    # THE DIG: it's GONE... no wait she's got it
 				if fp < 0.25:                             # drops it behind her
 					ball_pos = mouth.lerp(spos + Vector2(-30.0, 40.0), fp / 0.25)
@@ -14085,30 +14166,22 @@ func _draw_wardrobe() -> void:
 					fi = 4
 					sd_off = Vector2(-10.0, 3.0)
 					sq = 1.0 + 0.1 * sin(fp * 60.0)       # fast little dig wiggle
-					if randf() < 0.3:
+					if randf() < 0.45:
 						parts.append({"x": spos.x - 26.0 + randf_range(-8, 8), "y": spos.y + 40.0,
-							"vx": randf_range(-70, -20), "vy": randf_range(-90, -30),
-							"t": 0.0, "life": 0.35, "col": Color(0.62, 0.5, 0.36)})
-				else:                                     # POPS UP with it, triumphant
+							"vx": randf_range(-90, -20), "vy": randf_range(-110, -30),
+							"t": 0.0, "life": 0.4, "col": Color(0.62, 0.5, 0.36)})
+				else:                                     # POPS UP with it — a triumphant little hop
 					fi = 0; held = true
-					sq = 1.0 + 0.18 * sin((fp - 0.7) / 0.3 * PI)
-			elif fp < 0.28:                               # CLASSIC — she noses the ball out, eyeing it
-				ball_pos = mouth.lerp(drop, fp / 0.28) - Vector2(0, sin(fp / 0.28 * PI) * 40.0)
-				held = false; fi = 4
-			elif fp < 0.5:                                # PLAY-BOW — a little dip, tail up
-				sd_off.y = sin((fp - 0.28) / 0.22 * PI) * 7.0
-				ball_pos = drop; held = false; fi = 4
-			elif fp < 0.66:                               # POUNCE — lunges onto it with a big squash
-				var pp := (fp - 0.5) / 0.16
-				sd_off = (drop - spos) * 0.5 * sin(pp * PI)
-				sq = 1.0 - 0.22 * sin(pp * PI)
-				ball_pos = drop; held = false; fi = 4
-			else:                                         # CATCH — pops up with her chuckit, chuffed
-				fi = 0; held = true
-				sq = 1.0 + 0.16 * sin((fp - 0.66) / 0.34 * PI)
+					sd_off.y = -sin((fp - 0.7) / 0.3 * PI) * 18.0
+					sq = 1.0 + 0.2 * sin((fp - 0.7) / 0.3 * PI)
 		draw_circle(spos + Vector2(6.0, 36.0), 50.0, Color(1.0, 0.7, 0.35, 0.11 + (0.06 if playing else 0.0)))
-		draw_set_transform(spos + sd_off + Vector2(0, -bounce), 0.0, Vector2(2.2 / sq, 2.2 * sq))
-		draw_texture(tex_sadie_anim[fi], -tex_sadie_anim[fi].get_size() * 0.5, Color(1.18, 1.12, 1.06))
+		if running and not tex_sadie_run.is_empty():   # the REAL gallop, facing her direction of travel
+			var _rf: Texture2D = tex_sadie_run[int(anim_t * 16.0) % tex_sadie_run.size()]
+			draw_set_transform(spos + sd_off + Vector2(0, 26.0), 0.0, Vector2(2.6 * run_dir / sq, 2.6 * sq))
+			draw_texture(_rf, -_rf.get_size() * 0.5, Color(1.18, 1.12, 1.06))
+		else:
+			draw_set_transform(spos + sd_off + Vector2(0, -bounce), 0.0, Vector2(2.2 / sq, 2.2 * sq))
+			draw_texture(tex_sadie_anim[fi], -tex_sadie_anim[fi].get_size() * 0.5, Color(1.18, 1.12, 1.06))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if not held and tex_sadie_ball != null:           # the chuckit on the ground in front of her, spinning
 			draw_circle(Vector2(ball_pos.x, spos.y + 52.0), 8.0, Color(0.0, 0.0, 0.0, 0.14))
@@ -14117,9 +14190,9 @@ func _draw_wardrobe() -> void:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		wardrobe_sadie_rect = Rect2(spos.x - 52.0, spos.y - 56.0, 108.0, 116.0)
 		if anim_t - sadie_line_t < 4.0 and sadie_line != "":
-			_speech_bubble(Vector2(spos.x + 150.0, spos.y - 50.0), sadie_line,
+			_speech_bubble(Vector2(spos.x + 214.0, spos.y - 128.0), sadie_line,
 				Color(0.99, 0.95, 0.86, 0.96), Color(0.74, 0.46, 0.28, 0.92), 14, 1.0, false,
-				Color(0.62, 0.0, 0.02), Color(1.0, 0.16, 0.10), -72.0)
+				Color(0.62, 0.0, 0.02), Color(1.0, 0.16, 0.10), -150.0)
 		else:
 			_otext(Vector2(spos.x - 42.0, spos.y + 58.0), "* tap Sadie *", 11, Color(0.82, 0.7, 0.52, 0.55), 112.0, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	if wear_modal >= 0:                                  # the detail MODAL floats over the grid on demand
@@ -14185,8 +14258,10 @@ func _draw_wear_modal(idx: int) -> void:
 
 func _wardrobe_press(pos: Vector2) -> void:
 	if wear_modal < 0 and wardrobe_sadie_rect.has_point(pos):   # tap SADIE -> she plays FETCH with her chuckit + barks
-		sadie_fetch_t = SADIE_PLAY_DUR; sadie_idle_t = 0.0
+		sadie_idle_t = 0.0
 		sadie_play_kind = randi() % 4
+		sadie_play_dur = [3.4, 2.3, 2.8, 2.5][sadie_play_kind]
+		sadie_fetch_t = sadie_play_dur
 		sadie_line = SADIE_LINES[randi() % SADIE_LINES.size()]; sadie_line_t = anim_t
 		_sfx("ribbit", randf_range(0.58, 0.72), 4.0)        # a low woof-ish bark
 		return
