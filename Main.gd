@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.5"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.6"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1166,7 +1166,7 @@ var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
 var sand_dock = null            # SAND POND: the camp dock — Sadie sprints it and CANNONBALLS off
 var sand_dock_next := 0.0
-const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", "hero_cochichewick"]
+const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", ""]   # Cochichewick: no set-piece — the birding water speaks for itself (loon nixed)
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
 	"bank_cattail_0": ["CATTAILS", "The river's picket fence. Red-winged blackbirds hold territory in them all summer, and every pond worth its name grows a stand."],
@@ -1192,7 +1192,6 @@ const SHORE_LORE := {
 	"sand_dock": ["THE CAMP DOCK", "Straight, orange-brown, and exactly one good-girl-gallop long. The end board is worn smooth. You know why."],
 	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
 	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
-	"hero_cochichewick": ["THE LOON", "A silhouette on dark water under aurora light. You lift the binoculars slowly. Some birds you don't call out — you just watch."],
 }
 var tex_env := {}
 
@@ -1956,7 +1955,7 @@ func _ready() -> void:
 		var _rth := int(_arg_val(OS.get_cmdline_user_args(), "--theme", "0"))
 		distance = 6000.0; biome_progress = float(_rth) * THEME_LEN + 800.0
 		theme_idx = _rth; theme_prev = _rth; theme_sweep = 1.0
-		if tex_env.has(HERO_NAMES[theme_idx]):          # the biome's LANDMARK anchors the shot
+		if HERO_NAMES[theme_idx] != "" and tex_env.has(HERO_NAMES[theme_idx]):          # the biome's LANDMARK anchors the shot
 			env_scenery.append({"n": HERO_NAMES[theme_idx], "x": BANK_W + 86.0, "y": 300.0,
 				"rooted": true, "hero": true, "phase": 0.0, "flip": false})
 		for _ri in 16:                                  # pre-seed the scenery the run would have streamed in
@@ -2545,7 +2544,8 @@ func _save() -> void:
 func _see_shore(ti: int) -> void:
 	for bn2 in BANK_PROPS[ti]:
 		_codex_see("shore_" + String(bn2))
-	_codex_see("shore_" + HERO_NAMES[ti])
+	if HERO_NAMES[ti] != "":
+		_codex_see("shore_" + HERO_NAMES[ti])
 
 func _codex_see(id: String) -> void:
 	if id in codex_seen:
@@ -5958,7 +5958,7 @@ func _update_play(delta: float) -> void:
 		if sand_dock.y > VIEW.y + 60.0:
 			sand_dock = null
 	# a HERO landmark drifts through, rare enough to be an event
-	if distance >= hero_next and boss == null and tex_env.has(HERO_NAMES[theme_idx]):
+	if distance >= hero_next and boss == null and HERO_NAMES[theme_idx] != "" and tex_env.has(HERO_NAMES[theme_idx]):
 		hero_next = distance + randf_range(7000.0, 9500.0)
 		var _hright := randf() < 0.5
 		# landmarks live at the SHORE like real pond things, leaning into the river
