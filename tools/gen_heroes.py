@@ -1128,9 +1128,58 @@ HEROES = [
     ("hero_emerald.png",      build_emeraldrock, dict(yaw=15, pitch=40, target=106)),
 ]
 
+def build_jetski(alt=False):
+    """WOODBURY: a jetski parked at a little float — big-water toys, nosed up and ready."""
+    HULL = (206, 60, 44) if not alt else (44, 150, 172)
+    HULLD = (158, 40, 30) if not alt else (30, 110, 128)
+    HULLL = (235, 96, 74) if not alt else (86, 196, 214)
+    SEAT = (40, 38, 42); SEATL = (66, 64, 70)
+    BAR = (32, 32, 36); GRIP = (200, 200, 204)
+    POST = (108, 82, 54); ROPE = (196, 178, 140)
+    WET = (72, 82, 84); FOAM = (168, 196, 204)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    # it FLOATS (jetskis don't sit on docks): hull in the water, wet lap at the waterline,
+    # a rope back to a mooring post on shore
+    for yy in range(0, 6):                               # the mooring post
+        put(-8, yy, -6, POST)
+    put(-8, 6, -6, (84, 62, 40))
+    for i in range(6):                                   # sagging rope to the bow
+        put(-7 + i, max(1, 4 - int(round(1.6 * math.sin(i / 5.0 * math.pi)))), -6 + i, ROPE)
+    for zi in range(-8, 9):                              # hull: wedge nose-up at the bow
+        t = (zi + 8) / 16.0
+        w = 3.4 - 2.2 * max(0.0, t - 0.55) / 0.45        # narrows to the nose
+        lift = 2 + int(round(2.6 * max(0.0, t - 0.5)))   # bow rises
+        for x in range(-int(w), int(w) + 1):
+            put(x, lift, zi, HULLD if abs(x) == int(w) else HULL)
+            put(x, lift + 1, zi, HULL if abs(x) < int(w) else HULLD, only_empty=True)
+    for zi in range(-7, 0):                              # the saddle seat
+        put(0, 4, zi, SEAT); put(-1, 4, zi, SEAT); put(1, 4, zi, SEAT)
+        put(0, 5, zi, SEATL if zi % 2 else SEAT)
+    for x in range(-2, 3):                               # handlebar T at the bow rise
+        put(x, 6, 4, BAR)
+    put(-2, 6, 4, GRIP); put(2, 6, 4, GRIP)
+    put(0, 5, 4, BAR); put(0, 4, 4, BAR)
+    for zi in range(-8, 9, 2):                           # sponson stripe
+        put(int(3.4 - 2.2 * max(0.0, ((zi + 8) / 16.0) - 0.55) / 0.45), 3, zi, HULLL, only_empty=True)
+    for zi in range(-9, 10):                             # waterline lap hugging the hull
+        t = (zi + 8) / 16.0
+        w = int(3.4 - 2.2 * max(0.0, t - 0.55) / 0.45) + 1
+        put(-w, 1, zi, WET, only_empty=True)
+        put(w, 1, zi, WET, only_empty=True)
+        if zi % 3 == 0:
+            put(-w - 1, 1, zi, FOAM, only_empty=True)
+            put(w + 1, 1, zi, FOAM, only_empty=True)
+    for x in range(-3, 4):                               # stern wash
+        put(x, 1, -9, WET, only_empty=True)
+    return V
+
+
 BANKS = [
     ("bank_barredowl.png",    build_barredowl,  dict(yaw=8, pitch=24, target=38)),
     ("bank_lizzie.png",       build_lizzie,     dict(yaw=36, pitch=30, target=30)),
+    ("bank_jetski_0.png",     build_jetski,     dict(yaw=28, pitch=30, target=42)),
+    ("bank_jetski_1.png",     (lambda: build_jetski(True)), dict(yaw=-24, pitch=30, target=42)),
 ]
 
 

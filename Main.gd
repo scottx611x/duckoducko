@@ -179,7 +179,7 @@ const FACTS := [
 const THEME_LEN := 9000.0       # distance units (10 = 1m) — longer regions so each one registers
 const THEMES := [
 	{"name": "Buker Pond",     "tint": Color(1.0, 1.0, 1.0),      "line": "in at the boat launch. every trip starts here."},
-	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water of the Tacoma chain."},
+	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water. all of it."},
 	{"name": "Purgatory Pond", "tint": Color(0.66, 0.72, 0.62),   "line": "shallow, weedy, hard to reach. worth it."},
 	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74),   "line": "camp. you know the way."},
 	{"name": "Pleasant Pond",  "tint": Color(0.82, 0.98, 1.08),   "line": "the good fishing — out by Lively Brook."},
@@ -1000,7 +1000,8 @@ const CODEX := [
 		"lore": "A driverless mahogany runabout that prowls every pond on the river, wherever the water's wide enough to open her up. Nobody knows who built her or where the captain went; she just ROARS up from astern, carves a few showboating passes around you while hollering about no-wake zones, and vanishes upriver in a curtain of spray. She isn't AIMING for you — but that varnished hull will bowl you clean off the water if you sit in her path. Hop her wake or steer wide. All bravado, no brakes."},
 ]
 const CODEX_CATS := [["duck", "DUCKS"], ["boss", "BOSSES"], ["enemy", "ENEMIES"], ["friend", "FRIENDS"],
-	["relic", "ARTIFACTS"], ["power", "POWER-UPS"], ["wear", "WEARABLES"], ["snack", "SNACKS"], ["trash", "RIVER TRASH"]]
+	["relic", "ARTIFACTS"], ["power", "POWER-UPS"], ["wear", "WEARABLES"], ["snack", "SNACKS"], ["trash", "RIVER TRASH"],
+	["shore", "THE SHORELINE"]]
 # deep lore + taglines for the playable roster (shown in the DUCKS codex category)
 const DUCK_TAG := {
 	"mallard": "the balanced drake", "hen": "the clever hen", "wood": "the floaty show-off",
@@ -1164,6 +1165,31 @@ var env_scenery: Array = []
 var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
 const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", "hero_cochichewick"]
+# THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
+const SHORE_LORE := {
+	"bank_cattail_0": ["CATTAILS", "The river's picket fence. Red-winged blackbirds hold territory in them all summer, and every pond worth its name grows a stand."],
+	"bank_cattail_1": ["TALL CATTAILS", "The old-growth stand. Rumor says a bittern hides in there, doing its reed impression. Nobody has ever proven otherwise."],
+	"bank_jetski_0": ["THE RED JETSKI", "Parked, gassed, and slightly too loud even at rest. Big water calls for big toys."],
+	"bank_jetski_1": ["THE TEAL JETSKI", "The other one. Its owner swears it's faster. It is not faster."],
+	"bank_grave": ["A CROOKED GRAVESTONE", "'HERE LIES A LOG.' The bog buries its own and labels them honestly."],
+	"bank_deadtree": ["THE GNARLED SNAG", "Dead a hundred years and busier than ever — half the bog's herons learned to loom in its branches."],
+	"bank_bonfire": ["THE CAMP FIRE RING", "Stones stacked by many summers of hands. If you listen past the crackle: grilling, laughing, a dog shaking off lakewater."],
+	"bank_barredowl": ["BARRED OWL", "Who cooks for you? Who cooks for you-all? At camp, the answer drifts down from the pines every dusk."],
+	"bank_lamp": ["THE OLD LAMPPOST", "Somebody lit the way to the fishing hole once, and nobody ever had the heart to turn it off."],
+	"bank_pine": ["SHORE PINES", "Western-tall and unbothered. They smell like a different altitude entirely."],
+	"bank_fern": ["FERN BREAK", "Green on green on green. The shady understory where the moose SHOULD be, statistically."],
+	"bank_shroom": ["GLOW-CAPS", "Little teal lanterns at the waterline. Almost certainly magic. Definitely not for eating."],
+	"bank_snowduck": ["THE SNOWDUCK", "Somebody built a snowman shaped like a duck, with a carrot bill and a red scarf. That somebody understood things."],
+	"bank_lizzie": ["LIZZIE", "The beagle of the birding hill. Sits like a good girl, watches the water, has never once flushed the bird you were photographing. A professional."],
+	"bank_cow": ["THE COW", "She stands at the bank and watches you paddle by. Every pond, sometimes. No explanation has ever been offered."],
+	"hero_buker": ["THE BOAT LAUNCH", "Gravel ramp, worn tire ruts, one aluminum skiff tied to the post. Every trip you've ever loved started at a place exactly like this."],
+	"hero_woodbury": ["THE TURTLE LOG", "Three painted turtles, necks to the sun, arranged by seniority. The middle of the big water belongs to them."],
+	"hero_purgatory": ["THE DEAD TREE", "It rises out of the shallows like a question nobody answers. The crow is always there. The crow was always there."],
+	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
+	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
+	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
+	"hero_cochichewick": ["THE LOON", "A silhouette on dark water under aurora light. You lift the binoculars slowly. Some birds you don't call out — you just watch."],
+}
 var tex_env := {}
 
 # ---- RIVER EVENTS + FORKS: the replay engine. Events make a stretch of river briefly
@@ -1317,6 +1343,7 @@ func _update_river_events(delta: float) -> void:
 			theme_idx = int(side.theme)
 			theme_sweep = 0.0
 			region_t = anim_t
+			_see_shore(theme_idx)
 			biome_progress = float(theme_idx) * THEME_LEN + 400.0   # keep the modulo router in step
 			_swap_theme_music()
 			_flash("%s — %s" % [THEMES[theme_idx].name, m.name], 2.4)
@@ -1728,7 +1755,7 @@ func _ready() -> void:
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
-			"bank_bonfire", "bank_barredowl", "bank_lizzie",
+			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
@@ -2510,6 +2537,11 @@ func _save() -> void:
 	cfg.save("user://save.cfg")
 
 # mark a compendium character as ENCOUNTERED (lights up its entry + the menu NEW badge)
+func _see_shore(ti: int) -> void:
+	for bn2 in BANK_PROPS[ti]:
+		_codex_see("shore_" + String(bn2))
+	_codex_see("shore_" + HERO_NAMES[ti])
+
 func _codex_see(id: String) -> void:
 	if id in codex_seen:
 		return
@@ -6096,6 +6128,7 @@ func _update_play(delta: float) -> void:
 		theme_idx = ti
 		theme_sweep = 0.0
 		region_t = anim_t                          # kick off the arrival banner
+		_see_shore(theme_idx)                      # its fixtures enter your LIFE LIST
 		if theme_idx == 6 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
 			hawk_done = false                      # always patrols his own water — one more pass
 			hawk_timer = randf_range(3.0, 6.0)
@@ -10413,6 +10446,10 @@ Equip it before a run — the LOFT meter is its trigger.",
 			"sub": ("owned · a charm" if owned else "%d * at the wardrobe" % int(w.cost)),
 			"lore": "%s\n\nA duck cosmetic with a per-run perk — buy & equip it in the WARDROBE." % w.desc,
 			"type": "wear", "ref": w})
+	for sid2 in SHORE_LORE:
+		out.append({"key": "shore_" + sid2, "cat": "shore", "name": SHORE_LORE[sid2][0],
+			"sub": ("landmark · " if String(sid2).begins_with("hero_") else "shoreline · ") + ("seen on your waters" if ("shore_" + sid2) in codex_seen else "???"),
+			"lore": SHORE_LORE[sid2][1], "type": "shore", "ref": sid2})
 	var tnames := PROP_NAMES.duplicate()                # flotsam ordered common -> legendary
 	tnames.sort_custom(func(a, b): return int(PROP_TIERS.get(a, 0)) < int(PROP_TIERS.get(b, 0)))
 	for pn in tnames:
@@ -10496,6 +10533,8 @@ func _codex_tap_list(pos: Vector2) -> void:
 			return
 
 func _codex_tex(id: String):
+	if id.begins_with("shore_"):                      # shoreline fixtures: the sprite itself
+		return tex_env.get(id.substr(6))
 	if id.begins_with("boon_"):                       # shrine boons: their run-icon, writ large
 		return tex_boon.get(id.substr(5))
 	if id == "bongo":
@@ -10551,6 +10590,10 @@ func _codex_icon(it: Dictionary, box: Rect2) -> void:
 				_blit_centered(bt2, box.get_center(), minf((box.size.x - 10.0) / bt2.get_size().x, (box.size.y - 10.0) / bt2.get_size().y))
 			else:
 				draw_circle(box.get_center(), box.size.y * 0.3, Color(0.85, 0.7, 0.3, 0.5))
+		"shore":
+			if tex_env.has(it.ref):
+				var _sht: Texture2D = tex_env[it.ref]
+				_blit_centered(_sht, box.get_center(), minf((box.size.x - 8.0) / _sht.get_size().x, (box.size.y - 8.0) / _sht.get_size().y))
 		"spec":
 			draw_circle(box.get_center(), box.size.y * 0.32, Color(0.5, 0.85, 1.0, 0.2))
 			draw_arc(box.get_center(), box.size.y * 0.32, 0, TAU, 22, Color(0.5, 0.85, 1.0, 0.8), 2.0)
@@ -12652,7 +12695,7 @@ func _draw_living_water(scroll: float) -> void:
 # bank props per theme: [common, accent] generated sprites; primitives only as fallback
 const BANK_PROPS := [
 	["bank_cattail_0", "bank_cattail_1"],
-	["bank_umbrella", "bank_blanket"],
+	["bank_jetski_0", "bank_jetski_1"],    # WOODBURY: big-water toys, parked + ready (picnic gear NUKED)
 	["bank_grave", "bank_deadtree"],
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
 	["bank_lamp", "bank_cattail_0"],
@@ -12679,6 +12722,8 @@ func _draw_bank_decor() -> void:
 			var tname: String
 			if tex_env.has("bank_cow") and h == 42:
 				tname = "bank_cow"
+				if not codex_seen.has("shore_bank_cow"):
+					_codex_see("shore_bank_cow")       # you SAW the cow. the cow saw you.
 			else:
 				tname = pair[0] if h % 3 != 0 else pair[1]
 			var btex: Texture2D = tex_env.get(tname)
