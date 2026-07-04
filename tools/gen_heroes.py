@@ -1206,6 +1206,60 @@ def build_longdock():
     return V
 
 
+def build_angler(seated=False):
+    """PLEASANT: shore-side anglers. One stands mid-cast; one sits on a bucket the
+    way only a person with nowhere better to be can sit."""
+    HAT = (110, 122, 82); HATD = (84, 94, 62)
+    VEST = (168, 108, 60) if not seated else (86, 110, 138)
+    VESTD = (128, 80, 44) if not seated else (62, 82, 106)
+    SHIRT = (200, 196, 180); SKIN = (222, 178, 140)
+    PANT = (94, 88, 78); BOOT = (52, 48, 44)
+    ROD = (120, 90, 56); LINE = (210, 214, 220); BUCKET = (196, 196, 200); BUCKETD = (150, 150, 156)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    if seated:
+        for yy in range(0, 4):                            # the bucket throne
+            for a in range(0, 360, 30):
+                put(int(round(2.0 * math.cos(math.radians(a)))), yy,
+                    int(round(2.0 * math.sin(math.radians(a)))), BUCKET if yy > 0 else BUCKETD)
+        ellip(0, 5, 0, 2.4, 2.2, 2.0, VEST)               # hunched torso
+        ellip(0, 6.4, 0.8, 2.0, 1.6, 1.6, VESTD, only_empty=True)
+        for zz in range(1, 4):                            # legs folded forward
+            put(-1, 2, zz, PANT); put(1, 2, zz, PANT)
+        put(-1, 1, 4, BOOT); put(1, 1, 4, BOOT)
+        ellip(0, 8.6, 0.6, 1.5, 1.4, 1.4, SKIN)           # head, tucked low
+        for a in range(0, 360, 24):                       # bucket hat brim
+            put(int(round(2.0 * math.cos(math.radians(a)))), 9.4,
+                int(round(0.6 + 2.0 * math.sin(math.radians(a)))), HATD)
+        ellip(0, 10, 0.6, 1.4, 0.8, 1.3, HAT)
+        for i in range(9):                                # rod held low + lazy
+            put(2 + int(i * 0.55), 6 - int(i * 0.2), 2 + i, ROD if i % 3 else HATD)
+        for yy2 in range(1, 5):
+            if yy2 % 2:
+                put(7, yy2, 11, LINE)
+    else:
+        put(-1, 1, 0, BOOT); put(1, 1, 0, BOOT)           # planted stance
+        for yy in range(2, 6):
+            put(-1, yy, 0, PANT); put(1, yy, 0, PANT)
+        ellip(0, 7.5, 0, 2.2, 2.6, 1.8, VEST)             # vest torso
+        ellip(0, 8.6, 0.8, 1.8, 1.6, 1.4, VESTD, only_empty=True)
+        put(-2, 8, 0, SHIRT); put(2, 8, 0, SHIRT)         # rolled sleeves
+        put(-3, 7, 1, SKIN)                               # forward arm to the rod
+        ellip(0, 11.2, 0.4, 1.5, 1.5, 1.4, SKIN)          # head
+        for a in range(0, 360, 24):                       # bucket hat
+            put(int(round(2.0 * math.cos(math.radians(a)))), 12.0,
+                int(round(0.4 + 1.9 * math.sin(math.radians(a)))), HATD)
+        ellip(0, 12.6, 0.4, 1.4, 0.8, 1.3, HAT)
+        n = 14                                            # the rod, mid-cast arc
+        for i in range(n):
+            t = i / float(n - 1)
+            put(int(round(-3 + 9 * t)), int(round(8 + 8 * t - 3.5 * t * t)), int(round(1 + 8 * t)), ROD if i % 4 else HATD)
+        for yy2 in range(1, 12):                          # the cast line, dashed, way out
+            if yy2 % 2:
+                put(6, yy2, 12, LINE)
+    return V
+
+
 def build_osprey():
     """PURGATORY: an OSPREY roosting on a snag — dark above, WHITE below, the bold
     dark eye-stripe through a white head. The fish-hawk, resting between hunts."""
@@ -1243,6 +1297,8 @@ def build_osprey():
 BANKS = [
     ("sand_dock.png",         build_longdock,   dict(yaw=90, pitch=38, target=118)),
     ("bank_osprey.png",       build_osprey,     dict(yaw=14, pitch=22, target=40)),
+    ("bank_angler_0.png",     build_angler,     dict(yaw=20, pitch=24, target=40)),
+    ("bank_angler_1.png",     (lambda: build_angler(True)), dict(yaw=-16, pitch=24, target=34)),
     ("bank_barredowl.png",    build_barredowl,  dict(yaw=8, pitch=24, target=38)),
     ("bank_lizzie.png",       build_lizzie,     dict(yaw=36, pitch=30, target=30)),
     ("bank_jetski_0.png",     build_jetski,     dict(yaw=28, pitch=30, target=42)),

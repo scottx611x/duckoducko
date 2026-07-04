@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.4"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.5"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1177,7 +1177,8 @@ const SHORE_LORE := {
 	"bank_deadtree": ["THE GNARLED SNAG", "Dead a hundred years and busier than ever — half the bog's herons learned to loom in its branches."],
 	"bank_bonfire": ["THE CAMP FIRE RING", "Stones stacked by many summers of hands. If you listen past the crackle: grilling, laughing, a dog shaking off lakewater."],
 	"bank_barredowl": ["BARRED OWL", "Who cooks for you? Who cooks for you-all? At camp, the answer drifts down from the pines every dusk."],
-	"bank_lamp": ["THE OLD LAMPPOST", "Somebody lit the way to the fishing hole once, and nobody ever had the heart to turn it off."],
+	"bank_angler_0": ["THE CASTING ANGLER", "Mid-cast since dawn, probably. The good spots by the outlet are earned, not found."],
+	"bank_angler_1": ["THE BUCKET ANGLER", "Sits on an overturned bucket with the patience of geology. Has caught more than anyone. Tells no one where."],
 	"bank_pine": ["SHORE PINES", "Western-tall and unbothered. They smell like a different altitude entirely."],
 	"bank_fern": ["FERN BREAK", "Green on green on green. The shady understory where the moose SHOULD be, statistically."],
 	"bank_shroom": ["GLOW-CAPS", "Little teal lanterns at the waterline. Almost certainly magic. Definitely not for eating."],
@@ -1759,6 +1760,7 @@ func _ready() -> void:
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
 			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey", "sand_dock",
+			"bank_angler_0", "bank_angler_1",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
@@ -12751,7 +12753,7 @@ const BANK_PROPS := [
 	["bank_jetski_0", "bank_jetski_1"],    # WOODBURY: big-water toys, parked + ready (picnic gear NUKED)
 	["bank_deadtree", "bank_osprey"],      # PURGATORY: the snag + the fish-hawk roosting (graves evicted)
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
-	["bank_lamp", "bank_cattail_0"],
+	["bank_angler_0", "bank_angler_1"],    # PLEASANT: the shore-side regulars (lamppost evicted — weird)
 	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
 	["bank_pine", "bank_lizzie"],          # COCHICHEWICK: Lizzie the beagle watches the water
 ]
