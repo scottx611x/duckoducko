@@ -7485,6 +7485,7 @@ func _update_boss_globs(delta: float) -> void:
 			                                        # (a weak bounce left a hitbox loitering at duck height)
 			ripples.append({"x": f.x, "y": BASE_Y, "t": 0.0, "max": 70.0})
 			_sfx("thud", 1.1, -6.0)
+			_sfx("squeak", randf_range(0.8, 1.0), -8.0)   # it IS a dog toy
 		if f.get("ball", false) and f.get("bounced", false):
 			f.vy += 620.0 * delta                                  # gravity brings the bounce back down
 		# a glob to the face stings unless you're hopping over it / invincible — and only while
@@ -13075,6 +13076,12 @@ func _draw_menu() -> void:
 			_blit_centered(_wear3d_spin(wid, _mspin), hpos, 4.6)
 			if wid == "prop":
 				_blit_centered(_spin_from(_propblade_now(), _mspin), hpos, 4.6)
+		if not mwl.is_empty() and fmod(anim_t, 5.0) < 0.6:   # a passing GLINT off the outfit
+			var _gp2 := fmod(anim_t, 5.0) / 0.6
+			var _gpos2 := hpos + Vector2(-26.0 + _gp2 * 52.0, -34.0)
+			draw_circle(_gpos2, 2.4, Color(1, 1, 1, 0.85 * sin(_gp2 * PI)))
+			draw_line(_gpos2 - Vector2(5, 0), _gpos2 + Vector2(5, 0), Color(1, 1, 1, 0.5 * sin(_gp2 * PI)), 1.2)
+			draw_line(_gpos2 - Vector2(0, 5), _gpos2 + Vector2(0, 5), Color(1, 1, 1, 0.5 * sin(_gp2 * PI)), 1.2)
 		if anim_t - menu_msg_t < 3.0:
 			_otext(Vector2(0, 575), menu_msg, 21,
 				Color(1, 1, 1, minf(1.0, 3.0 - (anim_t - menu_msg_t))))
@@ -14568,6 +14575,11 @@ func _sim_begin() -> void:
 	sim_runs_total = maxi(1, int(_arg_val(args, "--runs", "1")))
 	sim_force_boss = int(_arg_val(args, "--boss", "-1"))
 	sim_force_kind = _arg_val(args, "--kind", "")
+	var _sim_asc := int(_arg_val(args, "--asc", "-1"))
+	if _sim_asc >= 0:                                  # fairness batches at high ascension
+		asc_unlocked = maxi(asc_unlocked, _sim_asc)
+		ascension = _sim_asc
+		asc_pace = 1.0 + 0.035 * ascension
 	sim_append = args.has("--append")
 	var sim_seed := _arg_val(args, "--seed", "")
 	if sim_seed != "":

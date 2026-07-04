@@ -578,7 +578,7 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] **PERSONAL POND THEMES** v1.20.2 — every arrival banner now carries Scott's line for that water; Buker opens at THE BOAT LAUNCH (aluminum skiff tied to the post); Woodbury keeps the turtle log on the big water; Purgatory stays shallow + weedy; SAND POND IS CAMP (pontoon boat hero, bonfire rings + barred owls on the banks, Sadie visits ~3x as often — camp dog's home water); Pleasant runs thick with minnows + an anchored skiff fishing by itself; Emerald went Colorado (pines over ferns) for the Mrs.; Cochichewick has Lizzie the beagle on the bank and the Weir Hill red-tail ALWAYS makes one pass over his own water. 🟡 all in-motion feels.
 
 ## 🌙🌙🌙 OVERNIGHT LOOP 2 (Scott, 2026-07-04: "find some other useful things")
-- [ ] --shotsweep: ONE windowed run captures every key screen (verification infra)
-- [ ] Endless mode: do events/forks fire after the bread? enable if gated out
-- [ ] --asc= sim arg + high-ascension balance batches (asc 6+ fairness)
-- [ ] Micro-juice: chuckit squeak-on-bounce; menu hero wearable glint
+- [x] --shotsweep v1.20.3 — one windowed run captures 9 key screens to /tmp/sweep_*.png (menu/select/shop/wardrobe/3 rivers/boss/death); all verified non-blank. Also found+fixed a --codexshot NAME COLLISION (my boon shot was shadowing the original dev mode; mine is now --boonshot).
+- [x] Endless verified — events + forks already fire post-bread (only tutorial/boss/death gate them; Pike branch correctly filtered). No change needed.
+- [x] --asc= sim arg + ASC-6 batch v1.20.3 — 0/8 wins but runs still reach 15-30k with deaths spread wide across causes; brutal but FAIR, no degenerate attack dominates. The ladder holds.
+- [x] Micro-juice v1.20.3 — Sadie's chuckit SQUEAKS on its bounce (it IS a dog toy); the menu hero's outfit catches a passing glint every ~5s.
