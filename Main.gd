@@ -1669,6 +1669,7 @@ func _ready() -> void:
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
+			"bank_bonfire", "bank_barredowl", "bank_lizzie",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
@@ -12466,10 +12467,10 @@ const BANK_PROPS := [
 	["bank_cattail_0", "bank_cattail_1"],
 	["bank_umbrella", "bank_blanket"],
 	["bank_grave", "bank_deadtree"],
-	["bank_sandcastle", "bank_cattail_1"],
+	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
 	["bank_lamp", "bank_cattail_0"],
-	["bank_fern", "bank_shroom"],
-	["bank_pine", "bank_snowduck"],
+	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
+	["bank_pine", "bank_lizzie"],          # COCHICHEWICK: Lizzie the beagle watches the water
 ]
 
 func _draw_bank_decor() -> void:
