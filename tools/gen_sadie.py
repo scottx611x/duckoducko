@@ -55,26 +55,28 @@ def build_boss(pose="idle", bob=0):
         # full gallop, side-read: one continuous horizontal body (NO segmented lumps — the
         # old swimming-gait render stacked spheres and read like Pokey at boss scale)
         stretch = [1.0, 0.4, 0.0, 0.6][runph]            # 1 = full extension, 0 = tucked
-        for zi in range(-14, 15):                         # a single smooth fuselage, nose to rump
-            t = (zi + 14) / 28.0
-            ry = 2.6 + 1.3 * math.sin(t * math.pi)        # deepest through the ribs
-            rx = 2.4 + 1.0 * math.sin(t * math.pi)
-            yc = 2.0 + 0.7 * math.cos(t * 2.6)            # a gentle spine line, not bumps
-            ellip(0, yc, zi * (0.55 + 0.25 * stretch), rx, ry, 0.9, COAT)
-        ellip(0, 4.6, -1, 2.6, 1.4, 5.5 + 2.0 * stretch, COATL)   # one long back highlight
-        ellip(0, 0.6, 4.5 + 2.0 * stretch, 2.4, 2.0, 2.4, CHEST)  # chest into the lead
-        fore_z = 7.0 + 3.5 * stretch
-        hind_z = -7.0 - 3.5 * stretch
-        for s in (1, -1):                                 # forelegs: reaching in the stretch, folded in the tuck
-            for i in range(5):
-                fz = fore_z + i * (0.8 * stretch) - (i * 0.5 * (1.0 - stretch))
-                fy = 0.5 - i * (0.55 + 0.45 * stretch)
-                ellip(s * 2.2, fy, fz, 1.1, 0.9, 1.1, COAT if i < 4 else PAW)
-        for s in (1, -1):                                 # hind legs: driving off behind
-            for i in range(5):
-                hz2 = hind_z - i * (0.9 * stretch) + (i * 0.5 * (1.0 - stretch))
-                hy2 = 0.5 - i * (0.5 + 0.4 * stretch)
-                ellip(s * 2.2, hy2, hz2, 1.2, 0.9, 1.2, COATD if i < 4 else PAW)
+        # a LAB gallops: SHORT back, DEEP chest, LONG legs. (v1 was a hotdog on casters.)
+        for zi in range(-8, 9):                           # compact torso, nose to rump
+            t = (zi + 8) / 16.0
+            ry = 3.4 + 1.6 * math.sin(t * math.pi)        # deep through the ribs
+            rx = 2.5 + 1.0 * math.sin(t * math.pi)
+            yc = 4.2 + 0.5 * math.cos(t * 2.6)            # HIGH shoulder line — legs get room
+            ellip(0, yc, zi * (0.8 + 0.2 * stretch), rx, ry, 0.9, COAT)
+        ellip(0, 6.8, -1, 2.4, 1.3, 3.6 + 1.2 * stretch, COATL)   # back highlight
+        ellip(0, 2.2, 4.0 + 1.4 * stretch, 2.6, 2.6, 2.2, CHEST)  # the deep lab chest, leading
+        fore_z = 6.0 + 3.0 * stretch
+        hind_z = -6.0 - 3.0 * stretch
+        for s in (1, -1):                                 # forelegs: LONG, reaching in the stretch
+            for i in range(7):
+                fz = fore_z + i * (0.7 * stretch) - (i * 0.45 * (1.0 - stretch))
+                fy = 2.5 - i * (1.15 + 0.25 * stretch)
+                ellip(s * 2.0, fy, fz, 1.25 - i * 0.06, 0.9, 1.15 - i * 0.05, COAT if i < 6 else PAW)
+        for s in (1, -1):                                 # hind legs: LONG drive off the haunch
+            ellip(s * 2.4, 3.0, -6.5, 1.9, 2.4, 2.6, COAT)
+            for i in range(7):
+                hz2 = hind_z - i * (0.8 * stretch) + (i * 0.4 * (1.0 - stretch))
+                hy2 = 2.0 - i * (1.05 + 0.2 * stretch)
+                ellip(s * 2.1, hy2, hz2, 1.3 - i * 0.06, 0.9, 1.2 - i * 0.05, COATD if i < 6 else PAW)
     elif pounce:
         # airborne: body stretched level, legs in clean paired diagonals
         ellip(0, 2, -1, 4.4, 3.2, 7.0, COAT)
@@ -124,7 +126,7 @@ def build_boss(pose="idle", bob=0):
 
     # ---- head ----
     hb = bob
-    hy = 9.0 + hb + (1 if proud else 0) - (6.5 if crouch else 0) - (4.5 if pounce else 0) - (4.5 if run else 0)
+    hy = 9.0 + hb + (1 if proud else 0) - (6.5 if crouch else 0) - (4.5 if pounce else 0) - (0.5 if run else 0)
     hz = 2.2 + (3.8 if crouch or pounce else 0) + (2.8 if point else 0) + (8.5 if run else 0)
     ellip(0, hy, hz, 3.4, 3.2, 3.2, COAT)                             # skull
     ellip(0, hy + 1.8, hz + 0.4, 2.6, 1.6, 2.6, COATL)                # solid crown light
@@ -188,7 +190,7 @@ def build_boss(pose="idle", bob=0):
     # tail: a happy plume (straight back when pointing, up + curled otherwise)
     if run:
         for i in range(6):
-            put(0, round(3 + i * 0.35), round(-13 - i * 0.9), COAT if i < 4 else COATL)
+            put(0, round(5.5 + i * 0.35), round(-9 - i * 0.9), COAT if i < 4 else COATL)
     elif point:
         for i in range(6):
             put(0, round(2 + i * 0.1), -7 - i, COAT if i < 4 else COATL)

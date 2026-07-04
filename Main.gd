@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.16.11"   # shown in Settings; keep in sync with export_presets.cfg
+const GAME_VERSION := "1.21.2"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3860,13 +3860,67 @@ func _update_sadie(delta: float) -> void:
 # RUSTY the red-tailed hawk: a friendly know-it-all who SWOOPS across the upper
 # sky, glides to a hover, drops a whimsical tip/cheer in a speech bubble, then
 # wings off. Purely decorative guidance — he never collides with or harms the duck.
-# Rusty looks at what you're actually doing and coaches THAT. Generic tips only
-# when nothing stands out. (Scott: the random flyover tip was annoying.)
+# Rusty is IN YOUR HEAD: he mines your run HISTORY for patterns before he opens his
+# beak — repeated killers, haunted distances, duck loyalty, upgrade ruts, hoarding —
+# then falls back to this-run coaching, and only then to the generic pool.
+var rusty_last_advice := ""     # never the same read twice in a row
+
 func _rusty_advice() -> String:
+	var a := _rusty_advice_raw()
+	if a != "" and a == rusty_last_advice:
+		return ""
+	if a != "":
+		rusty_last_advice = a
+	return a
+
+func _rusty_advice_raw() -> String:
+	# --- HISTORY reads (the psychic tier) ---
+	if run_history.size() >= 3:
+		var c0: String = str(run_history[0].get("cat", ""))
+		if c0 != "" and c0 == str(run_history[1].get("cat", "")) and c0 == str(run_history[2].get("cat", "")):
+			match c0:                                  # three straight deaths to the SAME thing
+				"sadie": return "three runs, the same good girl.\nshe's HOPPABLE, duckling. i counted."
+				"gerald": return "Gerald's had you three straight.\nhis SECOND dive is the liar — hold your hop."
+				"log": return "logs. again. AGAIN.\nyou steer late — pick your lane EARLY."
+				"heron": return "my lesser cousins keep catching you.\nwatch the SHADOW, not the bird."
+				"donny": return "CHRISSY owns you lately. she's a BOAT —\njump. don't juke. jump."
+				"megasadie": return "the BOUNDLESS one, three times?\nstomp her after the THROW — she watches the balls fly."
+				_: pass
+		var f0: int = int(run_history[0].get("ft", 0))
+		if f0 > 1000 and absi(f0 - int(run_history[1].get("ft", 0))) < 800 \
+				and absi(f0 - int(run_history[2].get("ft", 0))) < 800:
+			return "you always sink near %d ft.\ni've watched. i've COUNTED. break the pattern." % f0
+		if run_history.size() >= 4:
+			var sp0: String = str(run_history[0].get("sp", ""))
+			var loyal := true
+			for _ri2 in 4:
+				if str(run_history[_ri2].get("sp", "")) != sp0:
+					loyal = false
+			if loyal and sp0 != "":
+				return "you and that %s — inseparable.\n(the rest of the roster talks, you know.)" % sp0
+		var pick_counts := {}
+		for _ri3 in mini(3, run_history.size()):
+			for uid in run_history[_ri3].get("picked", {}):
+				pick_counts[uid] = int(pick_counts.get(uid, 0)) + 1
+		for uid in pick_counts:
+			if int(pick_counts[uid]) >= 3:
+				return "'%s' three runs straight?\nyour wings know OTHER tricks, duckling." % _sim_pretty_up(uid)
+	var _cheapest := 999999
+	var _cname := ""
+	for _wu2 in WEARABLES:
+		if not _owns_wear(_wu2.id) and int(_wu2.cost) < _cheapest:
+			_cheapest = int(_wu2.cost); _cname = String(_wu2.name)
+	if _cname != "" and feathers > _cheapest * 2:
+		return "your hoard could buy the %s TWICE.\nspend a little, scrooge-duck." % _cname
+	if bigday_streak >= 3:
+		return "%d dawns on patrol, back to back.\nthe early bird respects it." % bigday_streak
+	# --- THIS-RUN reads ---
 	if _up("shield") == 0 and shield_charges == 0 and distance > 8000.0:
 		return "flying BARE, are we? draft THICK FEATHERS —\none bonk shouldn't end a good story."
 	if int(run_stats.get("specials", 0)) == 0 and distance > 6000.0:
 		return "that LOFT bar is a WEAPON, not a decoration.\nfill it. unleash it."
+	if int(run_stats.get("hops", 0)) < int(distance / 3000.0) and distance > 6000.0:
+		return "you barely HOP. all that spring,\nwasted on paddling. UP, duckling."
 	if int(run_stats.get("nearmiss", 0)) == 0 and distance > 9000.0:
 		return "thread a log sometime, featherbrain —\nthe river pays NERVE in loft."
 	if ducklings_n == 0 and int(run_stats.get("ducklings", 0)) == 0 and distance > 9000.0:
@@ -13239,7 +13293,7 @@ func _draw_menu() -> void:
 		var npulse := 0.6 + 0.4 * sin(anim_t * 5.0)
 		draw_circle(bp, 12.0, Color(1.0, 0.32, 0.3, npulse))
 		_otext(Vector2(bp.x - 20.0, bp.y + 5.0), "%d" % newc, 14, Color.WHITE, 40, HORIZONTAL_ALIGNMENT_CENTER, 3)
-	_otext(Vector2(0, 944), "DUCKODUCKO beta · made by scott", 12, Color(1, 1, 1, 0.32),
+	_otext(Vector2(0, 944), "DUCKODUCKO v%s · made by scott" % GAME_VERSION, 12, Color(1, 1, 1, 0.32),
 		VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 	# BIG DAY explainer card — on top of everything (a mode nobody explains isn't a mode)

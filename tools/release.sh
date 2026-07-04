@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 TAG="${1:?usage: tools/release.sh vX.Y.Z}"
 REPO="scottx611x/duckoducko"
 mkdir -p build
+# stamp the tag into the menu footer so the site always shows what it's running
+sed -i '' "s/^const GAME_VERSION := \"[^\"]*\"/const GAME_VERSION := \"${TAG#v}\"/" Main.gd
 godot --headless --path . --export-debug "Android" build/duckoducko.apk
 godot --headless --path . --export-release "Web" docs/index.html
 rm -f build/duckoducko-web.zip
