@@ -26,7 +26,7 @@ import sys
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from voxel_duck import _vox_helpers                      # noqa: E402
+from voxel_duck import _vox_helpers, shade, render       # noqa: E402
 from gen_env import vox, _crisp, _outline, FS            # noqa: E402
 
 ART = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "art")

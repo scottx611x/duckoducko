@@ -178,13 +178,13 @@ const FACTS := [
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
 const THEME_LEN := 9000.0       # distance units (10 = 1m) — longer regions so each one registers
 const THEMES := [
-	{"name": "Buker Pond",     "tint": Color(1.0, 1.0, 1.0)},
-	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82)},
-	{"name": "Purgatory Pond", "tint": Color(0.66, 0.72, 0.62)},
-	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74)},
-	{"name": "Pleasant Pond",  "tint": Color(0.82, 0.98, 1.08)},
-	{"name": "Emerald Lake",   "tint": Color(0.62, 1.04, 0.80)},
-	{"name": "Lake Cochichewick", "tint": Color(0.54, 0.68, 0.94)},
+	{"name": "Buker Pond",     "tint": Color(1.0, 1.0, 1.0),      "line": "in at the boat launch. every trip starts here."},
+	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water of the Tacoma chain."},
+	{"name": "Purgatory Pond", "tint": Color(0.66, 0.72, 0.62),   "line": "shallow, weedy, hard to reach. worth it."},
+	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74),   "line": "camp. you know the way."},
+	{"name": "Pleasant Pond",  "tint": Color(0.82, 0.98, 1.08),   "line": "the good fishing — out by Lively Brook."},
+	{"name": "Emerald Lake",   "tint": Color(0.62, 1.04, 0.80),   "line": "the one out west. (she's right about it.)"},
+	{"name": "Lake Cochichewick", "tint": Color(0.54, 0.68, 0.94), "line": "binoculars up. the hawk holds Weir Hill."},
 ]
 # each biome weathers its driftwood differently — bog logs are mossy & dead, etc.
 const LOG_TINT := [
@@ -3759,7 +3759,7 @@ func _update_sadie(delta: float) -> void:
 		or (sadie.dir < 0.0 and sadie.x < BANK_W - 60.0)
 	if gone_x or sadie.y > VIEW.y + 80.0:
 		sadie = null
-		sadie_timer = randf_range(45.0, 80.0)      # INFREQUENT: a cameo, not a mechanic
+		sadie_timer = randf_range(18.0, 32.0) if theme_idx == 3 else randf_range(45.0, 80.0)   # at SAND POND she's home — camp dog visits often
 
 # RUSTY the red-tailed hawk: a friendly know-it-all who SWOOPS across the upper
 # sky, glides to a hover, drops a whimsical tip/cheer in a speech bubble, then
@@ -5923,6 +5923,9 @@ func _update_play(delta: float) -> void:
 		theme_idx = ti
 		theme_sweep = 0.0
 		region_t = anim_t                          # kick off the arrival banner
+		if theme_idx == 6 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
+			hawk_done = false                      # always patrols his own water — one more pass
+			hawk_timer = randf_range(3.0, 6.0)
 		_sfx("chime", 0.75); _sfx("fwoosh", 0.6, -6.0)
 		_swap_theme_music()                        # the river's mood shifts the music too
 	theme_sweep = minf(theme_sweep + delta * 0.38, 1.0)   # gentler, slower wash
@@ -7584,7 +7587,10 @@ func _pick_kind() -> int:
 		total += k.weight
 	var r := randi() % total
 	for i in ITEM_DEFS.size():
-		r -= ITEM_DEFS[i].weight
+		var w: int = ITEM_DEFS[i].weight
+		if theme_idx == 4 and ITEM_DEFS[i].name == "minnow":
+			w *= 3                                   # PLEASANT POND: the good fishing
+		r -= w
 		if r < 0:
 			# the GOLDEN EGG is legendary — even when its number comes up, it mostly slips away
 			if ITEM_DEFS[i].name == "goldegg" and randf() > 0.3:
@@ -11356,6 +11362,8 @@ func _draw() -> void:
 		_otext(Vector2(0, ry - 18.0), "~ now paddling into ~", 13, Color(0.8, 0.92, 1.0, 0.7 * ra), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		var _bt: Color = THEMES[theme_idx].tint                # the biome name takes on its own palette
 		_otext(Vector2(0, ry + 8.0), THEMES[theme_idx].name, 30, Color(clampf(0.82 * _bt.r, 0.45, 1.0), clampf(0.96 * _bt.g, 0.45, 1.0), clampf(_bt.b, 0.45, 1.0), ra), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		_otext(Vector2(0, ry + 34.0), String(THEMES[theme_idx].get("line", "")), 14,
+			Color(1.0, 0.96, 0.86, 0.75 * ra), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 	if paused:
 		_draw_pause()
