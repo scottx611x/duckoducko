@@ -1234,7 +1234,7 @@ func _ev_prop_mult() -> float:
 
 func _ev_speed_mult() -> float:
 	# the current EASES through an unpicked split — reading two signs at full flow felt random
-	var fork_slow: float = 0.55 if (not fork.is_empty() and not fork.get("picked", false)) else 1.0
+	var fork_slow: float = 0.45 if (not fork.is_empty() and not fork.get("picked", false)) else 1.0
 	return (1.22 if ev_id == "tailwind" else 1.0) * fork_slow
 
 func _update_river_events(delta: float) -> void:
@@ -1288,8 +1288,9 @@ func _update_river_events(delta: float) -> void:
 		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
 		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
 		if rth == lth: rth = (rth + 1) % THEMES.size()
-		fork = {"y": -140.0, "picked": false,
+		fork = {"y": -260.0, "picked": false,
 			"l": {"theme": lth, "mod": lmod}, "r": {"theme": rth, "mod": rmod}}
+		logs.clear(); enemies.clear()                  # the choice must be CHOOSABLE — clear the lane
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
 		_sfx("fwoosh", 0.7)
@@ -5821,7 +5822,8 @@ func _update_play(delta: float) -> void:
 	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide).
 	# CALM rules (Scott: "lilypads distracting"): sparse, bank-hugging, capped, never during bosses.
 	env_timer -= delta
-	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 6:
+	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 6 \
+			and (fork.is_empty() or fork.get("picked", true)):   # the split gets a CLEAN stage
 		env_timer = randf_range(1.8, 3.4)          # MODERATE density (Scott's call): ~half, calmer + cheaper
 		var tbl: Array = ENV_TABLE[theme_idx]
 		var tot := 0.0
@@ -7648,7 +7650,8 @@ func _spawn(delta: float) -> void:
 			item_timer = randf_range(0.5, 1.0)
 		return
 	log_timer -= delta
-	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty":
+	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty" \
+			and (fork.is_empty() or fork.get("picked", true)):   # no logs mid-decision
 		# THE GREAT JAM (ascension): a full-width log WALL with a boost log out front to vault it
 		if ascension >= 6 and randf() < 0.05 + 0.012 * (ascension - 6):
 			_spawn_log_jam()

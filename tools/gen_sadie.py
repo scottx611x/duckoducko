@@ -239,6 +239,12 @@ def main():
     save(render(shade(build_boss("idle", 0)), Y(4), Y(11), out=110, scale=3.0), "sadie_p2.png")
     save(render(shade(build_boss("idle", 0)), Y(34), Y(11), out=110, scale=3.0), "sadie_p3.png")
     save(render(shade(build_boss("idle", 0)), Y(18), Y(11), out=110, scale=3.0), "sadie_p4.png")
+    # ---- WARDROBE/AMBIENT gallop (exact 86x60): SAME model as the boss dash —
+    # the old swimming-gait renders survived here and were, verbatim, "the scariest
+    # thing I've ever seen". 8 slots cycle the 4-phase gallop twice. ----
+    for f in range(8):
+        save(fit(render(shade(build_boss("run", f % 4)), Y(90), Y(10), out=120, scale=2.6), 86, 60),
+             "sadie_run_%d.png" % f)
     # ---- CODEX spin (16 yaws, exact 56x40) ----
     SH = shade(build_boss("idle", 0))
     for i in range(16):
