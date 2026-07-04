@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.3"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.4"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1164,6 +1164,8 @@ var prop_timer := 5.0
 var env_scenery: Array = []
 var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
+var sand_dock = null            # SAND POND: the camp dock — Sadie sprints it and CANNONBALLS off
+var sand_dock_next := 0.0
 const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", "hero_cochichewick"]
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
@@ -1186,6 +1188,7 @@ const SHORE_LORE := {
 	"hero_woodbury": ["THE TURTLE LOG", "Three painted turtles, necks to the sun, arranged by seniority. The middle of the big water belongs to them."],
 	"hero_purgatory": ["THE DEAD TREE", "It rises out of the shallows like a question nobody answers. The crow is always there. The crow was always there."],
 	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
+	"sand_dock": ["THE CAMP DOCK", "Straight, orange-brown, and exactly one good-girl-gallop long. The end board is worn smooth. You know why."],
 	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
 	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
 	"hero_cochichewick": ["THE LOON", "A silhouette on dark water under aurora light. You lift the binoculars slowly. Some birds you don't call out — you just watch."],
@@ -1755,7 +1758,7 @@ func _ready() -> void:
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
-			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey",
+			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey", "sand_dock",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
@@ -4911,6 +4914,7 @@ func reset_game() -> void:
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	hero_next = randf_range(6000.0, 9000.0)
 	thermal_rings.clear(); thermal_chain = 0
+	sand_dock = null; sand_dock_next = 0.0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -5930,6 +5934,27 @@ func _update_play(delta: float) -> void:
 					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
 						"phase": randf() * TAU, "flip": randf() < 0.5})
 					break
+	# SAND POND: the camp dock drifts by — and Sadie does the thing she was born to do
+	if theme_idx == 3 and sand_dock == null and distance >= sand_dock_next and boss == null \
+			and fork.is_empty() and tex_env.has("sand_dock"):
+		sand_dock_next = distance + randf_range(5000.0, 7000.0)
+		sand_dock = {"y": -40.0, "side": (1.0 if randf() < 0.5 else -1.0), "t": -1.0}
+	if sand_dock != null:
+		sand_dock.y += speed * delta
+		if sand_dock.t < 0.0 and sand_dock.y > 130.0:
+			sand_dock.t = 0.0
+			_sfx("bark", 1.1, -6.0)                 # she's spotted the end of the dock
+		elif sand_dock.t >= 0.0:
+			var _pt: float = sand_dock.t
+			sand_dock.t += delta
+			if _pt < 1.32 and sand_dock.t >= 1.32:  # SPLASHDOWN
+				var _dend: float = (BANK_W + 232.0) if sand_dock.side > 0.0 else (VIEW.x - BANK_W - 232.0)
+				_water_burst(_dend, float(sand_dock.y), 1.4)
+				ripples.append({"x": _dend, "y": float(sand_dock.y), "t": 0.0, "max": 120.0})
+				_float_text(_dend, float(sand_dock.y) - 40.0, "SPLOOSH!", Color(0.7, 0.9, 1.0))
+				_sfx("splash_big", 1.0); _sfx("bark", 0.9, -4.0)
+		if sand_dock.y > VIEW.y + 60.0:
+			sand_dock = null
 	# a HERO landmark drifts through, rare enough to be an event
 	if distance >= hero_next and boss == null and tex_env.has(HERO_NAMES[theme_idx]):
 		hero_next = distance + randf_range(7000.0, 9500.0)
@@ -12637,6 +12662,34 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
+	# the camp dock + Sadie's cannonball run
+	if sand_dock != null and tex_env.has("sand_dock"):
+		var _dk: Texture2D = tex_env["sand_dock"]
+		var _dscale := 1.8
+		var _dw: float = _dk.get_size().x * _dscale
+		var _dleft: bool = sand_dock.side > 0.0
+		var _dcx: float = (BANK_W + _dw * 0.5 - 14.0) if _dleft else (VIEW.x - BANK_W - _dw * 0.5 + 14.0)
+		draw_set_transform(Vector2(_dcx, float(sand_dock.y)), 0.0, Vector2(_dscale, _dscale))
+		draw_texture(_dk, -_dk.get_size() * 0.5)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var _dt: float = float(sand_dock.t)
+		if _dt >= 0.0 and _dt < 1.32 and not tex_sadie_run.is_empty():
+			var _dir: float = 1.0 if _dleft else -1.0
+			var _x0: float = (BANK_W + 6.0) if _dleft else (VIEW.x - BANK_W - 6.0)
+			var _x1: float = (BANK_W + 196.0) if _dleft else (VIEW.x - BANK_W - 196.0)
+			var _sx: float
+			var _sy: float = float(sand_dock.y) - 14.0
+			if _dt < 0.9:
+				_sx = lerpf(_x0, _x1, _dt / 0.9)      # the RUNUP, full gallop
+			else:
+				var _jp: float = (_dt - 0.9) / 0.42   # the LEAP off the end board
+				_sx = lerpf(_x1, _x1 + _dir * 52.0, _jp)
+				_sy -= sin(_jp * PI) * 42.0 - _jp * 10.0
+			var _srf: Texture2D = tex_sadie_run[int(anim_t * 16.0) % tex_sadie_run.size()]
+			draw_set_transform(Vector2(_sx, _sy), (0.35 * _dir * clampf((_dt - 0.9) / 0.42, 0.0, 1.0)) if _dt >= 0.9 else 0.0,
+				Vector2(1.5 * _dir, 1.5))
+			draw_texture(_srf, -_srf.get_size() * 0.5)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# RUSTY'S THERMALS: golden hoops shimmer on the water — thread them
 	for tr in thermal_rings:
 		var _ta: float = 0.35 if tr.hit else (0.75 + 0.2 * sin(anim_t * 5.0 + float(tr.x)))

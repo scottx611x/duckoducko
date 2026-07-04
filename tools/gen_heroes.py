@@ -1175,6 +1175,37 @@ def build_jetski(alt=False):
     return V
 
 
+def build_longdock():
+    """SAND POND: the camp dock — straight, orange-brown, a LONG runup ending over
+    deep water. Built for exactly one purpose, and the dog knows what it is."""
+    PLANK = (196, 124, 62); PLANKD = (156, 94, 44); PLANKL = (224, 152, 84)
+    POST = (120, 76, 40); POSTD = (92, 56, 28); WET = (72, 82, 84); FOAM = (168, 196, 204)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    for zi in range(-30, 31):                            # the runup: straight planking
+        for x in range(-4, 5):
+            c = PLANK
+            if zi % 4 == 0:
+                c = PLANKD                               # plank seams
+            elif (x + zi) % 9 == 0:
+                c = PLANKL                               # sun-worn boards
+            put(x, 3, zi, c)
+        put(-4, 2, zi, PLANKD); put(4, 2, zi, PLANKD)    # edge shadow line
+    for zi in range(-28, 31, 8):                         # post pairs marching out
+        for yy in range(0, 3):
+            put(-4, yy, zi, POST if yy > 0 else POSTD)
+            put(4, yy, zi, POST if yy > 0 else POSTD)
+    for zi in range(-30, 31, 3):                         # waterline lap at the pilings
+        put(-5, 1, zi, WET, only_empty=True)
+        put(5, 1, zi, WET, only_empty=True)
+        if zi % 6 == 0:
+            put(-6, 1, zi, FOAM, only_empty=True)
+            put(6, 1, zi, FOAM, only_empty=True)
+    for x in range(-4, 5):                               # the END board — the launch pad
+        put(x, 3, 30, PLANKL)
+    return V
+
+
 def build_osprey():
     """PURGATORY: an OSPREY roosting on a snag — dark above, WHITE below, the bold
     dark eye-stripe through a white head. The fish-hawk, resting between hunts."""
@@ -1210,6 +1241,7 @@ def build_osprey():
 
 
 BANKS = [
+    ("sand_dock.png",         build_longdock,   dict(yaw=90, pitch=38, target=118)),
     ("bank_osprey.png",       build_osprey,     dict(yaw=14, pitch=22, target=40)),
     ("bank_barredowl.png",    build_barredowl,  dict(yaw=8, pitch=24, target=38)),
     ("bank_lizzie.png",       build_lizzie,     dict(yaw=36, pitch=30, target=30)),
