@@ -224,7 +224,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.14"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.15"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -610,6 +610,7 @@ var sim_was_alive := true
 var sim_hop_cd := 0.0
 var sim_saw_boss := false
 var sim_force_boss := -1
+var sim_thermals := false       # --thermals: drop each sim run straight into Rusty's course
 var sim_icon_cache := {}
 var sim_donny_react := true
 var sim_donny_active := false
@@ -1447,6 +1448,8 @@ func _update_river_events(delta: float) -> void:
 	if stretch_mod != "" and distance >= stretch_until:
 		if stretch_mod == "rusty":                      # course over: the GRADE, and it MEANS something
 			var _gr: float = float(slip_on) / maxf(1.0, float(slip_total))
+			if bot_mode:
+				print("[SIM] thermals sendoff: on=%d total=%d grade=%d%% pts=%d" % [slip_on, slip_total, int(_gr * 100), slip_pts.size()])
 			var _gl := ""
 			if _gr >= 0.9:
 				_gl = "PERFECT WING — %d%%!! take your pick,\nyou've EARNED the good stuff." % int(_gr * 100)
@@ -1465,9 +1468,11 @@ func _update_river_events(delta: float) -> void:
 			else:
 				_gl = "%d%%... we'll work on it, dweeb.\nmy line doesn't fly itself." % int(_gr * 100)
 				run_feathers += 10
+			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
 			if hawk != null:
 				hawk.line = _gl
-				hawk.said = false; hawk.say_t = -99.0
+				hawk.said = true; hawk.say_t = hawk.t
+				hawk.dwell = 4.6; hawk.depart = true
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -2055,6 +2060,19 @@ func _ready() -> void:
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_river_%d.png" % theme_idx)
+		get_tree().quit()
+	elif "--thermalshot" in OS.get_cmdline_user_args():
+		# THERMALS 2.0 verification: mid-course frame — ribbon, Rusty at its head, duck in the wake
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
+		distance = 12000.0
+		_dev_do("thermals")
+		var _thold := float(_arg_val(OS.get_cmdline_user_args(), "--hold", "3.0"))
+		await get_tree().create_timer(_thold).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_thermals.png")
+		print("[SHOT] thermals: pts=%d on=%d total=%d hawk=%s" % [slip_pts.size(), slip_on, slip_total, str(hawk != null)])
 		get_tree().quit()
 	elif "--sadieshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -4076,6 +4094,7 @@ func _spawn_hawk() -> void:
 	var is_tut: bool = not tutorial_seen
 	if stretch_mod == "rusty":                      # the COURSE BRIEFING comes first, loud and clear
 		hawk = {"x": -70.0, "y": 150.0, "dir": 1.0, "t": 0.0, "said": false, "say_t": -99.0, "dwell": 5.6,
+			"lead": true,
 			"line": "SHADOW ME, dweeb — stay in my SLIPSTREAM!\nfly it near-PERFECT and i'll deal you\nsomething LEGENDARY."}
 		_sfx("screech", 1.0, -8.0)
 		return
@@ -4139,6 +4158,14 @@ func _update_hawk(delta: float) -> void:
 	elif hawk.said and hawk.t - hawk.say_t < hawk.get("dwell", 3.4):
 		# hovering: hold position with a gentle drifting bob while the bubble shows
 		hawk.x += hawk.dir * 16.0 * delta
+	elif hawk.get("lead", false) and stretch_mod == "rusty" and not hawk.get("depart", false):
+		# THERMALS: he IS the course — fly the slipstream head, banking his weave
+		hawk.x = lerpf(hawk.x, slip_lead_x, 1.0 - exp(-3.2 * delta))
+		hawk.y = lerpf(hawk.y, 158.0, 1.0 - exp(-2.0 * delta))
+		if slip_tone == 20 and not hawk.get("cheered", false):    # one earned mid-course cheer
+			hawk.cheered = true
+			hawk.line = "THAT'S IT — RIGHT there!\nnow HOLD it, dweeb!"
+			hawk.said = true; hawk.say_t = hawk.t; hawk.dwell = 1.8
 	else:
 		# swoop off the far side, accelerating away
 		hawk.x += hawk.dir * 270.0 * delta
@@ -12792,19 +12819,27 @@ func _draw_river_events() -> void:
 		var _rib := PackedVector2Array()
 		for sp6 in slip_pts:
 			_rib.append(Vector2(sp6.x, sp6.y))
-		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.16), 58.0)     # the wide warm wake
-		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 22.0)      # the sweet spot
-		draw_polyline(_rib, Color(1.0, 0.97, 0.8, 0.5), 3.0)       # his exact line
-		if not tex_hawk.is_empty():                                # Rusty at the head, banking his weave
-			var _rh: Texture2D = tex_hawk[int(anim_t * 6.0) % mini(tex_hawk.size(), 3)]
-			var _rhs: Vector2 = _rh.get_size() * 1.6
-			var _bank := clampf((slip_lead_x - (slip_pts[maxi(0, slip_pts.size() - 6)].x if slip_pts.size() > 5 else slip_lead_x)) * 0.02, -0.4, 0.4)
-			draw_set_transform(Vector2(slip_lead_x, 168.0 + sin(anim_t * 1.8) * 6.0), _bank, Vector2.ONE)
-			draw_texture_rect(_rh, Rect2(-_rhs * 0.5, _rhs), false)
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.20), 68.0)     # the wake = the exact scoring band
+		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 26.0)      # the sweet spot
+		draw_polyline(_rib, Color(1.0, 0.97, 0.8, 0.55), 3.0)      # his exact line
 		# your line-hold reads at a glance: gold aura when you're IN the stream
 		if slip_tone > 0:
 			draw_circle(Vector2(duck_x, BASE_Y), 40.0 + 3.0 * sin(anim_t * 8.0), Color(1.0, 0.9, 0.5, 0.05 + 0.008 * slip_tone))
+		# live grade meter — hold 90%+ of his line and the LEGENDARY board is yours
+		if slip_total > 3:
+			var _gnow: float = float(slip_on) / float(slip_total)
+			var _in_now: bool = slip_tone > 0
+			var _mw := 150.0
+			var _mx: float = VIEW.x * 0.5 - _mw * 0.5
+			draw_rect(Rect2(_mx - 4.0, 116.0, _mw + 8.0, 24.0), Color(0.06, 0.10, 0.14, 0.55))
+			draw_rect(Rect2(_mx, 132.0, _mw, 5.0), Color(1, 1, 1, 0.14))
+			var _gc := Color(1.0, 0.88, 0.35) if _gnow >= 0.9 else (Color(1.0, 0.75, 0.4) if _gnow >= 0.7 else Color(0.8, 0.82, 0.9))
+			draw_rect(Rect2(_mx, 132.0, _mw * _gnow, 5.0), _gc)
+			draw_rect(Rect2(_mx + _mw * 0.9 - 1.0, 130.0, 2.0, 9.0), Color(1.0, 0.88, 0.35, 0.9))   # the LEGENDARY notch
+			var _mt: String = ("IN THE STREAM  %d%%" % int(_gnow * 100)) if _in_now else ("HOLD HIS LINE  %d%%" % int(_gnow * 100))
+			var _mtw := font.get_string_size(_mt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+			draw_string(font, Vector2(VIEW.x * 0.5 - _mtw * 0.5, 127.0), _mt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+				_gc if _in_now else Color(1, 1, 1, 0.75))
 	# SQUALL: slanting rain + a grey wash (reads instantly, costs nothing)
 	if ev_id == "squall":
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.36, 0.42, 0.52, 0.14))
@@ -14982,6 +15017,7 @@ func _sim_begin() -> void:
 	sim_runs_total = maxi(1, int(_arg_val(args, "--runs", "1")))
 	sim_force_boss = int(_arg_val(args, "--boss", "-1"))
 	sim_force_kind = _arg_val(args, "--kind", "")
+	sim_thermals = args.has("--thermals")
 	var _sim_asc := int(_arg_val(args, "--asc", "-1"))
 	if _sim_asc >= 0:                                  # fairness batches at high ascension
 		asc_unlocked = maxi(asc_unlocked, _sim_asc)
@@ -15013,6 +15049,9 @@ func _sim_start_run() -> void:
 	equipped_body = _bodies[randi() % _bodies.size()] if randf() < 0.6 else ""
 	if sim_force_boss >= 0:                        # drop straight into a chosen boss fight (isolation testing)
 		_force_boss(sim_force_boss, sim_force_kind)
+	if sim_thermals:
+		distance = 12000.0
+		_dev_do("thermals")
 	bot_mode = true
 	sim_run_t = 0.0; sim_hits = 0; sim_was_alive = true; sim_hop_cd = 0.0; sim_saw_boss = false
 	Engine.time_scale = 6.0
@@ -15119,6 +15158,15 @@ func _bot_control(delta: float) -> void:
 			target_x = bx
 			if sim_hop_cd <= 0.0 and not is_airborne() and absf(float(boss.x) - duck_x) < 80.0:
 				hop(); sim_hop_cd = 0.22
+			return
+	if stretch_mod == "rusty":                         # THERMALS: shadow Rusty's line (skill scales w/ persona)
+		var _bnd = null
+		for sp7 in slip_pts:
+			if float(sp7.y) > BASE_Y - 90.0 and float(sp7.y) < BASE_Y + 10.0:
+				_bnd = sp7
+		if _bnd != null:
+			var _wob: float = sin(sim_run_t * 3.1) * (6.0 if bot_persona == "cautious" else (26.0 if bot_persona == "reckless" else 12.0))
+			target_x = clampf(float(_bnd.x) + _wob, lo, hi)
 			return
 	var best_x := duck_x
 	var best_score := -1.0e9
