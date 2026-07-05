@@ -184,7 +184,7 @@ const THEMES := [
 	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74),   "line": "camp. you know the way."},
 	{"name": "Emerald Lake",   "tint": Color(0.62, 1.04, 0.80),   "line": "the one out west. (she's right about it.)"},
 	{"name": "Lake Cochichewick", "tint": Color(0.54, 0.68, 0.94), "line": "binoculars up. the hawk holds Weir Hill."},
-	{"name": "Jimmy Pond",     "tint": Color(0.98, 1.02, 1.0),    "line": "the top of the chain. quiet coves."},
+	{"name": "Jimmy Pond",     "tint": Color(0.98, 1.02, 1.0),    "line": "good fishin'. the quiet kind."},
 ]
 # each biome weathers its driftwood differently — bog logs are mossy & dead, etc.
 const LOG_TINT := [
@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.7"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.8"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1166,7 +1166,7 @@ var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
 var sand_dock = null            # SAND POND: the camp dock — Sadie sprints it and CANNONBALLS off
 var sand_dock_next := 0.0
-const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_emerald", "", ""]   # Cochichewick + Jimmy: no set-pieces (loon nixed; Jimmy awaits Scott)
+const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_emerald", "", "hero_pleasant"]   # Jimmy inherits the anchored skiff (file name is historical); Cochichewick stays wild
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
 	"bank_cattail_0": ["CATTAILS", "The river's picket fence. Red-winged blackbirds hold territory in them all summer, and every pond worth its name grows a stand."],
@@ -1189,6 +1189,9 @@ const SHORE_LORE := {
 	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
 	"sand_dock": ["THE CAMP DOCK", "Straight, orange-brown, and exactly one good-girl-gallop long. The end board is worn smooth. You know why."],
 	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
+	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
+	"bank_angler_0": ["THE CASTING ANGLER", "Mid-cast since dawn, probably. The good spots on Jimmy are earned, not found."],
+	"bank_angler_1": ["THE BUCKET ANGLER", "Sits on an overturned bucket with the patience of geology. Has caught more than anyone. Tells no one where."],
 }
 var tex_env := {}
 
@@ -7819,7 +7822,10 @@ func _pick_kind() -> int:
 		total += k.weight
 	var r := randi() % total
 	for i in ITEM_DEFS.size():
-		r -= ITEM_DEFS[i].weight
+		var w: int = ITEM_DEFS[i].weight
+		if theme_idx == 6 and ITEM_DEFS[i].name == "minnow":
+			w *= 3                                   # JIMMY POND: good fishin'
+		r -= w
 		if r < 0:
 			# the GOLDEN EGG is legendary — even when its number comes up, it mostly slips away
 			if ITEM_DEFS[i].name == "goldegg" and randf() > 0.3:
@@ -10558,6 +10564,15 @@ func _codex_tex(id: String):
 		return tex_env.get(id.substr(6))
 	if id.begins_with("boon_"):                       # shrine boons: their run-icon, writ large
 		return tex_boon.get(id.substr(5))
+	if id.begins_with("snack_"):                      # snacks: the floating treat itself
+		return tex_items.get(id.substr(6))
+	if id.begins_with("trash_"):                      # flotsam: its river sprite
+		var _ti3 := PROP_NAMES.find(id.substr(6))
+		return tex_props[_ti3] if _ti3 >= 0 and _ti3 < tex_props.size() else null
+	if id.begins_with("wear_"):                       # wearables: the flat shop icon
+		return tex_wear.get(id.substr(5))
+	if tex_boon.has(id):                              # power-ups share the boon icon sheet
+		return tex_boon[id]
 	if id == "bongo":
 		return tex_bongo[0] if tex_bongo.size() > 0 else tex_frog
 	match id:
@@ -12749,7 +12764,7 @@ const BANK_PROPS := [
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
 	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
 	["bank_pine", "bank_lizzie"],          # COCHICHEWICK: Lizzie the beagle watches the water
-	["bank_cattail_0", "bank_cattail_1"],  # JIMMY: quiet coves at the top of the chain (Scott to theme)
+	["bank_angler_0", "bank_angler_1"],    # JIMMY: good fishin' — the shore regulars set up here
 ]
 
 func _draw_bank_decor() -> void:
