@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.8"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.9"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -617,7 +617,7 @@ const DEV_MENU := [
 	{"name": "GERALD", "act": "gerald"}, {"name": "BONGO", "act": "bongo"},
 	{"name": "SNAPZ", "act": "snapz"}, {"name": "BARRY", "act": "beaver"},
 	{"name": "ETERNAL", "act": "eternal"}, {"name": "SADIE", "act": "megasadie"},
-	{"name": "BREAD", "act": "bread"},
+	{"name": "THERMALS", "act": "thermals"}, {"name": "BREAD", "act": "bread"},
 	{"name": "+5000 FT", "act": "warp"}, {"name": "+500 FTHR", "act": "feathers"},
 	{"name": "FILL LOFT", "act": "loft"}, {"name": "+3 SHIELD", "act": "shield"},
 ]
@@ -768,6 +768,38 @@ const SADIE_LINES := ["welcome! sniff around.", "*tail thumps the dock*", "ooh, 
 	"my CHUCKIT's right here — throw it after?", "that hat? chef's kiss.", "*happy pant*  take your time.",
 	"*nudges her chuckit toward you*", "i'll trade ya... for ONE throw of the chuckit."]
 const BODY_WEAR := ["scarf", "turtle", "cape", "vest", "jetpack", "satchel"]   # boombox is a HEAD piece
+# DEEP LORE: the power-ups deserve mythos, not tooltip text. Every entry answers
+# "what does the river believe about this?"
+const POWER_LORE := {
+	"spring": "Nobody taught the river's ducks to jump like this. One spring the water came up early and fast, and the ducks that season learned — and their ducklings learned it in the egg. The river remembers which legs are owed to it.",
+	"magnet": "Crumbs drift toward you as if called by name. The old drakes say the first CRUMB MAGNET was a wedding band lost off the Woodbury dock in 1974, and that bread has been trying to get back to it ever since.",
+	"snacks": "The radar isn't a machine. It's a feeling behind the left eye, the same one that tells a duck which picnic will be careless. Some are simply born tuned.",
+	"zen": "The river cannot actually slow down. What slows is YOU — your panic, your flapping, your certainty that faster is better. The current hears a calm heart and, embarrassed, eases up.",
+	"loft": "Loft was never meant to be hoarded. It leaks out of near-misses and swallowed bugs and perfect landings, and some ducks just learned to keep the lid on tighter.",
+	"tiny": "TUCK & TRIM is taught by mothers to ducklings in one sentence: 'be less places.' Mastering it takes a lifetime. The log cannot hit what has politely declined to be there.",
+	"shield": "Down so thick a bonk arrives as a rumor. Molted from a duck that once fell asleep mid-rapids and woke up downstream, unharmed and refreshed.",
+	"duckling": "It saw you paddle past and decided, with the total certainty available only to the very young, that you are its whole family now. Prove it right.",
+	"double": "The second hop is stolen from a sky that wasn't using it. Physics filed a complaint; the river lost the paperwork on purpose.",
+	"trio": "Three at once. The peeping is constant, the formation is chaos, the loyalty is absolute. The river parts a little easier for a parade.",
+	"gold": "A bill dipped in the last light of a golden hour, years ago, and never quite faded. Everything it touches is worth more — snacks, distance, moments.",
+	"nestegg": "Somewhere upstream there is a nest you have never seen, and every hundred feet you fly, it grows a little richer. Do not ask whose it is. It's yours now.",
+	"snackhawk": "Eating mid-air is falconry in reverse — the snack is the prey, the sky is the table. Rusty claims he invented it. Rusty claims a lot of things.",
+	"aftershock": "Every log you shatter owes you a favor. The blast collects the debt immediately, with interest, in LOFT.",
+	"bounce": "The boost logs were spring-cut lumber from a trampoline factory that flooded in '88. They have never accepted their retirement.",
+	"buffet": "Inside every log there was always a snack, the way inside every block of marble there was always a statue. You simply have the appetite required to see it.",
+	"school": "Your ducklings have unionized their appetites. Anything edible within reach of the parade is collectively bargained into your bill.",
+	"thunder": "Land hard enough, often enough, and the river starts flinching first. Now every splash-down detonates the neighborhood. The frogs have started applauding — from a distance.",
+	"hotwheels": "Feet so fast the water can't tell them from weather. On fire, they leave a wake of steam and a rumor of a very fast duck.",
+	"junker": "One duck's flotsam is your ammunition. The sling was invented by a hen who ran out of patience before she ran out of trash.",
+	"trashmag": "The river hoards junk in its pockets like a coat left too long at camp. This charm turns its pockets inside out as you pass.",
+	"packrat": "Three pieces of drifting nonsense orbit you like moons of a very small planet. Each one loves you enough to be a shield about it, exactly once.",
+	"scrapshell": "Armor built from bottle caps and bad decisions. It rattles. It is beautiful. It works.",
+	"dumpster": "Legendary flotsam is drawn to you now — the gnome, the good boot, the kite that never should have been let go. You are the river's lost-and-found.",
+	"nova": "The MEGA QUACK rides shotgun on every special you fire, a sonic exclamation point. Herons three ponds over cancel their plans.",
+	"wingducks": "They are not pets. They are colleagues. When a heron dives, two of yours dive back, and the paperwork sorts itself out mid-air.",
+	"cannon": "Crumbs, fired forward, at speed. The geese call it undignified. The geese are not eating as well as you are.",
+	"springy": "The river doubles its trampoline budget. Someone in accounting is furious; every duck downstream is delighted.",
+}
 const SADIE_WEAR_LINES := {
 	"crown":   ["ooooh ROYALTY. do i bow?", "your majesty may throw the chuckit."],
 	"pirate":  ["arrr? ARRR!!", "a pirate! i'll be your first mate."],
@@ -2768,6 +2800,14 @@ func _dev_do(act: String) -> void:
 		"beaver": _force_boss(0, "beaver")
 		"eternal": _force_boss(2)
 		"megasadie": _force_boss(2, "megasadie")
+		"thermals":                                 # drop straight into RUSTY'S THERMALS
+			if alive and not in_menu and boss == null:
+				stretch_mod = "rusty"
+				stretch_until = distance + THEME_LEN * 0.85
+				thermal_rings.clear(); thermal_timer = 0.4; thermal_chain = 0
+				hawk_done = false; hawk_timer = 0.5
+				enemies.clear(); logs.clear()
+				_flash("RUSTY'S THERMALS", 2.0)
 		"bread": _force_boss(-1)
 		"warp": distance += 50000.0; _flash("WARP +5000 ft")
 		"feathers": run_feathers += 500; _flash("+500 feathers")
@@ -10458,7 +10498,7 @@ Equip it before a run — the LOFT meter is its trigger.",
 		if u.id == "wingducks":
 			continue                               # already a FRIEND entry
 		out.append({"key": u.id, "cat": "power", "name": u.name, "sub": _rarity_word(u.rarity) + " power-up",
-			"lore": u.desc, "type": "power", "ref": u})
+			"lore": String(POWER_LORE.get(u.id, "")) + ("\n\n— " + u.desc if POWER_LORE.has(u.id) else u.desc), "type": "power", "ref": u})
 	var snk := ITEM_DEFS.duplicate()                    # snacks, ordered common -> rare by tier
 	snk.sort_custom(func(a, b): return int(a.get("tier", 0)) < int(b.get("tier", 0)))
 	for d in snk:
@@ -11759,6 +11799,7 @@ func _dev_icon(act: String):
 		"snapz": return tex_snapz[0] if tex_snapz.size() > 0 else null
 		"beaver": return tex_beaver[0] if tex_beaver.size() > 0 else null
 		"megasadie": return tex_sadieboss.get("proud", tex_sadie_greet) if not tex_sadieboss.is_empty() else tex_sadie_greet
+		"thermals": return tex_hawk[0] if tex_hawk.size() > 0 else null
 		"bread": return tex_bread
 	return null
 
