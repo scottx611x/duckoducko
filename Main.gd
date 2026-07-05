@@ -43,7 +43,7 @@ func _sfx_echo(snd: String, pitch: float, vol: float, delay: float) -> void:
 	sfx_echoes.append({"t": delay, "snd": snd, "pitch": pitch, "vol": vol})
 
 func _ouch() -> void:
-	hurt_flash = 0.7
+	hurt_flash = 1.1
 var combo_n := 0                # SNACK COMBO chain length
 var combo_t := 0.0              # seconds left to keep the chain alive
 var nearmiss_flash := 0.0       # brief juicy flourish timer for a near miss (speed-lines + glint)
@@ -224,7 +224,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.13"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.14"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -625,7 +625,8 @@ const DEV_MENU := [
 	{"name": "GERALD", "act": "gerald"}, {"name": "BONGO", "act": "bongo"},
 	{"name": "SNAPZ", "act": "snapz"}, {"name": "BARRY", "act": "beaver"},
 	{"name": "ETERNAL", "act": "eternal"}, {"name": "SADIE", "act": "megasadie"},
-	{"name": "THERMALS", "act": "thermals"}, {"name": "BREAD", "act": "bread"},
+	{"name": "THERMALS", "act": "thermals"}, {"name": "NEXT POND", "act": "pond"},
+	{"name": "BREAD", "act": "bread"},
 	{"name": "+5000 FT", "act": "warp"}, {"name": "+500 FTHR", "act": "feathers"},
 	{"name": "FILL LOFT", "act": "loft"}, {"name": "+3 SHIELD", "act": "shield"},
 ]
@@ -1283,11 +1284,11 @@ const FORK_MODS := [
 	{"id": "golden", "name": "GOLDEN REACH", "desc": "the light! the LIGHT!"},
 	{"id": "rusty",  "name": "RUSTY'S THERMALS", "desc": "no danger — just FLY"},
 ]
-var thermal_rings: Array = []   # RUSTY'S THERMALS: golden hoops to thread — {x, y, hit}
-var thermal_timer := 0.0
-var thermal_chain := 0
-var thermal_hits := 0           # course tally for Rusty's sendoff
-var thermal_total := 0
+var slip_pts: Array = []        # RUSTY'S THERMALS 2.0: his slipstream ribbon — {x, y}
+var slip_lead_x := 270.0        # where Rusty flies (he weaves; you shadow)
+var slip_on := 0                # scored ticks ON his line
+var slip_total := 0             # total scored ticks (grade = on/total)
+var slip_tone := 0              # rising hum step while you hold the line
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
@@ -1397,8 +1398,8 @@ func _update_river_events(delta: float) -> void:
 			_sfx("chime", 0.9)
 			_st("forks_taken")
 			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
-				thermal_rings.clear(); thermal_timer = 0.6; thermal_chain = 0
-				thermal_hits = 0; thermal_total = 0
+				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear()
 			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
@@ -1407,38 +1408,66 @@ func _update_river_events(delta: float) -> void:
 			fork = {}
 			fork_warned = false
 			fork_next = distance + randf_range(105000.0, 135000.0)
-	# RUSTY'S THERMALS: hoops drop in ahead, weaving; thread them for feathers + loft
+	# RUSTY'S THERMALS 2.0: SHADOW HIS LINE. He weaves ahead trailing a golden slipstream;
+	# every beat you hold his line scores. Fly it near-perfect and he teaches you something
+	# LEGENDARY. This is a TRACKING game, not a dodging game — a different wing entirely.
 	if stretch_mod == "rusty":
-		thermal_timer -= delta
-		if thermal_timer <= 0.0:
-			thermal_timer = randf_range(0.55, 0.85)
-			thermal_total += 1
-			thermal_rings.append({"x": clampf(VIEW.x * 0.5 + sin(distance * 0.0018) * (VIEW.x * 0.3) + randf_range(-40.0, 40.0),
-				BANK_W + 40.0, VIEW.x - BANK_W - 40.0), "y": -40.0, "hit": false})
-		for tr in thermal_rings:
-			tr.y += speed * delta
-			if not tr.hit and absf(float(tr.y) - BASE_Y) < 16.0 and absf(float(tr.x) - duck_x) < 36.0:
-				tr.hit = true
-				thermal_chain += 1
-				thermal_hits += 1
-				run_feathers += 2 + mini(thermal_chain, 8)
-				_float_text(tr.x, BASE_Y - 60.0, "+%d" % (2 + mini(thermal_chain, 8)), Color(1.0, 0.88, 0.4))
-				_add_loft(0.05)
-				_sfx("combo", 0.9 + 0.07 * minf(thermal_chain, 10.0), -6.0)
-				_spawn_parts(tr.x, BASE_Y, 8, Color(1.0, 0.88, 0.4), 160.0)
-				if thermal_chain > 0 and thermal_chain % 5 == 0:
-					_float_text(duck_x, BASE_Y - 110.0, "chain x%d!" % thermal_chain, Color(1.0, 0.85, 0.3))
-			elif not tr.hit and float(tr.y) > BASE_Y + 30.0 and thermal_chain > 0:
-				thermal_chain = 0                       # a missed hoop cools the thermal
-		thermal_rings = thermal_rings.filter(func(tr): return float(tr.y) < VIEW.y + 40.0)
-	elif not thermal_rings.is_empty():
-		thermal_rings.clear()
+		var _sw1: float = sin(distance * 0.0011) * (VIEW.x * 0.30)
+		var _sw2: float = sin(distance * 0.0033 + 1.7) * (VIEW.x * 0.17)
+		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
+		slip_pts.append({"x": slip_lead_x, "y": 176.0})
+		for sp3 in slip_pts:
+			sp3.y += speed * delta
+		slip_pts = slip_pts.filter(func(sp4): return float(sp4.y) < VIEW.y + 30.0)
+		# grade at the duck's row, ~10 ticks a second
+		if fmod(anim_t, 0.1) < delta:
+			var _band = null
+			for sp5 in slip_pts:
+				if absf(float(sp5.y) - BASE_Y) < 22.0:
+					_band = sp5
+					break
+			if _band != null:
+				slip_total += 1
+				if absf(float(_band.x) - duck_x) < 34.0:
+					slip_on += 1
+					slip_tone = mini(slip_tone + 1, 24)
+					if slip_tone % 4 == 0:
+						_sfx("combo", 0.8 + 0.05 * slip_tone, -14.0)   # the hum climbs while you hold it
+					if slip_tone % 10 == 0:
+						run_feathers += 3
+						_float_text(duck_x, BASE_Y - 96.0, "+3", Color(1.0, 0.88, 0.4))
+					if randf() < 0.4:
+						parts.append({"x": duck_x + randf_range(-10, 10), "y": BASE_Y - 8.0,
+							"vx": randf_range(-15, 15), "vy": randf_range(20, 60),
+							"t": 0.0, "life": 0.3, "col": Color(1.0, 0.9, 0.5)})
+				else:
+					slip_tone = 0                        # off the line: the hum dies
+	elif not slip_pts.is_empty():
+		slip_pts.clear()
 	if stretch_mod != "" and distance >= stretch_until:
-		if stretch_mod == "rusty" and hawk != null:     # course over: the tally, then the read
-			var _tl := "%d of %d rings! " % [thermal_hits, maxi(thermal_total, 1)]
-			var _adv := _rusty_advice()
-			hawk.line = _tl + (_adv if _adv != "" else ("MAGNIFICENT." if thermal_hits >= thermal_total - 2 else "we'll work on it, dweeb."))
-			hawk.said = false; hawk.say_t = -99.0
+		if stretch_mod == "rusty":                      # course over: the GRADE, and it MEANS something
+			var _gr: float = float(slip_on) / maxf(1.0, float(slip_total))
+			var _gl := ""
+			if _gr >= 0.9:
+				_gl = "PERFECT WING — %d%%!! take your pick,\nyou've EARNED the good stuff." % int(_gr * 100)
+				run_feathers += 60
+				drafting = true; draft_open_t = anim_t
+				target_x = duck_x; steer_anchor_x = duck_x; pressed = false; moved = false
+				draft_choices = _deal_boss_draft(3)     # a LEGENDARY board, dealt by the master himself
+				_sfx("unlock", 1.3); _sfx("chime", 1.6)
+			elif _gr >= 0.7:
+				_gl = "%d%% on my line — strong flying.\nhere's something rare." % int(_gr * 100)
+				run_feathers += 30
+				drafting = true; draft_open_t = anim_t
+				target_x = duck_x; steer_anchor_x = duck_x; pressed = false; moved = false
+				draft_choices = _deal_boss_draft(2)
+				_sfx("chime", 1.2)
+			else:
+				_gl = "%d%%... we'll work on it, dweeb.\nmy line doesn't fly itself." % int(_gr * 100)
+				run_feathers += 10
+			if hawk != null:
+				hawk.line = _gl
+				hawk.said = false; hawk.say_t = -99.0
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -2637,7 +2666,7 @@ func _eff_species() -> String:                      # the species to RENDER (rea
 func _hen_tint() -> Color:                          # only a fallback drab for ducks with NO hen art (rubber/secret)
 	var base := Color(0.9, 0.85, 0.78) if (hen_mode and not ducks.has(species + "hen")) else Color(1, 1, 1)
 	if hurt_flash > 0.0:                            # OUCH reads ON THE DUCK: a red strobe, fading fast
-		var hp2 := hurt_flash * (0.5 + 0.5 * sin(anim_t * 30.0))
+		var hp2 := hurt_flash * (0.5 + 0.5 * sin(anim_t * 16.0))
 		base = base.lerp(Color(1.0, 0.25, 0.2), clampf(hp2 * 1.6, 0.0, 0.75))
 	return base
 
@@ -2825,11 +2854,15 @@ func _dev_do(act: String) -> void:
 			if alive and not in_menu and boss == null:
 				stretch_mod = "rusty"
 				stretch_until = distance + THEME_LEN * 0.85
-				thermal_rings.clear(); thermal_timer = 0.4; thermal_chain = 0
-				thermal_hits = 0; thermal_total = 0
+				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear()
 				_flash("RUSTY'S THERMALS", 2.0)
+		"pond":                                     # WARP: jump to the next pond boundary (tap to cycle all 7)
+			if alive and not in_menu:
+				biome_progress = (floor(biome_progress / THEME_LEN) + 1.0) * THEME_LEN + 200.0
+				hero_next = distance + 800.0        # its landmark comes quick, for eyeballing
 		"bread": _force_boss(-1)
 		"warp": distance += 50000.0; _flash("WARP +5000 ft")
 		"feathers": run_feathers += 500; _flash("+500 feathers")
@@ -4043,7 +4076,7 @@ func _spawn_hawk() -> void:
 	var is_tut: bool = not tutorial_seen
 	if stretch_mod == "rusty":                      # the COURSE BRIEFING comes first, loud and clear
 		hawk = {"x": -70.0, "y": 150.0, "dir": 1.0, "t": 0.0, "said": false, "say_t": -99.0, "dwell": 5.6,
-			"line": "MY THERMALS, dweeb! thread the GOLD RINGS —\neach one pays. CHAINS pay more. FLY!"}
+			"line": "SHADOW ME, dweeb — stay in my SLIPSTREAM!\nfly it near-PERFECT and i'll deal you\nsomething LEGENDARY."}
 		_sfx("screech", 1.0, -8.0)
 		return
 	if is_tut:                                      # the FIRST-RUN welcome: teach the controls
@@ -4993,7 +5026,7 @@ func reset_game() -> void:
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	hero_next = randf_range(6000.0, 9000.0)
-	thermal_rings.clear(); thermal_chain = 0
+	slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -5818,7 +5851,7 @@ func _record_run() -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
-	hurt_flash = maxf(0.0, hurt_flash - delta * 2.2)
+	hurt_flash = maxf(0.0, hurt_flash - delta * 1.5)
 	if not sfx_echoes.is_empty():
 		var _keep_e: Array = []
 		for _e in sfx_echoes:
@@ -12754,14 +12787,24 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
-	# RUSTY'S THERMALS: golden hoops shimmer on the water — thread them
-	for tr in thermal_rings:
-		var _ta: float = 0.35 if tr.hit else (0.75 + 0.2 * sin(anim_t * 5.0 + float(tr.x)))
-		var _tc := Color(1.0, 0.86, 0.35, _ta)
-		draw_arc(Vector2(tr.x, tr.y), 30.0, 0.0, TAU, 26, _tc, 3.5)
-		draw_arc(Vector2(tr.x, tr.y), 22.0, 0.0, TAU, 22, Color(1.0, 0.95, 0.7, _ta * 0.5), 1.6)
-		if not tr.hit:
-			draw_circle(Vector2(tr.x, float(tr.y) - 30.0), 2.0, Color(1.0, 0.95, 0.7, _ta))
+	# RUSTY'S THERMALS 2.0: his golden SLIPSTREAM ribbon + the master himself at its head
+	if stretch_mod == "rusty" and slip_pts.size() > 1:
+		var _rib := PackedVector2Array()
+		for sp6 in slip_pts:
+			_rib.append(Vector2(sp6.x, sp6.y))
+		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.16), 58.0)     # the wide warm wake
+		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 22.0)      # the sweet spot
+		draw_polyline(_rib, Color(1.0, 0.97, 0.8, 0.5), 3.0)       # his exact line
+		if not tex_hawk.is_empty():                                # Rusty at the head, banking his weave
+			var _rh: Texture2D = tex_hawk[int(anim_t * 6.0) % mini(tex_hawk.size(), 3)]
+			var _rhs: Vector2 = _rh.get_size() * 1.6
+			var _bank := clampf((slip_lead_x - (slip_pts[maxi(0, slip_pts.size() - 6)].x if slip_pts.size() > 5 else slip_lead_x)) * 0.02, -0.4, 0.4)
+			draw_set_transform(Vector2(slip_lead_x, 168.0 + sin(anim_t * 1.8) * 6.0), _bank, Vector2.ONE)
+			draw_texture_rect(_rh, Rect2(-_rhs * 0.5, _rhs), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# your line-hold reads at a glance: gold aura when you're IN the stream
+		if slip_tone > 0:
+			draw_circle(Vector2(duck_x, BASE_Y), 40.0 + 3.0 * sin(anim_t * 8.0), Color(1.0, 0.9, 0.5, 0.05 + 0.008 * slip_tone))
 	# SQUALL: slanting rain + a grey wash (reads instantly, costs nothing)
 	if ev_id == "squall":
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.36, 0.42, 0.52, 0.14))
