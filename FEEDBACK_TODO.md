@@ -604,3 +604,6 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] **Jimmy = good fishin'** v1.21.9 — Pleasant's parked kit found its true home: shore anglers on Jimmy's banks, the anchored skiff as its landmark, minnows running triple, line "good fishin'. the quiet kind." Codex records restored under Jimmy.
 - [x] **Codex detail views fixed** v1.21.9 — the detail resolver only knew characters/boons/shoreline; SNACKS, RIVER TRASH, WEARABLES and POWER-UPS all showed empty circles in their detail pages. Resolver now serves every shelf (snacks->item sprite, trash->flotsam sprite, wearables->shop icon, powers->the boon icon sheet).
 - [x] Confirmed: Pleasant fully excised (zero references) — Scott's sighting was a cached web bundle; hard refresh.
+- [x] **Deep lore pass, POWER-UPS** v1.21.10 — all 28 upgrades now carry river mythos in their codex pages (samples sent to Scott for redlines); the draft-card text rides below as a footnote.
+- [x] **THERMALS dev button** v1.21.10 — dev menu drops you straight into Rusty's course mid-run (Rusty icon), for fast feedback.
+- [x] **Zoomies = the POUNCE** v1.21.11 — Scott's call: her best sprite (mid-air pounce) rotated nose-down into travel, and the crossing is now THREE BOUNDS instead of a flat slide. The "poeky run" is gone from the fight.
