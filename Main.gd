@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.9"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.10"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -7442,7 +7442,7 @@ func _megasadie_fight(delta: float) -> void:
 		var sd3: float = boss.get("skim_dir", 1.0)
 		var p2 := clampf(boss.t / 0.58, 0.0, 1.0)
 		boss.x = lerpf(VIEW.x * 0.5 - sd3 * (VIEW.x * 0.5 + 60.0), VIEW.x * 0.5 + sd3 * (VIEW.x * 0.5 + 60.0), p2)
-		boss.y = BASE_Y - 40.0 - sin(p2 * PI) * 14.0
+		boss.y = BASE_Y - 40.0 - absf(sin(p2 * PI * 3.0)) * 30.0   # three BOUNDS across the water
 		if fmod(boss.t, 0.06) < delta:
 			ripples.append({"x": boss.x - sd3 * 40.0, "y": BASE_Y, "t": 0.0, "max": 60.0})
 		if not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 56.0:
@@ -12400,9 +12400,9 @@ func _draw_boss_megasadie() -> void:
 	# her 16-frame turntable tracks the duck; gallop frames take over during the ZOOMIES
 	var gt: Texture2D = null
 	var hasb: bool = not tex_sadieboss.is_empty()
-	if st == "skim":                                # ZOOMIES: the gallop, ears streaming
-		if hasb and tex_sadieboss.has("run_0"):
-			gt = tex_sadieboss["run_%d" % (int(anim_t * 14.0) % 4)]
+	if st == "skim":                                # ZOOMIES: she POUNCES across — her best pose, in flight
+		if hasb and tex_sadieboss.has("pounce"):
+			gt = tex_sadieboss["pounce"]
 		elif not tex_sadie_run.is_empty():
 			gt = tex_sadie_run[int(anim_t * 14.0) % tex_sadie_run.size()]
 	elif st == "dazed":                             # sitting, tongue ALL the way out, SO proud
@@ -12460,13 +12460,15 @@ func _draw_boss_megasadie() -> void:
 	# SHE FACES THE DUCK (the frames render facing slightly right; mirror when you're left —
 	# same fix Bongo needed). the zoomies flip by travel direction instead.
 	var mface: float = 1.0
+	var mrot: float = 0.0
 	if st == "skim":
 		mface = -1.0 if boss.get("skim_dir", 1.0) < 0.0 else 1.0
+		mrot = mface * 0.42                            # nose-down into the bound
 	elif st == "tele":
 		mface = 1.0                                    # glance frames pick their own side
 	else:
 		mface = 1.0 if duck_x >= boss.x else -1.0
-	draw_set_transform(gpos, 0.0, Vector2(mface, 1.0))
+	draw_set_transform(gpos, mrot, Vector2(mface, 1.0))
 	draw_texture_rect(gt, Rect2(-gsz * 0.5, gsz), false, mod)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if stuck:
