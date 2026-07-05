@@ -182,19 +182,19 @@ const THEMES := [
 	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water. all of it."},
 	{"name": "Purgatory Pond", "tint": Color(0.66, 0.72, 0.62),   "line": "shallow, weedy, hard to reach. worth it."},
 	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74),   "line": "camp. you know the way."},
-	{"name": "Pleasant Pond",  "tint": Color(0.82, 0.98, 1.08),   "line": "the good fishing — out by Lively Brook."},
 	{"name": "Emerald Lake",   "tint": Color(0.62, 1.04, 0.80),   "line": "the one out west. (she's right about it.)"},
 	{"name": "Lake Cochichewick", "tint": Color(0.54, 0.68, 0.94), "line": "binoculars up. the hawk holds Weir Hill."},
+	{"name": "Jimmy Pond",     "tint": Color(0.98, 1.02, 1.0),    "line": "the top of the chain. quiet coves."},
 ]
 # each biome weathers its driftwood differently — bog logs are mossy & dead, etc.
 const LOG_TINT := [
-	Color(1.00, 1.00, 1.00),   # Lazy Pond — fresh natural driftwood
-	Color(1.08, 0.97, 0.74),   # Park Picnic — sun-bleached, warm
-	Color(0.60, 0.72, 0.52),   # Spooky Bog — mossy, sickly, dead
-	Color(1.12, 0.96, 0.66),   # Sand Pond — pale, sun-baked sandy driftwood
-	Color(0.80, 0.86, 0.92),   # City Fountain — cold, grey, waterlogged
-	Color(0.66, 0.92, 0.70),   # Emerald Lake — lush mossy green
-	Color(0.80, 0.88, 1.08),   # Aurora Lake — frost-rimed, icy blue
+	Color(1.00, 1.00, 1.00),   # Buker — fresh natural driftwood
+	Color(1.08, 0.97, 0.74),   # Woodbury — sun-bleached, warm
+	Color(0.60, 0.72, 0.52),   # Little Purgatory — mossy, sickly, dead
+	Color(1.12, 0.96, 0.66),   # Sand — pale, sun-baked sandy driftwood
+	Color(0.66, 0.92, 0.70),   # Emerald — lush mossy green
+	Color(0.80, 0.88, 1.08),   # Cochichewick — frost-rimed, icy blue
+	Color(0.96, 1.00, 1.02),   # Jimmy — quiet, clean, cool
 ]
 
 # collectibles: score (scoots you downriver) + loft fill + spawn weight + TIER (0 common,
@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.6"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.7"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1166,7 +1166,7 @@ var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
 var sand_dock = null            # SAND POND: the camp dock — Sadie sprints it and CANNONBALLS off
 var sand_dock_next := 0.0
-const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_pleasant", "hero_emerald", ""]   # Cochichewick: no set-piece — the birding water speaks for itself (loon nixed)
+const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_emerald", "", ""]   # Cochichewick + Jimmy: no set-pieces (loon nixed; Jimmy awaits Scott)
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
 	"bank_cattail_0": ["CATTAILS", "The river's picket fence. Red-winged blackbirds hold territory in them all summer, and every pond worth its name grows a stand."],
@@ -1177,8 +1177,6 @@ const SHORE_LORE := {
 	"bank_deadtree": ["THE GNARLED SNAG", "Dead a hundred years and busier than ever — half the bog's herons learned to loom in its branches."],
 	"bank_bonfire": ["THE CAMP FIRE RING", "Stones stacked by many summers of hands. If you listen past the crackle: grilling, laughing, a dog shaking off lakewater."],
 	"bank_barredowl": ["BARRED OWL", "Who cooks for you? Who cooks for you-all? At camp, the answer drifts down from the pines every dusk."],
-	"bank_angler_0": ["THE CASTING ANGLER", "Mid-cast since dawn, probably. The good spots by the outlet are earned, not found."],
-	"bank_angler_1": ["THE BUCKET ANGLER", "Sits on an overturned bucket with the patience of geology. Has caught more than anyone. Tells no one where."],
 	"bank_pine": ["SHORE PINES", "Western-tall and unbothered. They smell like a different altitude entirely."],
 	"bank_fern": ["FERN BREAK", "Green on green on green. The shady understory where the moose SHOULD be, statistically."],
 	"bank_shroom": ["GLOW-CAPS", "Little teal lanterns at the waterline. Almost certainly magic. Definitely not for eating."],
@@ -1190,7 +1188,6 @@ const SHORE_LORE := {
 	"hero_purgatory": ["THE DEAD TREE", "It rises out of the shallows like a question nobody answers. The crow is always there. The crow was always there."],
 	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
 	"sand_dock": ["THE CAMP DOCK", "Straight, orange-brown, and exactly one good-girl-gallop long. The end board is worn smooth. You know why."],
-	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
 	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
 }
 var tex_env := {}
@@ -1397,9 +1394,9 @@ const ENV_TABLE := [
 	[["env_lily_0", 1.5], ["env_lily_1", 1.3], ["env_lilyflower", 0.7], ["env_duckweed_1", 1.2], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
 	[["env_snag", 2.6], ["env_duckweed_0", 2.2], ["env_duckweed_1", 1.8], ["env_stone_0", 1.0], ["env_lily_0", 0.5], ["env_bottle", 0.12]],
 	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_duckweed_0", 0.6], ["env_sailboat", 0.14], ["env_raft", 0.10]],
-	[["env_lily_0", 1.4], ["env_lily_1", 1.2], ["env_lilyflower", 0.8], ["env_stone_1", 1.0], ["env_duckweed_1", 1.0], ["env_sailboat", 0.12], ["env_bottle", 0.08]],
 	[["env_lily_0", 1.7], ["env_lilyflower", 1.1], ["env_duckweed_0", 2.0], ["env_duckweed_1", 1.7], ["env_snag", 1.0], ["env_raft", 0.10]],
 	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 0.8], ["env_snag", 0.8], ["env_duckweed_1", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
+	[["env_lily_0", 2.2], ["env_lily_1", 1.8], ["env_duckweed_0", 1.2], ["env_stone_0", 0.9], ["env_snag", 0.5], ["env_bottle", 0.08], ["env_raft", 0.06]],
 ]
 var golden_t := 0.0              # GOLDEN HOUR: warm sunset wash remaining
 var golden_next := 38.0          # countdown to the next golden hour
@@ -1574,7 +1571,7 @@ var jukebox_sel := 0                           # which JUKEBOX entry the shop ro
 var jukebox_hits := []                         # the jukebox row's tap targets (in the shop)
 # each scenery THEME picks an ambient bed (by theme_idx; "" keeps the default music.wav)
 # same tune, gently tinted per region (warmer / hushed / brisk / shimmery)
-const THEME_MUSIC := ["music_default", "music_warm", "music_hush", "music_brisk", "music_shimmer", "music_warm", "music_default"]
+const THEME_MUSIC := ["music_default", "music_warm", "music_hush", "music_brisk", "music_warm", "music_default", "music_calm"]
 
 # menu easter egg: the big drake likes being tapped
 var menu_spin_vel := 0.0
@@ -5418,7 +5415,7 @@ func _pick_hop_style() -> void:
 	fancy = hop_style != "" and hop_style not in ["wobble", "boing"]
 	# LAKE COCHICHEWICK (the finale water) is enchanted: every hop chimes a note up a
 	# pentatonic scale — WHIMSY §6's "pretty payoff theme", finally sung
-	if theme_idx == 6 and boss == null:
+	if theme_idx == 5 and boss == null:
 		var _pent := [1.0, 1.125, 1.266, 1.5, 1.688, 2.0]
 		_sfx("combo", _pent[hop_count % 6], -10.0)
 	match hop_style:
@@ -6156,7 +6153,7 @@ func _update_play(delta: float) -> void:
 		theme_sweep = 0.0
 		region_t = anim_t                          # kick off the arrival banner
 		_see_shore(theme_idx)                      # its fixtures enter your LIFE LIST
-		if theme_idx == 6 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
+		if theme_idx == 5 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
 			hawk_done = false                      # always patrols his own water — one more pass
 			hawk_timer = randf_range(3.0, 6.0)
 		_sfx("chime", 0.75); _sfx("fwoosh", 0.6, -6.0)
@@ -7822,10 +7819,7 @@ func _pick_kind() -> int:
 		total += k.weight
 	var r := randi() % total
 	for i in ITEM_DEFS.size():
-		var w: int = ITEM_DEFS[i].weight
-		if theme_idx == 4 and ITEM_DEFS[i].name == "minnow":
-			w *= 3                                   # PLEASANT POND: the good fishing
-		r -= w
+		r -= ITEM_DEFS[i].weight
 		if r < 0:
 			# the GOLDEN EGG is legendary — even when its number comes up, it mostly slips away
 			if ITEM_DEFS[i].name == "goldegg" and randf() > 0.3:
@@ -11298,7 +11292,7 @@ func _draw() -> void:
 
 	# PER-BIOME WATER: a colour WASH so each pond differs (the variety), + GENTLE caustics (calm, non-distracting)
 	if has_art:
-		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.26, 0.34, 0.52, 0.26), Color(0.11, 0.55, 0.36, 0.28), Color(0.09, 0.17, 0.45, 0.32)][theme_idx]
+		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.11, 0.55, 0.36, 0.28), Color(0.09, 0.17, 0.45, 0.32), Color(0.20, 0.44, 0.55, 0.14)][theme_idx]
 		draw_rect(Rect2(Vector2.ZERO, VIEW), _wash)
 		# living-water FX are GAMEPLAY-only (menus don't need streaks/foam — web frame budget)
 		if not (in_menu or in_select or in_shop or in_stats or in_codex or in_shrine or in_jukebox):
@@ -12753,9 +12747,9 @@ const BANK_PROPS := [
 	["bank_jetski_0", "bank_jetski_1"],    # WOODBURY: big-water toys, parked + ready (picnic gear NUKED)
 	["bank_deadtree", "bank_osprey"],      # PURGATORY: the snag + the fish-hawk roosting (graves evicted)
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
-	["bank_angler_0", "bank_angler_1"],    # PLEASANT: the shore-side regulars (lamppost evicted — weird)
 	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
 	["bank_pine", "bank_lizzie"],          # COCHICHEWICK: Lizzie the beagle watches the water
+	["bank_cattail_0", "bank_cattail_1"],  # JIMMY: quiet coves at the top of the chain (Scott to theme)
 ]
 
 func _draw_bank_decor() -> void:
@@ -12831,25 +12825,25 @@ func _draw_atmosphere() -> void:
 				var fx := fposmod(f * 137.0 + anim_t * (9.0 + f * 3.0), VIEW.x + 240.0) - 120.0
 				var fy := 110.0 + f * 135.0 + sin(anim_t * 0.5 + f) * 20.0
 				draw_circle(Vector2(fx, fy), 72.0 + f * 9.0, Color(0.74, 0.8, 0.76, 0.07))
+		6:                                          # Jimmy Pond — cottonwood fluff on still air
+			for i in 5:
+				var _jf := fposmod(i * 101.0 + anim_t * (6.0 + i * 2.0), VIEW.x + 60.0) - 30.0
+				var _jy := 90.0 + i * 150.0 + sin(anim_t * 0.35 + i) * 26.0
+				draw_circle(Vector2(_jf, _jy), 2.2 + sin(anim_t + i) * 0.7, Color(1.0, 1.0, 0.96, 0.14))
 		3:                                          # Sand Pond — warm haze + blowing sand motes
 			draw_rect(Rect2(0.0, 0.0, VIEW.x, 220.0), Color(1.0, 0.84, 0.48, 0.045))
 			for i in 8:
 				var sx := fposmod(i * 74.0 + anim_t * (46.0 + i * 9.0), VIEW.x + 40.0) - 20.0
 				var sy := 90.0 + i * 100.0 + sin(anim_t * 0.9 + i) * 14.0
 				draw_circle(Vector2(sx, sy), 1.5, Color(0.96, 0.82, 0.5, 0.28))
-		4:                                          # City Fountain — cool drifting mist
-			for m in 5:
-				var mx := fposmod(m * 124.0 + anim_t * 13.0, VIEW.x + 180.0) - 90.0
-				var my := 100.0 + m * 152.0 + sin(anim_t * 0.4 + m) * 18.0
-				draw_circle(Vector2(mx, my), 52.0 + m * 9.0, Color(0.82, 0.86, 0.93, 0.05))
-		5:                                          # Emerald Lake — fireflies
+		4:                                          # Emerald Lake — fireflies
 			for i in 9:
 				var fx := fposmod(i * 67.0 + sin(anim_t * 0.6 + i * 1.3) * 52.0, VIEW.x)
 				var fy := fposmod(i * 103.0 + sin(anim_t * 0.5 + i) * 40.0 + anim_t * 5.0, VIEW.y)
 				var blink := maxf(0.0, sin(anim_t * 3.0 + i * 2.0))
 				draw_circle(Vector2(fx, fy), 7.0, Color(0.7, 1.0, 0.4, 0.16 * blink))
 				draw_circle(Vector2(fx, fy), 2.6, Color(0.9, 1.0, 0.55, 0.3 + 0.65 * blink))
-		6:                                          # Aurora Lake — aurora ribbons + falling snow
+		5:                                          # Cochichewick — aurora ribbons + falling snow
 			for b in 3:
 				var pts := PackedVector2Array()
 				for i in 25:
