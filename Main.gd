@@ -43,7 +43,7 @@ func _sfx_echo(snd: String, pitch: float, vol: float, delay: float) -> void:
 	sfx_echoes.append({"t": delay, "snd": snd, "pitch": pitch, "vol": vol})
 
 func _ouch() -> void:
-	hurt_flash = 0.5
+	hurt_flash = 0.7
 var combo_n := 0                # SNACK COMBO chain length
 var combo_t := 0.0              # seconds left to keep the chain alive
 var nearmiss_flash := 0.0       # brief juicy flourish timer for a near miss (speed-lines + glint)
@@ -224,7 +224,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.12"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.13"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -913,6 +913,7 @@ var sadie_timer := 40.0
 var hawk = null
 var hawk_timer := 8.0           # first fly-by comes early so he introduces himself
 var hawk_done := false          # RUSTY only swoops ONCE per run (no pestering)
+var hawk_summon := false        # a SUMMONS overrides his early-run-only rule (Thermals, Weir Hill)
 var donny = null                # DONNY the wooden speedboat: a Sand Pond cameo (cosmetic, never bites)
 var donny_timer := 14.0         # cooldown before he can roar in
 var cloud = null                # RARE CLOUD GEYSER: ride it up to skip a boss -> {x,y,t}
@@ -1205,8 +1206,7 @@ var prop_timer := 5.0
 var env_scenery: Array = []
 var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
-var sand_dock = null            # SAND POND: the camp dock — Sadie sprints it and CANNONBALLS off
-var sand_dock_next := 0.0
+
 const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_emerald", "", "hero_pleasant"]   # Jimmy inherits the anchored skiff (file name is historical); Cochichewick stays wild
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
@@ -1228,7 +1228,6 @@ const SHORE_LORE := {
 	"hero_woodbury": ["THE TURTLE LOG", "Three painted turtles, necks to the sun, arranged by seniority. The middle of the big water belongs to them."],
 	"hero_purgatory": ["THE DEAD TREE", "It rises out of the shallows like a question nobody answers. The crow is always there. The crow was always there."],
 	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
-	"sand_dock": ["THE CAMP DOCK", "Straight, orange-brown, and exactly one good-girl-gallop long. The end board is worn smooth. You know why."],
 	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
 	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
 	"bank_angler_0": ["THE CASTING ANGLER", "Mid-cast since dawn, probably. The good spots on Jimmy are earned, not found."],
@@ -1287,6 +1286,8 @@ const FORK_MODS := [
 var thermal_rings: Array = []   # RUSTY'S THERMALS: golden hoops to thread — {x, y, hit}
 var thermal_timer := 0.0
 var thermal_chain := 0
+var thermal_hits := 0           # course tally for Rusty's sendoff
+var thermal_total := 0
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
@@ -1397,7 +1398,8 @@ func _update_river_events(delta: float) -> void:
 			_st("forks_taken")
 			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
 				thermal_rings.clear(); thermal_timer = 0.6; thermal_chain = 0
-				hawk_done = false; hawk_timer = 0.5     # Rusty sweeps in to fly the course with you
+				thermal_hits = 0; thermal_total = 0
+				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear()
 			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
 				golden_t = GOLDEN_DUR
@@ -1410,6 +1412,7 @@ func _update_river_events(delta: float) -> void:
 		thermal_timer -= delta
 		if thermal_timer <= 0.0:
 			thermal_timer = randf_range(0.55, 0.85)
+			thermal_total += 1
 			thermal_rings.append({"x": clampf(VIEW.x * 0.5 + sin(distance * 0.0018) * (VIEW.x * 0.3) + randf_range(-40.0, 40.0),
 				BANK_W + 40.0, VIEW.x - BANK_W - 40.0), "y": -40.0, "hit": false})
 		for tr in thermal_rings:
@@ -1417,7 +1420,9 @@ func _update_river_events(delta: float) -> void:
 			if not tr.hit and absf(float(tr.y) - BASE_Y) < 16.0 and absf(float(tr.x) - duck_x) < 36.0:
 				tr.hit = true
 				thermal_chain += 1
+				thermal_hits += 1
 				run_feathers += 2 + mini(thermal_chain, 8)
+				_float_text(tr.x, BASE_Y - 60.0, "+%d" % (2 + mini(thermal_chain, 8)), Color(1.0, 0.88, 0.4))
 				_add_loft(0.05)
 				_sfx("combo", 0.9 + 0.07 * minf(thermal_chain, 10.0), -6.0)
 				_spawn_parts(tr.x, BASE_Y, 8, Color(1.0, 0.88, 0.4), 160.0)
@@ -1429,8 +1434,10 @@ func _update_river_events(delta: float) -> void:
 	elif not thermal_rings.is_empty():
 		thermal_rings.clear()
 	if stretch_mod != "" and distance >= stretch_until:
-		if stretch_mod == "rusty" and hawk != null:     # course over: Rusty reads your run before he goes
-			hawk.line = _rusty_advice() if _rusty_advice() != "" else "GOOD flying, dweeb. same time tomorrow?"
+		if stretch_mod == "rusty" and hawk != null:     # course over: the tally, then the read
+			var _tl := "%d of %d rings! " % [thermal_hits, maxi(thermal_total, 1)]
+			var _adv := _rusty_advice()
+			hawk.line = _tl + (_adv if _adv != "" else ("MAGNIFICENT." if thermal_hits >= thermal_total - 2 else "we'll work on it, dweeb."))
 			hawk.said = false; hawk.say_t = -99.0
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
@@ -1800,7 +1807,7 @@ func _ready() -> void:
 	for bn in ["bank_cattail_0", "bank_cattail_1", "bank_umbrella", "bank_blanket", "bank_grave",
 			"bank_deadtree", "bank_sandcastle", "bank_lamp", "bank_fern", "bank_shroom",
 			"bank_pine", "bank_snowduck", "bank_cow",
-			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey", "sand_dock",
+			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey",
 			"bank_angler_0", "bank_angler_1",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
 			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
@@ -2000,7 +2007,7 @@ func _ready() -> void:
 		if HERO_NAMES[theme_idx] != "" and tex_env.has(HERO_NAMES[theme_idx]):          # the biome's LANDMARK anchors the shot
 			env_scenery.append({"n": HERO_NAMES[theme_idx], "x": BANK_W + 86.0, "y": 300.0,
 				"rooted": true, "hero": true, "phase": 0.0, "flip": false})
-		for _ri in 16:                                  # pre-seed the scenery the run would have streamed in
+		for _ri in 6:                                   # pre-seed at LIVE density (16 lied about the cut)
 			var _rtbl: Array = ENV_TABLE[theme_idx].filter(func(e): return tex_env.has(e[0]))
 			if _rtbl.is_empty(): break
 			var _rtot := 0.0                            # WEIGHTED pick, same as live spawning (else rare rafts flood the shot)
@@ -2628,7 +2635,11 @@ func _eff_species() -> String:                      # the species to RENDER (rea
 	return (species + "hen") if (hen_mode and ducks.has(species + "hen")) else species
 
 func _hen_tint() -> Color:                          # only a fallback drab for ducks with NO hen art (rubber/secret)
-	return Color(0.9, 0.85, 0.78) if (hen_mode and not ducks.has(species + "hen")) else Color(1, 1, 1)
+	var base := Color(0.9, 0.85, 0.78) if (hen_mode and not ducks.has(species + "hen")) else Color(1, 1, 1)
+	if hurt_flash > 0.0:                            # OUCH reads ON THE DUCK: a red strobe, fading fast
+		var hp2 := hurt_flash * (0.5 + 0.5 * sin(anim_t * 30.0))
+		base = base.lerp(Color(1.0, 0.25, 0.2), clampf(hp2 * 1.6, 0.0, 0.75))
+	return base
 
 func _equip_wear(id: String) -> void:               # slot it into HEAD or BODY, whichever it belongs to
 	if _wear_slot(id) == "body":
@@ -2815,7 +2826,8 @@ func _dev_do(act: String) -> void:
 				stretch_mod = "rusty"
 				stretch_until = distance + THEME_LEN * 0.85
 				thermal_rings.clear(); thermal_timer = 0.4; thermal_chain = 0
-				hawk_done = false; hawk_timer = 0.5
+				thermal_hits = 0; thermal_total = 0
+				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear()
 				_flash("RUSTY'S THERMALS", 2.0)
 		"bread": _force_boss(-1)
@@ -4027,7 +4039,13 @@ func _spawn_hawk() -> void:
 	var sx := -70.0 if dir > 0.0 else VIEW.x + 70.0
 	# RUSTY is an early-game GUIDE: a friendly tip or cheer, nothing to do with bosses.
 	var line: String
+	hawk_summon = false
 	var is_tut: bool = not tutorial_seen
+	if stretch_mod == "rusty":                      # the COURSE BRIEFING comes first, loud and clear
+		hawk = {"x": -70.0, "y": 150.0, "dir": 1.0, "t": 0.0, "said": false, "say_t": -99.0, "dwell": 5.6,
+			"line": "MY THERMALS, dweeb! thread the GOLD RINGS —\neach one pays. CHAINS pay more. FLY!"}
+		_sfx("screech", 1.0, -8.0)
+		return
 	if is_tut:                                      # the FIRST-RUN welcome: teach the controls
 		line = "welcome, duckling! DRAG to steer, TAP to hop.\nfill your LOFT bar and the special ERUPTS — and come see me at my SHOP!"
 		tutorial_seen = true
@@ -4068,7 +4086,8 @@ func _update_hawk(delta: float) -> void:
 	if hawk == null:
 		# RUSTY swoops in ONCE, EARLY (under 1000 ft), and only every 3rd run —
 		# but he always shows on your very first run to teach the controls
-		if not hawk_done and not tut_mode and (hawk_visits or not tutorial_seen) and boss == null and int(distance / 10.0) < 1000:
+		if not hawk_done and not tut_mode and (hawk_visits or not tutorial_seen or hawk_summon) and boss == null \
+				and (int(distance / 10.0) < 1000 or hawk_summon):
 			hawk_timer -= delta
 			if hawk_timer <= 0.0:
 				_spawn_hawk()
@@ -4975,7 +4994,6 @@ func reset_game() -> void:
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	hero_next = randf_range(6000.0, 9000.0)
 	thermal_rings.clear(); thermal_chain = 0
-	sand_dock = null; sand_dock_next = 0.0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -5983,9 +6001,9 @@ func _update_play(delta: float) -> void:
 	# living-river scenery: biome-weighted pond dressing streaming by (pure atmosphere, no collide).
 	# CALM rules (Scott: "lilypads distracting"): sparse, bank-hugging, capped, never during bosses.
 	env_timer -= delta
-	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 6 \
+	if env_timer <= 0.0 and not tex_env.is_empty() and boss == null and env_scenery.size() < 4 \
 			and (fork.is_empty() or fork.get("picked", true)):   # the split gets a CLEAN stage
-		env_timer = randf_range(1.8, 3.4)          # MODERATE density (Scott's call): ~half, calmer + cheaper
+		env_timer = randf_range(2.8, 4.8)          # SPARSE: a piece is an event, not a texture
 		var tbl: Array = ENV_TABLE[theme_idx]
 		var tot := 0.0
 		for entry in tbl:
@@ -6005,27 +6023,6 @@ func _update_play(delta: float) -> void:
 					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
 						"phase": randf() * TAU, "flip": randf() < 0.5})
 					break
-	# SAND POND: the camp dock drifts by — and Sadie does the thing she was born to do
-	if theme_idx == 3 and sand_dock == null and distance >= sand_dock_next and boss == null \
-			and fork.is_empty() and tex_env.has("sand_dock"):
-		sand_dock_next = distance + randf_range(5000.0, 7000.0)
-		sand_dock = {"y": -40.0, "side": (1.0 if randf() < 0.5 else -1.0), "t": -1.0}
-	if sand_dock != null:
-		sand_dock.y += speed * delta
-		if sand_dock.t < 0.0 and sand_dock.y > 130.0:
-			sand_dock.t = 0.0
-			_sfx("bark", 1.1, -6.0)                 # she's spotted the end of the dock
-		elif sand_dock.t >= 0.0:
-			var _pt: float = sand_dock.t
-			sand_dock.t += delta
-			if _pt < 1.32 and sand_dock.t >= 1.32:  # SPLASHDOWN
-				var _dend: float = (BANK_W + 232.0) if sand_dock.side > 0.0 else (VIEW.x - BANK_W - 232.0)
-				_water_burst(_dend, float(sand_dock.y), 1.4)
-				ripples.append({"x": _dend, "y": float(sand_dock.y), "t": 0.0, "max": 120.0})
-				_float_text(_dend, float(sand_dock.y) - 40.0, "SPLOOSH!", Color(0.7, 0.9, 1.0))
-				_sfx("splash_big", 1.0); _sfx("bark", 0.9, -4.0)
-		if sand_dock.y > VIEW.y + 60.0:
-			sand_dock = null
 	# a HERO landmark drifts through, rare enough to be an event
 	if distance >= hero_next and boss == null and HERO_NAMES[theme_idx] != "" and tex_env.has(HERO_NAMES[theme_idx]):
 		hero_next = distance + randf_range(7000.0, 9500.0)
@@ -6227,6 +6224,7 @@ func _update_play(delta: float) -> void:
 		_see_shore(theme_idx)                      # its fixtures enter your LIFE LIST
 		if theme_idx == 5 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
 			hawk_done = false                      # always patrols his own water — one more pass
+			hawk_summon = true
 			hawk_timer = randf_range(3.0, 6.0)
 		_sfx("chime", 0.75); _sfx("fwoosh", 0.6, -6.0)
 		_swap_theme_music()                        # the river's mood shifts the music too
@@ -11179,16 +11177,8 @@ func _refresh_hud() -> void:
 	if alive and int(mult * 100.0) > int(run_stats.get("toppace", 100)):
 		run_stats["toppace"] = int(mult * 100.0)   # best pace multiplier this run (×100)
 	pace_mult = mult
-	if mult > 1.04:
-		pace_label.text = "×%.2f" % mult
-		# sit it just right of the ft value, dropped to share the big text's baseline
-		var ftw: float = font.get_string_size(score_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
-		pace_label.position = Vector2(20.0 + ftw + 14.0, 10.0 + 12.0)
-		var hot: float = clampf((mult - 1.6) / 1.4, 0.0, 1.0)   # ramps red-hot as the river screams along
-		pace_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0).lerp(Color(1.0, 0.75, 0.3), hot))
-		pace_label.visible = true
-	else:
-		pace_label.visible = false
+	pace_label.visible = false                     # the ×pace readout read as leftover telemetry — retired
+	                                               # (toppace still logs for the LOGBOOK charts)
 	# (shield + fire are drawn as sprites in _draw_status_icons — emoji die on Android)
 	loft_bar.value = loft
 	loft_bar.is_ready = loft_ready
@@ -12764,34 +12754,6 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
-	# the camp dock + Sadie's cannonball run
-	if sand_dock != null and tex_env.has("sand_dock"):
-		var _dk: Texture2D = tex_env["sand_dock"]
-		var _dscale := 1.8
-		var _dw: float = _dk.get_size().x * _dscale
-		var _dleft: bool = sand_dock.side > 0.0
-		var _dcx: float = (BANK_W + _dw * 0.5 - 14.0) if _dleft else (VIEW.x - BANK_W - _dw * 0.5 + 14.0)
-		draw_set_transform(Vector2(_dcx, float(sand_dock.y)), 0.0, Vector2(_dscale, _dscale))
-		draw_texture(_dk, -_dk.get_size() * 0.5)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		var _dt: float = float(sand_dock.t)
-		if _dt >= 0.0 and _dt < 1.32 and not tex_sadie_run.is_empty():
-			var _dir: float = 1.0 if _dleft else -1.0
-			var _x0: float = (BANK_W + 6.0) if _dleft else (VIEW.x - BANK_W - 6.0)
-			var _x1: float = (BANK_W + 196.0) if _dleft else (VIEW.x - BANK_W - 196.0)
-			var _sx: float
-			var _sy: float = float(sand_dock.y) - 14.0
-			if _dt < 0.9:
-				_sx = lerpf(_x0, _x1, _dt / 0.9)      # the RUNUP, full gallop
-			else:
-				var _jp: float = (_dt - 0.9) / 0.42   # the LEAP off the end board
-				_sx = lerpf(_x1, _x1 + _dir * 52.0, _jp)
-				_sy -= sin(_jp * PI) * 42.0 - _jp * 10.0
-			var _srf: Texture2D = tex_sadie_run[int(anim_t * 16.0) % tex_sadie_run.size()]
-			draw_set_transform(Vector2(_sx, _sy), (0.35 * _dir * clampf((_dt - 0.9) / 0.42, 0.0, 1.0)) if _dt >= 0.9 else 0.0,
-				Vector2(1.5 * _dir, 1.5))
-			draw_texture(_srf, -_srf.get_size() * 0.5)
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# RUSTY'S THERMALS: golden hoops shimmer on the water — thread them
 	for tr in thermal_rings:
 		var _ta: float = 0.35 if tr.hit else (0.75 + 0.2 * sin(anim_t * 5.0 + float(tr.x)))
@@ -12863,7 +12825,7 @@ func _draw_bank_decor() -> void:
 		return
 	var pair: Array = BANK_PROPS[theme_idx]
 	var have_tex: bool = tex_env.has(pair[0]) and tex_env.has(pair[1])
-	var nslots: int = 4 if have_tex else 4         # reeled WAY in (Scott: "too much art on the sides")
+	var nslots: int = 2 if have_tex else 2         # ONE piece per side per screen — the banks are quiet now
 	for k in nslots:
 		var span := VIEW.y + 200.0
 		var sy: float = fposmod(k * (span / nslots) + distance, span) - 100.0
