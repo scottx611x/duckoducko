@@ -224,7 +224,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.15"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.16"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -2004,7 +2004,12 @@ func _ready() -> void:
 		in_menu = false; in_select = true; in_wardrobe = true
 		equipped_wear = "raccoon"; equipped_body = "turtle"; feathers = 4000
 		sadie_line = SADIE_LINES[0]; sadie_line_t = 999.0
-		await get_tree().create_timer(0.4).timeout
+		var _wf := _arg_val(OS.get_cmdline_user_args(), "--fetch", "")
+		if _wf != "":                                  # freeze her mid-fetch for verification shots
+			sadie_play_kind = 2 if _wf == "lap" else 0
+			sadie_play_dur = 4.0
+			sadie_fetch_t = {"chase": 2.72, "return": 1.2, "lap": 3.0}.get(_wf, 2.72)
+		await get_tree().create_timer(0.05).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_ward.png")
 		get_tree().quit()
@@ -14469,9 +14474,9 @@ func _draw_wardrobe() -> void:
 					var tp := fp / 0.18
 					ball_pos = mouth.lerp(spos + far, tp) - Vector2(0, sin(tp * PI) * 120.0)
 					held = false; fi = 1
-				elif fp < 0.46:                           # the CHASE: ears back, full gallop
+				elif fp < 0.46:                           # the CHASE: three flying bounds after it
 					var cp := (fp - 0.18) / 0.28
-					sd_off = far * cp
+					sd_off = far * cp + Vector2(0, -absf(sin(cp * PI * 3.0)) * 24.0)
 					running = true; run_dir = 1.0
 					ball_pos = spos + far; held = false
 					if randf() < 0.25:                    # kicked-up spray behind her
@@ -14483,9 +14488,9 @@ func _draw_wardrobe() -> void:
 					sd_off = far + Vector2(0, -sin(pp * PI) * 26.0)
 					sq = 1.0 - 0.24 * sin(pp * PI)
 					ball_pos = spos + far; held = false; fi = 4
-				elif fp < 0.88:                           # the RETURN: gallop home, ball in mouth, SO proud
+				elif fp < 0.88:                           # the RETURN: bounds home, ball in mouth, SO proud
 					var rp := (fp - 0.56) / 0.32
-					sd_off = far * (1.0 - rp)
+					sd_off = far * (1.0 - rp) + Vector2(0, -absf(sin(rp * PI * 3.0)) * 24.0)
 					running = true; run_dir = -1.0
 					held = true
 				else:                                     # skid-stop + drop at your feet
@@ -14517,7 +14522,7 @@ func _draw_wardrobe() -> void:
 				held = true
 				var lap := fposmod(fp * 2.0, 1.0)         # two full laps
 				var lx := sin(lap * PI) * 380.0           # out to right field and back
-				sd_off = Vector2(lx, -absf(sin(fp * TAU * 5.0)) * 5.0)
+				sd_off = Vector2(lx, -absf(sin(fp * TAU * 4.0)) * 18.0)   # she BOUNDS the laps
 				running = true
 				run_dir = 1.0 if cos(lap * PI) >= 0.0 else -1.0
 				if randf() < 0.2:
@@ -14542,9 +14547,9 @@ func _draw_wardrobe() -> void:
 					sd_off.y = -sin((fp - 0.7) / 0.3 * PI) * 18.0
 					sq = 1.0 + 0.2 * sin((fp - 0.7) / 0.3 * PI)
 		draw_circle(spos + Vector2(6.0, 36.0), 50.0, Color(1.0, 0.7, 0.35, 0.11 + (0.06 if playing else 0.0)))
-		if running and not tex_sadie_run.is_empty():   # the REAL gallop, facing her direction of travel
-			var _rf: Texture2D = tex_sadie_run[int(anim_t * 16.0) % tex_sadie_run.size()]
-			draw_set_transform(spos + sd_off + Vector2(0, 26.0), 0.0, Vector2(2.6 * run_dir / sq, 2.6 * sq))
+		if running and tex_sadie_anim.size() > 4:      # she BOUNDS on her best pose — the boss-zoomies look
+			var _rf: Texture2D = tex_sadie_anim[4]
+			draw_set_transform(spos + sd_off + Vector2(0, 14.0), run_dir * 0.42, Vector2(2.1 * run_dir / sq, 2.1 * sq))
 			draw_texture(_rf, -_rf.get_size() * 0.5, Color(1.18, 1.12, 1.06))
 		else:
 			draw_set_transform(spos + sd_off + Vector2(0, -bounce), 0.0, Vector2(2.2 / sq, 2.2 * sq))
