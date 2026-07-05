@@ -36,6 +36,14 @@ const DUCKLING_LOST_DECK := ["(they're fine. probably.)", "(off to duckling camp
 	"(they'll walk it off.)", "(brave little soul.)", "(noble sacrifice.)",
 	"(they knew the risks.)", "(gone fishin'.)", "(it's just a flesh wound.)"]
 var nearmiss_cd := 0.0          # cooldown so a flurry of herons doesn't spam the callout
+var hurt_flash := 0.0           # tasteful red edge-pulse when YOU take a hit
+var sfx_echoes: Array = []      # deferred decaying sfx repeats: {t, snd, pitch, vol}
+
+func _sfx_echo(snd: String, pitch: float, vol: float, delay: float) -> void:
+	sfx_echoes.append({"t": delay, "snd": snd, "pitch": pitch, "vol": vol})
+
+func _ouch() -> void:
+	hurt_flash = 0.5
 var combo_n := 0                # SNACK COMBO chain length
 var combo_t := 0.0              # seconds left to keep the chain alive
 var nearmiss_flash := 0.0       # brief juicy flourish timer for a near miss (speed-lines + glint)
@@ -216,7 +224,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.11"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.12"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3871,6 +3879,7 @@ func _dyn_pace() -> float:
 	return m
 
 func _lose_duckling() -> void:
+	_ouch()
 	momentum_t = 0.0                                # MOMENTUM: a duckling-loss bonk breaks the un-hit streak
 	if boon_gosling_guard and shield_charges > 0:   # GOSLING GUARD: a shield soaks the scatter
 		shield_charges -= 1
@@ -4435,7 +4444,7 @@ func _update_turtle(delta: float) -> void:
 				# the BITE: caught on the water at the strike point = it gets you
 				if absf(duck_x - tt.snap_x) < 46.0 and not is_airborne() and not is_invincible():
 					if shield_charges > 0:
-						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0)
+						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0); _ouch()
 					elif ducklings_n > 0:
 						_lose_duckling()
 					else:
@@ -5791,6 +5800,16 @@ func _record_run() -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
+	hurt_flash = maxf(0.0, hurt_flash - delta * 2.2)
+	if not sfx_echoes.is_empty():
+		var _keep_e: Array = []
+		for _e in sfx_echoes:
+			_e.t -= delta
+			if _e.t <= 0.0:
+				_sfx(_e.snd, _e.pitch, _e.vol)
+			else:
+				_keep_e.append(_e)
+		sfx_echoes = _keep_e
 	if slot_t > 0.0:
 		_update_slot(delta)
 	if in_wardrobe and sadie_fetch_t <= 0.0:         # SADIE plays with her ball on her own now and then
@@ -6469,8 +6488,14 @@ func _stomp_critter(x: float, y: float, who: String) -> void:
 	duck_shake = maxf(duck_shake, 0.22)
 	_sfx("crunch", 1.0)
 	_sfx("quack", randf_range(0.6, 0.8), 3.0)
+	_sfx_echo("crunch", 0.8, -8.0, 0.11)           # the MARIO reverb: two decaying repeats
+	_sfx_echo("crunch", 0.62, -15.0, 0.24)
+	if state == St.HOPPING:                        # and the BOUNCE — the stomp gives back
+		hop_t = cur_hop_dur() * 0.2
+		hop_lift_bonus = maxf(hop_lift_bonus, 1.25)
 	_spawn_parts(x, y, 18, Color(0.85, 0.9, 1.0), 240.0)
 	ripples.append({"x": x, "y": y, "t": 0.0, "max": 120.0})
+	ripples.append({"x": x, "y": y, "t": 0.0, "max": 62.0, "col": Color(1.0, 0.95, 0.75)})
 	_float_text(x, y - 36.0, "STOMP!  +3", Color(1.0, 0.85, 0.4))
 
 # ---- GERALD THE IMMENSE ------------------------------------------------------
@@ -7694,6 +7719,9 @@ func _snapz_fight(delta: float) -> void:
 func _boss_stomped() -> void:
 	boss.stomped = true
 	boss_stomp_flash = 1.0
+	_sfx_echo("mega", 0.85, -8.0, 0.12)            # the boss BOP reverberates
+	_sfx_echo("mega", 0.65, -15.0, 0.26)
+	ripples.append({"x": boss.x, "y": BASE_Y, "t": 0.0, "max": 90.0, "col": Color(1.0, 0.95, 0.75)})
 	duck_shake = maxf(duck_shake, 0.5)
 	# bounce the duck back up off his head so the stomp reads as a real bop
 	hop_t = cur_hop_dur() * 0.18
@@ -7756,6 +7784,7 @@ func _update_boss_globs(delta: float) -> void:
 	boss_globs = boss_globs.filter(func(f): return (f.y < BASE_Y + 30.0 or (f.get("ball", false) and not f.get("bounced", false))) and f.y > -220.0 and f.x > -40.0 and f.x < VIEW.x + 40.0)
 
 func _boss_hits_player(by_glob := false) -> void:
+	_ouch()
 	if shield_charges > 0:
 		shield_charges -= 1
 		_flash("POOF.")
@@ -7949,7 +7978,7 @@ func _update_thwomp(l: Dictionary, delta: float) -> void:
 				_sfx("crunch", 0.8); _sfx("mega", 0.55); _sfx("bonk", 0.6, -4.0)
 				if alive and not is_airborne() and not is_invincible() and absf(l.x - duck_x) < l.w * 0.5 + 18.0:
 					if shield_charges > 0:
-						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0)
+						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0); _ouch()
 					elif ducklings_n > 0:
 						_lose_duckling()
 					else:
@@ -11638,6 +11667,15 @@ func _draw() -> void:
 	_draw_bank_decor()
 	if golden_t > 0.0:
 		_draw_golden_hour()
+	if hurt_flash > 0.0:                            # OUCH: red breathes in from the edges, never a full flash
+		var _ha: float = hurt_flash * (0.5 if setting_reduce_flash else 1.0)
+		for _hi in 3:
+			var _hw := 34.0 - _hi * 10.0
+			var _haa := (0.10 + _hi * 0.05) * _ha
+			draw_rect(Rect2(0, 0, _hw, VIEW.y), Color(0.9, 0.12, 0.1, _haa))
+			draw_rect(Rect2(VIEW.x - _hw, 0, _hw, VIEW.y), Color(0.9, 0.12, 0.1, _haa))
+			draw_rect(Rect2(0, 0, VIEW.x, _hw * 0.7), Color(0.9, 0.12, 0.1, _haa))
+			draw_rect(Rect2(0, VIEW.y - _hw * 0.7, VIEW.x, _hw * 0.7), Color(0.9, 0.12, 0.1, _haa))
 
 	# the in-run menu escape hatch + pause button (translucent, corner, ignorable).
 	# hidden during the tutorial — RUSTY's SKIP button owns that corner instead.
