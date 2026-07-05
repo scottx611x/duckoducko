@@ -216,7 +216,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.10"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.11"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -870,6 +870,7 @@ var squash := 0.0               # landing squash-and-stretch (1 -> 0)
 
 var theme_idx := 0
 var theme_prev := 0
+var theme_route: Array = [0, 1, 2, 3, 4, 5, 6]  # per-run pond ORDER (Buker opens; rest shuffled)
 var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
 var region_t := -9.0            # anim_t when a new scenery region began (for its arrival banner)
 
@@ -1379,7 +1380,8 @@ func _update_river_events(delta: float) -> void:
 			theme_sweep = 0.0
 			region_t = anim_t
 			_see_shore(theme_idx)
-			biome_progress = float(theme_idx) * THEME_LEN + 400.0   # keep the modulo router in step
+			var _rpos: int = maxi(0, theme_route.find(theme_idx))
+			biome_progress = float(_rpos) * THEME_LEN + 400.0   # keep the ROUTE router in step
 			_swap_theme_music()
 			_flash("%s — %s" % [THEMES[theme_idx].name, m.name], 2.4)
 			_say(String(m.desc), 2.6)
@@ -3907,7 +3909,7 @@ func _update_sadie(delta: float) -> void:
 	if sadie == null:
 		if distance > 3000.0:                      # the dog park is past the 300m bend
 			sadie_timer -= delta
-			if sadie_timer <= 0.0 and stretch_mod != "rusty":
+			if sadie_timer <= 0.0 and stretch_mod != "rusty" and not _cameo_busy():
 				_spawn_sadie()
 		return
 	sadie.t += delta
@@ -4137,7 +4139,7 @@ func _update_donny(delta: float) -> void:
 		# a rare treat: only in SAND POND, mid-paddle, no duel
 		if alive and boss == null and state != St.MEGA and not tut_mode and not paused and distance > 1500.0:
 			donny_timer -= delta
-			if donny_timer <= 0.0 and stretch_mod != "rusty":
+			if donny_timer <= 0.0 and stretch_mod != "rusty" and not _cameo_busy():
 				_spawn_donny()
 		return
 	var d = donny
@@ -4376,6 +4378,10 @@ func _draw_cloud() -> void:
 		draw_line(Vector2(cx - 9, jy + 6), Vector2(cx, jy), Color(0.8, 0.95, 1.0, ca), 3.0)
 		draw_line(Vector2(cx + 9, jy + 6), Vector2(cx, jy), Color(0.8, 0.95, 1.0, ca), 3.0)
 
+# stage manager: only ONE major ambient character on stage at a time
+func _cameo_busy() -> bool:
+	return sadie != null or donny != null or haz_turtle != null
+
 func _update_turtle(delta: float) -> void:
 	if boss != null or tut_mode:                   # no turtles during a boss duel or the tutorial
 		haz_turtle = null
@@ -4385,7 +4391,7 @@ func _update_turtle(delta: float) -> void:
 		# stops surfacing, all run long (STARVATION-era menace)
 		if distance > 4500.0 and (next_boss_idx < 2 or ascension >= 5):
 			turtle_timer -= delta
-			if turtle_timer <= 0.0:
+			if turtle_timer <= 0.0 and not _cameo_busy():
 				haz_turtle = {"x": clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0),
 					"stage": "lurk", "t": 0.0, "snap_x": duck_x, "sub": 1.0, "yaw0": randf_range(-0.7, 0.7)}
 				_codex_see("turtle")
@@ -4876,6 +4882,10 @@ func reset_game() -> void:
 	boss_waves.clear()
 	next_boss_idx = 0
 	_bigday_reseed(1)                                  # Big Day: everyone faces the same lineup today
+	theme_route = [0]
+	var _rest := [1, 2, 3, 4, 5, 6]
+	_rest.shuffle()
+	theme_route.append_array(_rest)                    # every trip starts at the launch; the chain reshuffles
 	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2], ["gerald", "megasadie"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = the ETERNAL or SADIE THE BOUNDLESS
 	boss_hp_bonus = 0
 	asc_pace = 1.0
@@ -6189,7 +6199,7 @@ func _update_play(delta: float) -> void:
 		_open_draft()
 
 	# themed stretches: new palette washes down the screen, the duck approves
-	var ti := int(biome_progress / THEME_LEN) % THEMES.size()
+	var ti: int = theme_route[int(biome_progress / THEME_LEN) % theme_route.size()]
 	if ti != theme_idx and not tut_mode:
 		theme_prev = theme_idx
 		theme_idx = ti
@@ -7846,7 +7856,7 @@ func _spawn(delta: float) -> void:
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
-	if heron_timer <= 0.0 and distance > HERON_START:
+	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2:
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
 		if ascension >= 6 and randf() < 0.25 + 0.05 * (ascension - 6):   # RELENTLESS FLOCK: herons hunt in packs
@@ -12652,16 +12662,16 @@ func _draw_flock() -> void:
 # GOLDEN HOUR: a warm low-sun wash over the whole river — strongest up top, eased in/out.
 func _draw_golden_hour() -> void:
 	var ge: float = minf(clampf((GOLDEN_DUR - golden_t) / 2.5, 0.0, 1.0), clampf(golden_t / 2.5, 0.0, 1.0))
-	for i in 10:                                           # a warm vertical gradient (low sun = brightest at the top)
+	for i in 10:                                           # a warm vertical gradient — HALVED (verdict from the household)
 		var yy: float = i * VIEW.y / 10.0
-		var a: float = maxf(0.0, (0.26 - i * 0.018)) * ge
+		var a: float = maxf(0.0, (0.13 - i * 0.009)) * ge
 		draw_rect(Rect2(0.0, yy, VIEW.x, VIEW.y / 10.0 + 1.0), Color(1.0, 0.66, 0.28, a))
-	for g in 3:                                            # the low sun's warm glow, layered
-		draw_circle(Vector2(VIEW.x * 0.5, -40.0), 260.0 - g * 60.0, Color(1.0, 0.84, 0.46, 0.1 * ge))
-	for r in 4:                                            # soft slanting god-rays
-		var rx: float = VIEW.x * (0.12 + r * 0.26) + sin(anim_t * 0.2 + r) * 14.0
+	for g in 2:                                            # the low sun's warm glow, gentler
+		draw_circle(Vector2(VIEW.x * 0.5, -40.0), 240.0 - g * 70.0, Color(1.0, 0.84, 0.46, 0.05 * ge))
+	for r in 3:                                            # whisper-faint god-rays
+		var rx: float = VIEW.x * (0.16 + r * 0.3) + sin(anim_t * 0.2 + r) * 14.0
 		draw_polyline(PackedVector2Array([Vector2(rx, -20.0), Vector2(rx + 70.0, VIEW.y + 20.0)]),
-			Color(1.0, 0.9, 0.62, 0.025 * ge), 34.0)
+			Color(1.0, 0.9, 0.62, 0.012 * ge), 30.0)
 
 # RIVER EVENTS + FORK visuals: the split island + hanging signs, the lost duckling's raft,
 # and squall rain. Drawn with the gameplay layer (they're world objects, not HUD).
@@ -12815,7 +12825,7 @@ func _draw_bank_decor() -> void:
 		return
 	var pair: Array = BANK_PROPS[theme_idx]
 	var have_tex: bool = tex_env.has(pair[0]) and tex_env.has(pair[1])
-	var nslots: int = 7 if have_tex else 6
+	var nslots: int = 4 if have_tex else 4         # reeled WAY in (Scott: "too much art on the sides")
 	for k in nslots:
 		var span := VIEW.y + 200.0
 		var sy: float = fposmod(k * (span / nslots) + distance, span) - 100.0
@@ -12832,12 +12842,19 @@ func _draw_bank_decor() -> void:
 				if not codex_seen.has("shore_bank_cow"):
 					_codex_see("shore_bank_cow")       # you SAW the cow. the cow saw you.
 			else:
-				tname = pair[0] if h % 3 != 0 else pair[1]
+				tname = pair[0] if h % 4 != 0 else pair[1]
 			var btex: Texture2D = tex_env.get(tname)
 			if btex != null:
 				var bsz: Vector2 = btex.get_size() * 2.0
 				var inset: float = -d * (8.0 + float((k * 13 + wrap_i * 7) % 14))   # sit ON the grass
-				draw_texture_rect(btex, Rect2(Vector2(b.x + inset - bsz.x * 0.5, b.y - bsz.y), bsz), false)
+				# side-facing props (cow, dogs, anglers, jetskis) natively face RIGHT —
+				# mirror them on the right bank so they watch the WATER, not the woods
+				if left:
+					draw_texture_rect(btex, Rect2(Vector2(b.x + inset - bsz.x * 0.5, b.y - bsz.y), bsz), false)
+				else:
+					draw_set_transform(Vector2(b.x + inset, b.y - bsz.y * 0.5), 0.0, Vector2(-1.0, 1.0))
+					draw_texture_rect(btex, Rect2(-bsz * 0.5, bsz), false)
+					draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			continue
 		match theme_idx:
 			0:                                        # Lazy Pond — cattail reeds
