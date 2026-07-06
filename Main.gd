@@ -185,6 +185,7 @@ const FACTS := [
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
 const THEME_LEN := 9000.0       # distance units (10 = 1m) — longer regions so each one registers
+const SLIP_LEN := THEME_LEN * 1.6   # RUSTY'S THERMALS course length — long enough to EARN the grade
 const THEMES := [
 	{"name": "Buker Pond",     "tint": Color(1.0, 1.0, 1.0),      "line": "in at the boat launch. every trip starts here."},
 	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water. all of it."},
@@ -224,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.16"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.17"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -941,6 +942,7 @@ var ducklings_wear := true      # cosmetic toggle: your brood sports your equipp
 var setting_shake := true       # SCREEN SHAKE — impact judder (off for comfort)
 var setting_reduce_flash := false  # REDUCED FLASHING — dampen strobes/flashes (photosensitivity)
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
+var tex_hawk_lead := []         # his BACK view — flying away, leading the Thermals
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
 var shop_screech_t := -9.0      # anim_t of the last tap on the shopkeeper
 var shop_line := ""             # the line he screeched (tap-triggered, not auto)
@@ -1293,7 +1295,7 @@ var slip_tone := 0              # rising hum step while you hold the line
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
-		return 0.02                                  # the Thermals are a truce — no hunting
+		return 0.0                                   # the Thermals are HIS course — nothing else exists
 	return (1.8 if ev_id == "patrol" else 1.0) \
 		* (1.5 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
 
@@ -1308,7 +1310,7 @@ func _ev_prop_mult() -> float:
 func _ev_speed_mult() -> float:
 	# the current EASES through an unpicked split — reading two signs at full flow felt random
 	var fork_slow: float = 0.45 if (not fork.is_empty() and not fork.get("picked", false)) else 1.0
-	return (1.22 if ev_id == "tailwind" else 1.0) * fork_slow
+	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * fork_slow   # his slipstream PULLS you
 
 func _update_river_events(delta: float) -> void:
 	if tut_mode or boss != null or not alive:
@@ -1332,7 +1334,7 @@ func _update_river_events(delta: float) -> void:
 			_say("the little one paddles off...", 2.2)     # missed — a soft, sad beat (whimsy rule: never punish hard)
 			ev_duckling = {}; ev_id = ""
 	# roll a new event
-	if ev_id == "" and distance >= ev_next and fork.is_empty():
+	if ev_id == "" and distance >= ev_next and fork.is_empty() and stretch_mod != "rusty":
 		var e: Dictionary = RIVER_EVENTS[randi() % RIVER_EVENTS.size()]
 		ev_id = e.id
 		ev_until = distance + randf_range(5200.0, 7200.0)
@@ -1399,10 +1401,13 @@ func _update_river_events(delta: float) -> void:
 			_sfx("chime", 0.9)
 			_st("forks_taken")
 			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
+				stretch_until = distance + SLIP_LEN
 				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
 				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
-				enemies.clear(); logs.clear()
+				enemies.clear(); logs.clear(); items.clear()
+				next_draft = maxf(next_draft, stretch_until + 600.0)
+				if ev_id != "": ev_until = distance
 			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
 				golden_t = GOLDEN_DUR
 		if float(fork.y) > VIEW.y + 260.0:
@@ -1413,10 +1418,12 @@ func _update_river_events(delta: float) -> void:
 	# every beat you hold his line scores. Fly it near-perfect and he teaches you something
 	# LEGENDARY. This is a TRACKING game, not a dodging game — a different wing entirely.
 	if stretch_mod == "rusty":
-		var _sw1: float = sin(distance * 0.0011) * (VIEW.x * 0.30)
-		var _sw2: float = sin(distance * 0.0033 + 1.7) * (VIEW.x * 0.17)
-		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
-		slip_pts.append({"x": slip_lead_x, "y": 176.0})
+		var _cprog: float = clampf(1.0 - (stretch_until - distance) / SLIP_LEN, 0.0, 1.0)
+		var _sw1: float = sin(distance * 0.0011) * (VIEW.x * 0.27)
+		var _sw2: float = sin(distance * 0.0037 + 1.7) * (VIEW.x * (0.11 + 0.11 * _cprog))
+		var _sw3: float = sin(distance * 0.0093 + 4.2) * (VIEW.x * 0.12) * _cprog   # the late-course JUKES
+		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2 + _sw3, BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
+		slip_pts.append({"x": slip_lead_x, "y": 148.0})
 		for sp3 in slip_pts:
 			sp3.y += speed * delta
 		slip_pts = slip_pts.filter(func(sp4): return float(sp4.y) < VIEW.y + 30.0)
@@ -1429,7 +1436,7 @@ func _update_river_events(delta: float) -> void:
 					break
 			if _band != null:
 				slip_total += 1
-				if absf(float(_band.x) - duck_x) < 34.0:
+				if absf(float(_band.x) - duck_x) < 26.0:
 					slip_on += 1
 					slip_tone = mini(slip_tone + 1, 24)
 					if slip_tone % 4 == 0:
@@ -1469,10 +1476,10 @@ func _update_river_events(delta: float) -> void:
 				_gl = "%d%%... we'll work on it, dweeb.\nmy line doesn't fly itself." % int(_gr * 100)
 				run_feathers += 10
 			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
-			if hawk != null:
+			if hawk != null:                            # he wheels around to face you for the grade
 				hawk.line = _gl
 				hawk.said = true; hawk.say_t = hawk.t
-				hawk.dwell = 4.6; hawk.depart = true
+				hawk.dwell = 4.6; hawk.depart = true; hawk.leading = false
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -1796,6 +1803,9 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://art/hawk_0.png"):
 		tex_hawk = [load("res://art/hawk_0.png"), load("res://art/hawk_1.png"),
 			load("res://art/hawk_2.png")]
+	if ResourceLoader.exists("res://art/hawk_lead_0.png"):
+		tex_hawk_lead = [load("res://art/hawk_lead_0.png"), load("res://art/hawk_lead_1.png"),
+			load("res://art/hawk_lead_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
 	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread", "heron"]:   # COMPENDIUM turntables (+ open-mouth react sets)
@@ -2876,11 +2886,13 @@ func _dev_do(act: String) -> void:
 		"thermals":                                 # drop straight into RUSTY'S THERMALS
 			if alive and not in_menu and boss == null:
 				stretch_mod = "rusty"
-				stretch_until = distance + THEME_LEN * 0.85
+				stretch_until = distance + SLIP_LEN
 				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
 				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
-				enemies.clear(); logs.clear()
+				enemies.clear(); logs.clear(); items.clear()
+				next_draft = maxf(next_draft, stretch_until + 600.0)
+				if ev_id != "": ev_until = distance
 				_flash("RUSTY'S THERMALS", 2.0)
 		"pond":                                     # WARP: jump to the next pond boundary (tap to cycle all 7)
 			if alive and not in_menu:
@@ -4160,17 +4172,19 @@ func _update_hawk(delta: float) -> void:
 			hawk.said = true
 			hawk.say_t = hawk.t
 			_sfx("screech", 0.85, -16.0)            # his keening red-tail announcing cry (distant)
-	elif hawk.said and hawk.t - hawk.say_t < hawk.get("dwell", 3.4):
-		# hovering: hold position with a gentle drifting bob while the bubble shows
-		hawk.x += hawk.dir * 16.0 * delta
 	elif hawk.get("lead", false) and stretch_mod == "rusty" and not hawk.get("depart", false):
-		# THERMALS: he IS the course — fly the slipstream head, banking his weave
-		hawk.x = lerpf(hawk.x, slip_lead_x, 1.0 - exp(-3.2 * delta))
-		hawk.y = lerpf(hawk.y, 158.0, 1.0 - exp(-2.0 * delta))
+		# THERMALS: he IS the course — fly the slipstream head, banking his weave,
+		# tail to you the whole way (bubbles trail along; he never stops flying)
+		hawk.leading = true
+		hawk.x = lerpf(hawk.x, slip_lead_x, 1.0 - exp(-4.5 * delta))
+		hawk.y = lerpf(hawk.y, 142.0, 1.0 - exp(-2.0 * delta))
 		if slip_tone == 20 and not hawk.get("cheered", false):    # one earned mid-course cheer
 			hawk.cheered = true
 			hawk.line = "THAT'S IT — RIGHT there!\nnow HOLD it, dweeb!"
 			hawk.said = true; hawk.say_t = hawk.t; hawk.dwell = 1.8
+	elif hawk.said and hawk.t - hawk.say_t < hawk.get("dwell", 3.4):
+		# hovering: hold position with a gentle drifting bob while the bubble shows
+		hawk.x += hawk.dir * 16.0 * delta
 	else:
 		# swoop off the far side, accelerating away
 		hawk.x += hawk.dir * 270.0 * delta
@@ -4187,15 +4201,24 @@ func _update_hawk(delta: float) -> void:
 func _draw_hawk() -> void:
 	if hawk == null or tex_hawk.is_empty():
 		return
+	var _leading: bool = hawk.get("leading", false)
 	var fr: Texture2D = tex_hawk[int(hawk.t * 7.0) % tex_hawk.size()]   # wings beating
+	if _leading and not tex_hawk_lead.is_empty():
+		fr = tex_hawk_lead[int(hawk.t * 7.0) % tex_hawk_lead.size()]    # tail to you: he LEADS
 	var hpos := Vector2(hawk.x, hawk.y + sin(hawk.t * 2.2) * 4.0)
 	# faint shadow gliding along below him for a touch of depth
 	if tex_shadow != null:
 		var shz := tex_shadow.get_size() * DUCK_DRAW * 0.9
 		draw_set_transform(hpos + Vector2(6, 30), 0.0, Vector2.ONE)
 		draw_texture_rect(tex_shadow, Rect2(-shz * 0.5, shz), false, Color(0, 0, 0, 0.18))
-	# art faces +z drawn head-up; flip on X so he points the way he's flying
-	draw_set_transform(hpos, sin(hawk.t * 1.6) * 0.05, Vector2(hawk.dir, 1.0))
+	# art faces +z drawn head-up; flip on X so he points the way he's flying.
+	# leading the Thermals he banks INTO his weave instead (back view, no flip)
+	var _hrot: float = sin(hawk.t * 1.6) * 0.05
+	var _hflip: float = hawk.dir
+	if _leading:
+		_hrot = clampf((slip_lead_x - hawk.x) * 0.018, -0.34, 0.34)
+		_hflip = 1.0
+	draw_set_transform(hpos, _hrot, Vector2(_hflip, 1.0))
 	var hsz: Vector2 = fr.get_size() * DUCK_DRAW
 	draw_texture_rect(fr, Rect2(-hsz * 0.5, hsz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -7898,8 +7921,9 @@ func _spawn_log_jam() -> void:
 	_sfx("fwoosh", 0.6, -3.0)
 
 func _spawn(delta: float) -> void:
-	# during the boss — or while RUSTY delivers his tip — the river clears; only snacks fall
-	if boss != null or hawk != null:
+	# during the boss — or while RUSTY delivers a mid-run tip — the river clears; only
+	# snacks fall. NOT on his course: the Thermals run the strict truce path below.
+	if boss != null or (hawk != null and stretch_mod != "rusty"):
 		item_timer -= delta
 		if item_timer <= 0.0:
 			items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
@@ -7943,12 +7967,12 @@ func _spawn(delta: float) -> void:
 		log_timer = (randf_range(0.65, 1.15) * (BASE_SPEED / speed) + 0.25) / endless_heat
 
 	item_timer -= delta
-	if item_timer <= 0.0:
+	if item_timer <= 0.0 and stretch_mod != "rusty":   # no snacks on the course — only HIS line pays
 		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
-	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2:
+	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and stretch_mod != "rusty":
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
 		if ascension >= 6 and randf() < 0.25 + 0.05 * (ascension - 6):   # RELENTLESS FLOCK: herons hunt in packs
@@ -12824,8 +12848,8 @@ func _draw_river_events() -> void:
 		var _rib := PackedVector2Array()
 		for sp6 in slip_pts:
 			_rib.append(Vector2(sp6.x, sp6.y))
-		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.20), 68.0)     # the wake = the exact scoring band
-		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 26.0)      # the sweet spot
+		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.20), 52.0)     # the wake = the exact scoring band
+		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 20.0)      # the sweet spot
 		draw_polyline(_rib, Color(1.0, 0.97, 0.8, 0.55), 3.0)      # his exact line
 		# your line-hold reads at a glance: gold aura when you're IN the stream
 		if slip_tone > 0:
@@ -12836,14 +12860,14 @@ func _draw_river_events() -> void:
 			var _in_now: bool = slip_tone > 0
 			var _mw := 150.0
 			var _mx: float = VIEW.x * 0.5 - _mw * 0.5
-			draw_rect(Rect2(_mx - 4.0, 116.0, _mw + 8.0, 24.0), Color(0.06, 0.10, 0.14, 0.55))
-			draw_rect(Rect2(_mx, 132.0, _mw, 5.0), Color(1, 1, 1, 0.14))
+			draw_rect(Rect2(_mx - 4.0, 226.0, _mw + 8.0, 24.0), Color(0.06, 0.10, 0.14, 0.55))
+			draw_rect(Rect2(_mx, 242.0, _mw, 5.0), Color(1, 1, 1, 0.14))
 			var _gc := Color(1.0, 0.88, 0.35) if _gnow >= 0.9 else (Color(1.0, 0.75, 0.4) if _gnow >= 0.7 else Color(0.8, 0.82, 0.9))
-			draw_rect(Rect2(_mx, 132.0, _mw * _gnow, 5.0), _gc)
-			draw_rect(Rect2(_mx + _mw * 0.9 - 1.0, 130.0, 2.0, 9.0), Color(1.0, 0.88, 0.35, 0.9))   # the LEGENDARY notch
+			draw_rect(Rect2(_mx, 242.0, _mw * _gnow, 5.0), _gc)
+			draw_rect(Rect2(_mx + _mw * 0.9 - 1.0, 240.0, 2.0, 9.0), Color(1.0, 0.88, 0.35, 0.9))   # the LEGENDARY notch
 			var _mt: String = ("IN THE STREAM  %d%%" % int(_gnow * 100)) if _in_now else ("HOLD HIS LINE  %d%%" % int(_gnow * 100))
 			var _mtw := font.get_string_size(_mt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
-			draw_string(font, Vector2(VIEW.x * 0.5 - _mtw * 0.5, 127.0), _mt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+			draw_string(font, Vector2(VIEW.x * 0.5 - _mtw * 0.5, 237.0), _mt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
 				_gc if _in_now else Color(1, 1, 1, 0.75))
 	# SQUALL: slanting rain + a grey wash (reads instantly, costs nothing)
 	if ev_id == "squall":
