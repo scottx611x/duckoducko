@@ -831,6 +831,9 @@ def generate_ducks(art_dir):
             save(render(shade(build(sp, "out", hen_override=True)), gy, PITCH, scale=sc), "%s_hop_0.png" % hp)
             save(render(shade(build(sp, "out_up", hen_override=True)), gy, PITCH, scale=sc), "%s_hop_1.png" % hp)
             save(render(SHh, math.radians(0), math.radians(15), out=FACE_CANVAS, scale=2.5 * size, cy_frac=0.46), "%s_face.png" % hp)
+            Vfh = build(sp, "folded", hen_override=True)   # hens MEGA-tumble as voxels too
+            for i, sl in enumerate(stack_slices(Vfh, shade(Vfh))):
+                save(sl, "%s_stack_%02d.png" % (hp, i))
     # THE ANCIENT DUCK: a golden elder with a flowing white beard, for the shrine.
     # two frames so his beak flaps while he talks.
     elder = shade(build("golden", "folded", elder=True))

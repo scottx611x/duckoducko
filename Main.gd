@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.24"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.25"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3043,13 +3043,15 @@ func _dbg_codexshot() -> void:
 	var _all_items := _codex_items()
 	for _di in _all_items.size():
 		var _dit: Dictionary = _all_items[_di]
-		if _seen_types.has(str(_dit.type)) or not _codex_seen_item(_dit):
+		if not _codex_seen_item(_dit):
+			continue
+		if str(_dit.type) != "char" and _seen_types.has(str(_dit.type)):
 			continue
 		_seen_types[str(_dit.type)] = true
 		codex_sel = _di
 		await get_tree().create_timer(0.03).timeout
 		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png("/tmp/codex_detail_%s.png" % str(_dit.type))
+		get_viewport().get_texture().get_image().save_png("/tmp/codex_detail_%s.png" % (str(_dit.key) if str(_dit.type) == "char" else str(_dit.type)))
 	codex_sel = -1
 	# open the bread detail
 	var items := _codex_items()
@@ -13365,7 +13367,7 @@ func _draw_duck() -> void:
 		var sw := Vector2(ss.x * swf, ss.y * swf)
 		draw_texture_rect(tex_shadow, Rect2(Vector2(duck_x, BASE_Y + 8) - sw * 0.5, sw),
 			false, Color(1, 1, 1, 1.0 - 0.4 * h))
-		var st_slices = ducks[_eff_species()].get("stack", [])   # drakes tumble as voxels; hen variants keep their OWN look (elif below)
+		var st_slices = ducks[_eff_species()].get("stack", [])   # drakes AND hens tumble as true voxels (hen stacks: regen_hen_stacks.py)
 		if state == St.MEGA and not st_slices.is_empty():
 			# MEGA HOP: the duck becomes the 3D voxel — tumbling or flying
 			var p := mega_t / cur_mega_dur()
