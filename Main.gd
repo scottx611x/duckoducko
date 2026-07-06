@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.19"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.20"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -321,6 +321,7 @@ const ROSTER := [
 	# SECRET ducks — not for sale; earned by doing something special (see _unlock_secret)
 	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "size": 0.98, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
 	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "ascend the river to summon him", "cost": 0, "secret": true},
+	{"name": "Rusty", "species": "rusty", "hop": 0.92, "steer": 0.88, "pace": 0.88, "size": 0.95, "trait": "fly his thermals PERFECT to earn his wings", "cost": 0, "secret": true},
 ]
 # each duck has its OWN voice — roughly by size (big = deep honk, small = squeaky),
 # hand-tuned for character. rubber ducky is the exception: it squeaks.
@@ -328,7 +329,7 @@ const QUACK_PITCH := {
 	"mallard": 1.0, "hen": 1.14, "wood": 1.06, "bufflehead": 1.36, "shoveler": 0.9,
 	"pintail": 1.0, "hoodie": 1.08, "ruddy": 1.2, "canvasback": 0.86, "harlequin": 1.12,
 	"eider": 0.72, "golden": 0.96, "disco": 1.18, "shadow": 0.76,
-	"teal": 1.32, "merganser": 0.84, "goldeneye": 1.0,
+	"teal": 1.32, "merganser": 0.84, "goldeneye": 1.0, "rusty": 0.9,
 }
 
 # ---- state -------------------------------------------------------------------
@@ -500,6 +501,8 @@ func _quack(sp: String, vol := 0.0) -> void:
 	var deep := 0.5 if big_quacks else 1.0          # MEGA-DEEP QUACKS whimsy toggle
 	if sp == "rubberduck":
 		_sfx("squeak", randf_range(0.95, 1.08) * deep, vol - 11.0)   # the squeak was EAR-piercing
+	elif sp == "rusty":
+		_sfx("screech", randf_range(0.95, 1.08) * deep, vol - 7.0)   # a red-tail does not quack
 	else:
 		_sfx("quack", float(QUACK_PITCH.get(sp, 1.0)) * randf_range(0.95, 1.05) * deep, vol)
 # boon "tier" = how many bosses you must have bested for it to enter the shrine pool.
@@ -1435,7 +1438,6 @@ func _update_river_events(delta: float) -> void:
 			var _nc: int = int(ceil(slip_count))
 			if _nc != _pc and _nc <= 3:
 				if _nc > 0:
-					_flash(str(_nc), 0.85)
 					_sfx("chime", 1.0 + 0.16 * (3 - _nc), -4.0)
 				else:
 					_flash("FLY!", 1.3)
@@ -1473,6 +1475,8 @@ func _update_river_events(delta: float) -> void:
 			var _gl := ""
 			if _gr >= 0.9:
 				_gl = "PERFECT WING — %d%%!! take your pick,\nyou've EARNED the good stuff." % int(_gr * 100)
+				if _gr >= 0.99 and _unlock_secret("rusty", "Rusty — you've EARNED his wings"):
+					_gl = "a TRUE PERFECT?! that settles it, kid —\nfrom now on you can fly as ME."
 				run_feathers += 60
 				drafting = true; draft_open_t = anim_t
 				target_x = duck_x; steer_anchor_x = duck_x; pressed = false; moved = false
@@ -6320,7 +6324,8 @@ func _update_play(delta: float) -> void:
 
 	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck;
 	# never mid-boss — Gerald does not pause for shopping)
-	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0 and boss == null and not tut_mode:
+	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0 and boss == null and not tut_mode \
+			and stretch_mod != "rusty":               # NEVER mid-Thermals — the course is sacred
 		_open_draft()
 
 	# themed stretches: new palette washes down the screen, the duck approves
@@ -12923,6 +12928,26 @@ func _draw_river_events() -> void:
 					Vector2(_chx, BASE_Y - 7.0), Vector2(_chx + _cdir * 8.0, BASE_Y),
 					Vector2(_chx, BASE_Y + 7.0), Vector2(_chx + _cdir * 3.0, BASE_Y)]),
 					Color(1.0, 0.88, 0.4, _cha))
+		# THE INTRO CARD: while the countdown runs, say exactly what this is and how to win
+		if slip_count > 0.0:
+			var _icy := 300.0
+			draw_rect(Rect2(VIEW.x * 0.5 - 148.0, _icy, 296.0, 108.0), Color(0.06, 0.10, 0.14, 0.72))
+			draw_rect(Rect2(VIEW.x * 0.5 - 148.0, _icy, 296.0, 3.0), Color(1.0, 0.86, 0.35, 0.9))
+			var _ils: Array = ["RUSTY'S THERMALS", "shadow his GOLDEN slipstream", "hold the line: 90% pays a LEGENDARY", "grading starts at FLY!"]
+			for _ii in _ils.size():
+				var _isz: int = 16 if _ii == 0 else 12
+				var _icol := Color(1.0, 0.88, 0.4) if _ii == 0 else Color(1, 1, 1, 0.88)
+				var _ilw := font.get_string_size(_ils[_ii], HORIZONTAL_ALIGNMENT_LEFT, -1, _isz).x
+				draw_string(font, Vector2(VIEW.x * 0.5 - _ilw * 0.5, _icy + 26.0 + _ii * 24.0), _ils[_ii],
+					HORIZONTAL_ALIGNMENT_LEFT, -1, _isz, _icol)
+			if slip_count <= 3.9:                      # the BIG runway digits
+				var _cn: int = int(ceil(slip_count))
+				var _cfrac: float = slip_count - floor(slip_count)
+				var _csz: int = int(58.0 + 26.0 * _cfrac)
+				var _ct := str(_cn)
+				var _ctw := font.get_string_size(_ct, HORIZONTAL_ALIGNMENT_LEFT, -1, _csz).x
+				draw_string(font, Vector2(VIEW.x * 0.5 - _ctw * 0.5, _icy + 190.0), _ct,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, _csz, Color(1.0, 0.88, 0.35, 0.35 + 0.6 * _cfrac))
 		# live grade meter — hold 90%+ of his line and the LEGENDARY board is yours
 		if slip_total > 3:
 			var _gnow: float = float(slip_on) / float(slip_total)
