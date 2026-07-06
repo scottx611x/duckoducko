@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.34"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.35"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -12250,7 +12250,11 @@ func _draw_dev_menu() -> void:
 # it starts BELOW the duck sprite (~44px of butt) so nobody waddles underneath it.
 func _duckling_pos(i: int) -> Vector2:
 	var spacing := minf(34.0, 230.0 / maxf(1.0, float(ducklings_n)))
-	return Vector2(_trail_x(0.34 * (i + 1)), BASE_Y + 92.0 + spacing * i)   # trail FURTHER back (clear of the duck's rear)
+	# SNAPPIER conga (0.22s a slot, was 0.34) — but each duckling is its OWN duckling:
+	# a personal reaction time, a personal little weave, a personal bob. like the real ones.
+	var lag: float = 0.22 * (i + 1) + 0.035 * sin(float(i) * 2.7)
+	var wob: float = sin(anim_t * (1.25 + 0.2 * float(i % 3)) + float(i) * 2.13) * (2.5 + 1.6 * float(i % 2))
+	return Vector2(_trail_x(lag) + wob, BASE_Y + 92.0 + spacing * i + sin(anim_t * 1.7 + float(i) * 1.4) * 2.0)
 
 # the conga line: each duckling follows the duck's wake and hops a beat late
 func _draw_ducklings() -> void:
@@ -12304,13 +12308,22 @@ func _duckling_h(i: int) -> float:
 		# mama goes up, EVERYONE goes up: ride the whole mega arc, staggered
 		var mp := clampf((mega_t - 0.06 * (i + 1)) / cur_mega_dur(), 0.0, 1.0)
 		return sin(mp * PI)
-	var delay := 0.04 * (i + 1)   # the whole conga pops up with you, in a quick wave
+	var delay := 0.04 * (i + 1) + 0.02 * fposmod(float(i) * 0.37, 1.0)   # each pops on its OWN beat
 	var dur := cur_hop_dur()      # same hang time as the duck — clearly "with you"
+	var best := 0.0
 	for e in hop_events:
 		var p: float = (anim_t - e - delay) / dur
 		if p >= 0.0 and p < 1.0:
-			return sin(p * PI)
-	return 0.0
+			best = maxf(best, sin(p * PI))
+	# ducklings ALWAYS hop logs — a log crossing a duckling's row lifts it right over,
+	# no mama required. brave little souls.
+	var dpv := Vector2(_trail_x(0.22 * (i + 1)), BASE_Y + 92.0 + minf(34.0, 230.0 / maxf(1.0, float(ducklings_n))) * i)
+	for l in logs:
+		if absf(float(l.x) - dpv.x) < float(l.w) * 0.5 + 20.0:
+			var lp: float = (float(l.y) - (dpv.y - 76.0)) / 112.0
+			if lp >= 0.0 and lp < 1.0:
+				best = maxf(best, sin(lp * PI) * 0.92)
+	return best
 
 # GERALD: telegraph target + dive shockwaves, drawn on the water (under the duck)
 # ARENA DRESSING: the intro's mood should not evaporate when the letterbox lifts.
