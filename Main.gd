@@ -92,6 +92,7 @@ const UPGRADES := [
 	{"id": "junker", "name": "JUNK SLINGER", "desc": "your hoard is AMMO — auto-chuck trash to bonk herons & chip logs (stack = faster)", "rarity": 2},
 	{"id": "dumpster", "name": "DUMPSTER DIVE", "desc": "one duck's junk: every 10 trash you grab coughs up a guaranteed RARE snack", "rarity": 1},
 	{"id": "scrapshell", "name": "SCRAP SHELL", "desc": "your hoard is ARMOR — a bonk is eaten by 4 trash instead of you", "rarity": 2},
+	{"id": "school", "name": "DUCKLING MAGNET", "desc": "ducklings tractor-beam in snacks they pass", "rarity": 2},
 	# the 1942 tier: legendaries that change what the game IS
 	{"id": "cannon", "name": "CRUMB CANNON", "desc": "auto-fire crumbs: smash herons, chip logs (stack -> 3-way spread)", "rarity": 3},
 	{"id": "wingducks", "name": "WINGDUCKS", "desc": "escorts dive-bomb herons — and fly back", "rarity": 3},
@@ -105,7 +106,7 @@ const ICON_MODELS := {
 	"gold": "coin", "pockets": "pouch", "nestegg": "egg", "clutch": "clutch", "egghead": "egghead",
 	"thunder": "bolt", "magnet": "magnet", "hotwheels": "flame", "wildfire": "wildfire", "phoenix": "phoenix", "thermal": "thermal",
 	"mega": "arrow", "loft": "loftgauge", "warmup": "hourglass", "double": "doublearrow", "wild": "star", "lucky": "clover",
-	"duckling": "chick", "trio": "trio", "apex": "crown", "warlord": "warhelm",
+	"duckling": "chick", "trio": "trio", "school": "conga", "apex": "crown", "warlord": "warhelm",
 	"secondwind": "heart", "buffet": "fork", "snackhawk": "snackwing", "wingducks": "vformation", "earlybird": "earlybird",
 	"spring": "spring", "springy": "trampoline", "snacks": "cookie", "cannon": "cannon", "highstakes": "die",
 	"bounce": "ball", "breadwinner": "loaf", "basket": "breadbasket", "nova": "burst", "aftershock": "shockring",
@@ -121,7 +122,7 @@ const SYNERGY := {
 	"snackhawk": ["spring", "double", "snacks", "magnet"],
 	"spring": ["snackhawk", "double"],
 	"double": ["spring", "snackhawk"],
-	"snacks": ["snackhawk", "gold", "magnet"],
+	"snacks": ["snackhawk", "school", "gold", "magnet"],
 	"magnet": ["snacks", "snackhawk", "gold"],
 	"aftershock": ["thunder", "loft"],
 	"thunder": ["aftershock", "shield"],
@@ -131,8 +132,9 @@ const SYNERGY := {
 	"buffet": ["loft", "gold"],
 	"gold": ["nestegg", "snacks", "buffet"],
 	"nestegg": ["gold"],
-	"duckling": ["trio", "wingducks"],
-	"trio": ["duckling", "wingducks"],
+	"school": ["duckling", "trio", "snacks"],
+	"duckling": ["school", "trio", "wingducks"],
+	"trio": ["school", "duckling", "wingducks"],
 	"shield": ["thunder", "wingducks"],
 	"cannon": ["buffet", "gold"],
 	"wingducks": ["shield", "duckling", "trio"],
@@ -223,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.26"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.27"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -800,6 +802,7 @@ const POWER_LORE := {
 	"aftershock": "Every log you shatter owes you a favor. The blast collects the debt immediately, with interest, in LOFT.",
 	"bounce": "The boost logs were spring-cut lumber from a trampoline factory that flooded in '88. They have never accepted their retirement.",
 	"buffet": "Inside every log there was always a snack, the way inside every block of marble there was always a statue. You simply have the appetite required to see it.",
+	"school": "Your ducklings have unionized their appetites. Anything edible within reach of the parade is collectively bargained into your bill.",
 	"thunder": "Land hard enough, often enough, and the river starts flinching first. Now every splash-down detonates the neighborhood. The frogs have started applauding — from a distance.",
 	"hotwheels": "Feet so fast the water can't tell them from weather. On fire, they leave a wake of steam and a rumor of a very fast duck.",
 	"junker": "One duck's flotsam is your ammunition. The sling was invented by a hen who ran out of patience before she ran out of trash.",
@@ -1412,17 +1415,6 @@ func _update_river_events(delta: float) -> void:
 			_sfx("chime", 0.7)
 		if fork_auto != 0.0 and not fork.get("picked", false):   # the traversal, animated: she paddles her line
 			target_x = VIEW.x * (0.30 if fork_auto < 0.0 else 0.70)
-		# the island is LAND: ease the duck out of the wedge so it never paddles on grass
-		var wtop: float = float(fork.y) - 130.0
-		var wbot: float = float(fork.y) + 270.0
-		if BASE_Y > wtop and BASE_Y < wbot:
-			var wprog: float = (BASE_Y - wtop) / (wbot - wtop)
-			var whalf: float = 8.0 + wprog * 78.0
-			var wdx: float = duck_x - VIEW.x * 0.5
-			if absf(wdx) < whalf:
-				var pushd: float = (whalf - absf(wdx) + 6.0) * (1.0 if wdx >= 0.0 else -1.0)
-				duck_x += pushd * clampf(delta * 7.0, 0.0, 1.0)
-				target_x = duck_x
 		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
 			fork.picked = true
 			fork_auto = 0.0
@@ -2231,6 +2223,10 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_sky.png")
+		fork_choosing = false                      # ...and the RAW river view (island + signs, no overlay)
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_raw.png")
 		get_tree().quit()
 	elif "--ponchointro" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -2426,7 +2422,7 @@ func _ready() -> void:
 		start_game()
 		tut_mode = false; in_shrine = false; drafting = false; shrine_boons = []
 		_pick_upgrade(_upg_def("trashmag")); _pick_upgrade(_upg_def("packrat")); _pick_upgrade(_upg_def("junker"))
-		_pick_upgrade(_upg_def("dumpster")); _pick_upgrade(_upg_def("scrapshell")); _pick_upgrade(_upg_def("trio"))
+		_pick_upgrade(_upg_def("dumpster")); _pick_upgrade(_upg_def("scrapshell")); _pick_upgrade(_upg_def("school")); _pick_upgrade(_upg_def("trio"))
 		for _tq in range(8): trash_queue.append({"tex": _tq % max(1, tex_props.size()), "rar": _tq % 4})
 		trash_hoard = trash_queue.size(); run_trash = 13
 		golden_t = GOLDEN_DUR * 0.5
@@ -2498,7 +2494,7 @@ func _smoke() -> void:
 	print("SMOKE picked=", picked, " drafting=", drafting)
 	# ducklings: pick a parade, then let one soak a bonk
 	_pick_upgrade(_upg_def("trio"))                    # trio
-	print("SMOKE ducklings=", ducklings_n, " synergy(trio)=", _has_synergy("trio"))
+	print("SMOKE ducklings=", ducklings_n, " synergy(school)=", _has_synergy("school"))
 	# spring log under the duck -> hyper jump
 	logs.append({"x": duck_x, "y": BASE_Y, "w": 160.0, "h": 46.0, "missed": false,
 		"spring": true, "phase": 0.0, "frog": false, "frog_gone": false})
@@ -3815,7 +3811,7 @@ func _upgrade_icon(id: String):
 			return tex_items.get("ducky")
 		"shield", "gold", "nestegg":
 			return tex_items.get("feather")
-		"duckling", "trio":
+		"duckling", "trio", "school":
 			return tex_duckling.get("idle", [null])[0]
 		"springy", "bounce", "aftershock", "thunder":
 			return tex_log
@@ -3853,6 +3849,7 @@ const DRAFT_TIPS := {
 	"aftershock":"AFTERSHOCK turns blast-smashed logs into LOFT — pairs with THUNDER FEET.",
 	"bounce":   "BOUNCE CHARGE refills LOFT off every boost log. Special-spam fuel.",
 	"buffet":   "LOG BUFFET drops a snack from EVERY log you wreck. Endless nibbles.",
+	"school":   "DUCKLING MAGNET lets your brood tractor in snacks they pass. Free food.",
 	"thunder":  "THUNDER FEET detonates logs on every landing — a constant lane-clear.",
 	"cannon":   "CRUMB CANNON auto-fires; stack it and it fans into a 3-way spread.",
 	"wingducks":"WINGDUCKS dive-bomb the herons FOR you. Hands-free heron defense.",
@@ -3862,8 +3859,8 @@ const DRAFT_TIPS := {
 
 # the build ARCHETYPES Rusty recognises — which powers, boons + wearables feed each playstyle
 const ARCH := {
-	"snacks":    {"name": "a SNACK economy", "up": ["magnet", "snacks", "gold", "snackhawk", "buffet", "cannon", "nestegg"], "boon": ["breadwinner"], "wear": ["pirate", "chef", "vest", "crown"]},
-	"ducklings": {"name": "a DUCKLING brood", "up": ["duckling", "trio", "wingducks"], "boon": ["clutch", "gosling_guard"], "wear": []},
+	"snacks":    {"name": "a SNACK economy", "up": ["magnet", "snacks", "gold", "snackhawk", "buffet", "school", "cannon", "nestegg"], "boon": ["breadwinner"], "wear": ["pirate", "chef", "vest", "crown"]},
+	"ducklings": {"name": "a DUCKLING brood", "up": ["duckling", "trio", "school", "wingducks"], "boon": ["clutch", "gosling_guard"], "wear": []},
 	"fire":      {"name": "an ON-FIRE rampage", "up": ["hotwheels", "thunder", "aftershock"], "boon": ["wildfire"], "wear": ["scarf"]},
 	"special":   {"name": "a SPECIAL-spam engine", "up": ["loft", "nova", "bounce"], "boon": [], "wear": ["party", "satchel"]},
 	"air":       {"name": "an AIR / hops build", "up": ["spring", "double", "springy", "snackhawk"], "boon": [], "wear": ["prop", "jetpack"]},
@@ -6191,6 +6188,50 @@ func _update_play(delta: float) -> void:
 	_update_hawk(delta)
 	_update_donny(delta)
 	_update_turtle(delta * sm)
+
+	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
+	# range get tagged with the pulling duckling and slide toward it until gulped.
+	if _up("school") > 0 and ducklings_n > 0:
+		for it in items:
+			if it.got:
+				continue
+			if it.has("pull_i") and int(it.pull_i) < ducklings_n:
+				var pp := _duckling_pos(int(it.pull_i))
+				var pv := Vector2(pp.x - it.x, pp.y - it.y)
+				if pv.length() < 26.0:
+					_collect(it)
+					_float_text(pp.x, pp.y - 24.0, "peep!", Color(0.97, 0.87, 0.45))
+					_sfx("peep", randf_range(1.1, 1.3), -6.0)
+				else:
+					var pd := pv.normalized() * 520.0 * delta   # a STRONG reel-in (beats the river scroll)
+					it.x += pd.x
+					it.y += pd.y
+					if randf() < 0.25:               # sparkle along the beam
+						_spawn_parts(it.x, it.y, 1, Color(1.0, 0.9, 0.45, 0.8), 30.0)
+			else:
+				for i in ducklings_n:
+					var dlp := _duckling_pos(i)
+					if Vector2(it.x - dlp.x, it.y - dlp.y).length() < 165.0:   # wider snag radius
+						it["pull_i"] = i             # locked on
+						break
+		for t in lane_trash:                             # the brood tractors TRASH too (junkyard synergy)
+			if t.got:
+				continue
+			var nd := 160.0
+			var near := -1
+			for i in ducklings_n:
+				var dl := _duckling_pos(i)
+				var dd: float = Vector2(t.x - dl.x, t.y - dl.y).length()
+				if dd < nd:
+					nd = dd; near = i
+			if near >= 0:
+				var pp := _duckling_pos(near)
+				var pv := Vector2(pp.x - t.x, pp.y - t.y)
+				if pv.length() < 28.0:
+					_collect_trash(t)
+				else:
+					var pd := pv.normalized() * 470.0 * delta
+					t.x += pd.x; t.y += pd.y
 
 	# CRUMB MAGNET: nearby snacks drift gently to the duck before the gulp
 	var _racc: float = _wf("raccoon") if _wear("raccoon") else 0.0   # RACCOON MASK: a trash-panda's reach
@@ -8729,6 +8770,12 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 				draw_circle(dpc, s * 0.3, col)
 				draw_circle(dpc + Vector2(0, -s * 0.32), s * 0.18, col)        # little head
 				draw_circle(dpc + Vector2(s * 0.14, -s * 0.34), s * 0.05, col.darkened(0.5))  # eye
+		"school":                                          # DUCKLING MAGNET — a duckling pulling snacks in
+			draw_circle(c + Vector2(-s * 0.3, 0), s * 0.34, col)
+			draw_circle(c + Vector2(-s * 0.3, -s * 0.36), s * 0.2, col)
+			for r in [s * 0.55, s * 0.85]:                  # tractor-beam rings reaching right
+				draw_arc(c + Vector2(-s * 0.3, 0), r, -PI * 0.45, PI * 0.45, 10, Color(col.r, col.g, col.b, 0.55), 1.5)
+			draw_circle(c + Vector2(s * 0.75, 0), s * 0.16, col.lightened(0.4))   # the snack being pulled
 		"trailblazer":                                     # a forward chevron — blazing ahead
 			for o in [-s * 0.5, s * 0.2]:
 				draw_colored_polygon(PackedVector2Array([c + Vector2(o - s * 0.2, -s * 0.8),
@@ -12886,16 +12933,8 @@ func _draw_golden_hour() -> void:
 func _draw_river_events() -> void:
 	if not fork.is_empty():
 		var fy: float = fork.y
-		# the island wedge: a grassy tear the river parts around, widening downstream
-		var wtip := Vector2(VIEW.x * 0.5, fy - 130.0)
-		var wl := Vector2(VIEW.x * 0.5 - 74.0, fy + 210.0)
-		var wr := Vector2(VIEW.x * 0.5 + 74.0, fy + 210.0)
-		draw_colored_polygon(PackedVector2Array([wtip, wr + Vector2(0, 60), wl + Vector2(0, 60)]), Color(0.24, 0.42, 0.22))
-		draw_colored_polygon(PackedVector2Array([wtip + Vector2(0, 14), wr + Vector2(-10, 52), wl + Vector2(10, 52)]), Color(0.30, 0.50, 0.26))
-		# foam where the current splits around the tip
-		for k in 5:
-			var fa: float = 0.3 - k * 0.05
-			draw_arc(wtip + Vector2(0, 8), 10.0 + k * 7.0 + sin(anim_t * 2.0 + k) * 2.0, PI * 0.75, PI * 2.25, 14, Color(1, 1, 1, fa), 2.0)
+		# (the old giant green island wedge read like a BEAM on the water — gone. the split
+		# is told by the Ancient Duck's chooser + these channel signs, like real pilings.)
 		# two hanging SIGNS naming each channel + its promise
 		for side in 2:
 			var sd: Dictionary = fork.l if side == 0 else fork.r
@@ -15255,7 +15294,7 @@ func _bot_persona_params() -> Vector2:
 		_:          return Vector2(1.00, 0.40)
 
 # draft/boon weights: defense keeps the bot alive to SEE bosses 2-3 (weights ~ what a decent player values)
-const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "double": 2.5,
+const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "school": 2.5, "double": 2.5,
 	"spring": 2.0, "zen": 2.0, "springy": 1.8, "wingducks": 1.8, "thunder": 1.6, "loft": 1.5,
 	"bounce": 1.4, "tiny": 1.4, "magnet": 1.2, "snacks": 1.2}
 const BOT_BOON_W := {"goosedown": 4.0, "secondwind": 3.5, "phoenix": 3.5, "clutch": 3.0,
