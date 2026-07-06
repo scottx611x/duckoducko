@@ -185,7 +185,7 @@ const FACTS := [
 
 # themed stretches: every 500m the water palette washes down the screen (DESIGN §5)
 const THEME_LEN := 9000.0       # distance units (10 = 1m) — longer regions so each one registers
-const SLIP_LEN := THEME_LEN * 1.6   # RUSTY'S THERMALS course length — long enough to EARN the grade
+const SLIP_LEN := THEME_LEN * 2.2   # RUSTY'S THERMALS course length — long enough to EARN the grade
 const THEMES := [
 	{"name": "Buker Pond",     "tint": Color(1.0, 1.0, 1.0),      "line": "in at the boat launch. every trip starts here."},
 	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water. all of it."},
@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.18"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.19"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1292,6 +1292,7 @@ var slip_lead_x := 270.0        # where Rusty flies (he weaves; you shadow)
 var slip_on := 0                # scored ticks ON his line
 var slip_total := 0             # total scored ticks (grade = on/total)
 var slip_tone := 0              # rising hum step while you hold the line
+var slip_count := 0.0           # pre-course countdown — grading starts at FLY!
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
@@ -1401,8 +1402,9 @@ func _update_river_events(delta: float) -> void:
 			_sfx("chime", 0.9)
 			_st("forks_taken")
 			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
-				stretch_until = distance + SLIP_LEN
+				stretch_until = distance + maxf(SLIP_LEN, speed * 1.25 * 28.0)   # ~28s of course wherever it starts
 				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+				slip_count = 8.2
 				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear(); items.clear()
@@ -1427,8 +1429,19 @@ func _update_river_events(delta: float) -> void:
 		for sp3 in slip_pts:
 			sp3.y += speed * delta
 		slip_pts = slip_pts.filter(func(sp4): return float(sp4.y) < VIEW.y + 30.0)
-		# grade at the duck's row, ~10 ticks a second
-		if fmod(anim_t, 0.1) < delta:
+		if slip_count > 0.0:                          # the runway: 3·· 2·· 1·· FLY!
+			var _pc: int = int(ceil(slip_count))
+			slip_count = maxf(0.0, slip_count - delta)
+			var _nc: int = int(ceil(slip_count))
+			if _nc != _pc and _nc <= 3:
+				if _nc > 0:
+					_flash(str(_nc), 0.85)
+					_sfx("chime", 1.0 + 0.16 * (3 - _nc), -4.0)
+				else:
+					_flash("FLY!", 1.3)
+					_sfx("unlock", 1.5)
+		# grade at the duck's row, ~10 ticks a second — only once the course is LIVE
+		if slip_count <= 0.0 and fmod(anim_t, 0.1) < delta:
 			var _band = null
 			for sp5 in slip_pts:
 				if absf(float(sp5.y) - BASE_Y) < 22.0:
@@ -1463,17 +1476,17 @@ func _update_river_events(delta: float) -> void:
 				run_feathers += 60
 				drafting = true; draft_open_t = anim_t
 				target_x = duck_x; steer_anchor_x = duck_x; pressed = false; moved = false
-				draft_choices = _deal_boss_draft(3)     # a LEGENDARY board, dealt by the master himself
+				draft_choices = _deal_rusty_draft(true)   # ALL-LEGENDARY — perfection pays perfectly
 				_sfx("unlock", 1.3); _sfx("chime", 1.6)
 			elif _gr >= 0.7:
-				_gl = "%d%% on my line — strong flying.\nhere's something rare." % int(_gr * 100)
+				_gl = "%d%% on my line — strong flying.\nhere's something SHINY for the effort." % int(_gr * 100)
 				run_feathers += 30
 				drafting = true; draft_open_t = anim_t
 				target_x = duck_x; steer_anchor_x = duck_x; pressed = false; moved = false
-				draft_choices = _deal_boss_draft(2)
+				draft_choices = _deal_rusty_draft(false)  # EPIC ceiling — the legendary is for 90%+
 				_sfx("chime", 1.2)
 			else:
-				_gl = "%d%%... we'll work on it, dweeb.\nmy line doesn't fly itself." % int(_gr * 100)
+				_gl = "%d%%... we'll work on it, kid.\nevery great wing started somewhere." % int(_gr * 100)
 				run_feathers += 10
 			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
 			if hawk != null:                            # he wheels around to face you for the grade
@@ -2886,8 +2899,9 @@ func _dev_do(act: String) -> void:
 		"thermals":                                 # drop straight into RUSTY'S THERMALS
 			if alive and not in_menu and boss == null:
 				stretch_mod = "rusty"
-				stretch_until = distance + SLIP_LEN
+				stretch_until = distance + maxf(SLIP_LEN, speed * 1.25 * 28.0)   # ~28s of course wherever it starts
 				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+				slip_count = 8.2
 				slip_lead_x = duck_x
 				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
 				enemies.clear(); logs.clear(); items.clear()
@@ -4112,7 +4126,7 @@ func _spawn_hawk() -> void:
 	if stretch_mod == "rusty":                      # the COURSE BRIEFING comes first, loud and clear
 		hawk = {"x": -70.0, "y": 150.0, "dir": 1.0, "t": 0.0, "said": false, "say_t": -99.0, "dwell": 5.6,
 			"lead": true,
-			"line": "SHADOW ME, dweeb — stay in my SLIPSTREAM!\nfly it near-PERFECT and i'll deal you\nsomething LEGENDARY."}
+			"line": "SHADOW ME, kid — stay in my SLIPSTREAM!\nfly it near-PERFECT and i'll deal you\nsomething LEGENDARY."}
 		_sfx("screech", 1.0, -8.0)
 		return
 	if is_tut:                                      # the FIRST-RUN welcome: teach the controls
@@ -4180,7 +4194,7 @@ func _update_hawk(delta: float) -> void:
 		hawk.y = lerpf(hawk.y, 142.0, 1.0 - exp(-2.0 * delta))
 		if slip_tone == 20 and not hawk.get("cheered", false):    # one earned mid-course cheer
 			hawk.cheered = true
-			hawk.line = "THAT'S IT — RIGHT there!\nnow HOLD it, dweeb!"
+			hawk.line = "THAT'S IT — RIGHT there!\nnow HOLD it, ace!"
 			hawk.said = true; hawk.say_t = hawk.t; hawk.dwell = 1.8
 	elif hawk.said and hawk.t - hawk.say_t < hawk.get("dwell", 3.4):
 		# hovering: hold position with a gentle drifting bob while the bubble shows
@@ -5081,7 +5095,7 @@ func reset_game() -> void:
 	env_timer = 0.4
 	_bigday_reseed(3)                                  # Big Day: same event/fork mile-markers today
 	hero_next = randf_range(6000.0, 9000.0)
-	slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+	slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0; slip_count = 0.0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	sadie = null
@@ -6062,7 +6076,7 @@ func _update_play(delta: float) -> void:
 	# floating nonsense drifts by along the banks
 	prop_timer -= delta
 	var junkboon: bool = _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0
-	if prop_timer <= 0.0 and not tex_props.is_empty():
+	if prop_timer <= 0.0 and not tex_props.is_empty() and stretch_mod != "rusty":
 		var left := randf() < 0.5
 		var _px: float = (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0))
 		if junkboon:                               # once trash is a RESOURCE it floats the whole river, reachable
@@ -6872,6 +6886,33 @@ func _open_boss_draft(min_rar: int) -> void:
 	_sfx("unlock", 1.1)
 
 # deal 3 distinct powers of at least min_rar (legendaries are the prize for the Eternal)
+func _deal_rusty_draft(perfect: bool) -> Array:
+	# THERMALS payout: PERFECT WING = a board of pure legendaries; strong flying = epics
+	# EXACTLY (never legendary — that would cheapen the 90% bar). Fillers pad if pools run dry.
+	var _cap: int = 3 if perfect else 2
+	var out: Array = []
+	var pool := UPGRADES.filter(func(u): return u.rarity == (3 if perfect else 2) and picked.get(u.id, 0) == 0)
+	pool.shuffle()
+	for u in pool:
+		if out.size() >= _cap:
+			break
+		out.append(u)
+	var lesser := UPGRADES.filter(func(u): return u.rarity < (3 if perfect else 2) and picked.get(u.id, 0) == 0 and not out.has(u))
+	lesser.shuffle()
+	for u in lesser:
+		if out.size() >= 3:
+			break
+		out.append(u)
+	if out.size() < 3:
+		var any := UPGRADES.filter(func(u): return not out.has(u))
+		any.shuffle()
+		for u in any:
+			if out.size() >= 3:
+				break
+			out.append(u)
+	out.shuffle()
+	return out
+
 func _deal_boss_draft(min_rar: int) -> Array:
 	# ALWAYS a full board of 3: boss_draft_count high-tier cards (scaling per boss) + varied lesser fillers.
 	# first boss -> 1 epic + 2 rare/common; second -> 2 legendary + 1 lesser; the Eternal -> 3 legendary.
@@ -12858,9 +12899,30 @@ func _draw_river_events() -> void:
 		draw_polyline(_rib, Color(1.0, 0.85, 0.3, 0.20), 52.0)     # the wake = the exact scoring band
 		draw_polyline(_rib, Color(1.0, 0.9, 0.5, 0.35), 20.0)      # the sweet spot
 		draw_polyline(_rib, Color(1.0, 0.97, 0.8, 0.55), 3.0)      # his exact line
-		# your line-hold reads at a glance: gold aura when you're IN the stream
+		# your line-hold reads at a glance — ON: gold aura + sparkle wake. OFF: chevrons point you home.
+		var _dband = null
+		for sp8 in slip_pts:
+			if absf(float(sp8.y) - BASE_Y) < 22.0:
+				_dband = sp8
+				break
 		if slip_tone > 0:
 			draw_circle(Vector2(duck_x, BASE_Y), 40.0 + 3.0 * sin(anim_t * 8.0), Color(1.0, 0.9, 0.5, 0.05 + 0.008 * slip_tone))
+			draw_arc(Vector2(duck_x, BASE_Y), 46.0 + 2.0 * sin(anim_t * 8.0), 0.0, TAU, 28, Color(1.0, 0.88, 0.4, 0.35), 2.0)
+			for _sk in 2:                              # golden sparkles peeling off the wake
+				var _ska: float = fmod(anim_t * 2.3 + _sk * 0.5, 1.0)
+				draw_circle(Vector2(duck_x + sin(anim_t * 9.0 + _sk * 3.1) * 18.0, BASE_Y + 20.0 + _ska * 46.0),
+					2.4 * (1.0 - _ska), Color(1.0, 0.92, 0.55, 0.7 * (1.0 - _ska)))
+		elif _dband != null and slip_count <= 0.0:     # OFF the line: pulsing chevrons aim you back
+			var _cdx: float = float(_dband.x) - duck_x
+			var _cdir: float = 1.0 if _cdx > 0.0 else -1.0
+			for _ch in 3:
+				var _chp: float = fmod(anim_t * 1.6 + _ch * 0.33, 1.0)
+				var _chx: float = duck_x + _cdir * (34.0 + _chp * minf(absf(_cdx) - 20.0, 70.0))
+				var _cha: float = (0.65 - 0.5 * _chp)
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(_chx, BASE_Y - 7.0), Vector2(_chx + _cdir * 8.0, BASE_Y),
+					Vector2(_chx, BASE_Y + 7.0), Vector2(_chx + _cdir * 3.0, BASE_Y)]),
+					Color(1.0, 0.88, 0.4, _cha))
 		# live grade meter — hold 90%+ of his line and the LEGENDARY board is yours
 		if slip_total > 3:
 			var _gnow: float = float(slip_on) / float(slip_total)
