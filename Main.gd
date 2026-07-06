@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.32"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.33"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1268,8 +1268,8 @@ const FORK_TAGS := {            # each branch is a CONTRACT: the deal on the car
 	"heron": ["DANGER PAYS", "herons hunt DOUBLE here.\nfinish UNHIT: +60 feathers\nand a bonk shield."],
 	"calm": ["THE QUIET WATER", "nothing hunts here.\nnothing pays, either."],
 	"junk": ["SCAVENGER'S RUN", "flotsam-thick. every junk you\ngrab pays DOUBLE at the far end."],
-	"snacks": ["THE FEAST", "snacks everywhere. eat 12 before\nit ends: +30 and your LOFT fills."],
-	"golden": ["BLESSED", "the golden hour walks with you.\n+25 blessing at the end."],
+	"snacks": ["THE FEAST", "snacks everywhere. eat 12 before it\nends: +30 feathers + your LOFT fills."],
+	"golden": ["BLESSED", "the golden hour walks with you.\n+25 feathers at the end."],
 	"rusty": ["THE TRIAL", "no danger at all. fly it\nnear-PERFECT for a LEGENDARY."],
 }
 var fork_next := 12000.0        # forks split the river between boss marks
@@ -1603,7 +1603,7 @@ func _update_river_events(delta: float) -> void:
 			else:
 				_flash("%d snacks... the feast wanted 12." % _sg, 2.0)
 		elif stretch_mod == "golden":
-			_wager_payout(25, "the golden hour's blessing: +25")
+			_wager_payout(25, "the golden hour's blessing: +25 feathers")
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -13132,11 +13132,11 @@ func _draw_river_events() -> void:
 					_wt = "THE FEAST · SECURED (%d)" % _fs
 			"junk":
 				var _fj: int = run_trash - int(stretch_snap.get("trash", 0))
-				_wt = "SCAVENGER · %d junk = +%d" % [_fj, _fj * 2]
+				_wt = "SCAVENGER · %d junk = +%d feathers" % [_fj, _fj * 2]
 			"feathers":
-				_wt = "EASY MONEY · +40 at the end"
+				_wt = "EASY MONEY · +40 feathers at the end"
 			"golden":
-				_wt = "BLESSED · +25 ahead"
+				_wt = "BLESSED · +25 feathers ahead"
 		if _wt != "":
 			var _ww := font.get_string_size(_wt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 			var _wr := Rect2(VIEW.x * 0.5 - _ww * 0.5 - 12.0, 118.0, _ww + 24.0, 24.0)
