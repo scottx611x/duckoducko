@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.30"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.31"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1258,6 +1258,7 @@ var fork_choosing := false      # THE ANCIENT DUCK holds the river while you wei
 var fork_ask_t := 0.0
 var fork_sky := -1              # which card (if any) is THE SKY ROUTE this split (-1 none)
 var fork_auto := 0.0            # after choosing: the duck paddles itself down the picked leg
+var fork_ride := {}             # THE CURRENT TAKES HER: {t, side, x0} — a 1.1s scripted rush into the branch
 var stretch_hit := false        # tagged by _ouch() during a wager stretch (DANGER PAYS contract)
 var stretch_snap := {}          # counters at the branch mouth — settlements diff against these
 const FORK_TAGS := {            # each branch is a CONTRACT: the deal on the card, settled at the far end
@@ -1315,6 +1316,53 @@ var slip_total := 0             # total scored ticks (grade = on/total)
 var slip_tone := 0              # rising hum step while you hold the line
 var slip_count := 0.0           # pre-course countdown — grading starts at FLY!
 
+func _wager_payout(amount: int, line: String, big := false) -> void:
+	run_feathers += amount
+	_flash(line, 2.5)
+	var _n: int = 6 if big else 4
+	for i in _n:                                    # a rising slot-machine arpeggio — getting PAID
+		sfx_echoes.append({"snd": "chime", "pitch": 0.85 + i * 0.13, "vol": -7.0, "t": 0.09 * i})
+	_spawn_parts(duck_x, BASE_Y - 30.0, 26 if big else 16, Color(1.0, 0.88, 0.4), 250.0)
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 110.0, "col": Color(1.0, 0.9, 0.5)})
+
+func _fork_commit(sidei: int) -> void:
+	if fork.is_empty() or fork.get("picked", false):
+		return
+	fork.picked = true
+	fork_auto = 0.0
+	var side: Dictionary = fork.l if sidei == 0 else fork.r
+	var m: Dictionary = side.mod
+	stretch_mod = String(m.id)
+	stretch_hit = false
+	stretch_snap = {"snacks": int(run_stats.get("snacks", 0)), "trash": run_trash}
+	stretch_until = distance + THEME_LEN * 0.85
+	theme_prev = theme_idx
+	theme_idx = int(side.theme)
+	theme_sweep = 0.0
+	region_t = anim_t
+	_see_shore(theme_idx)
+	var _rpos: int = maxi(0, theme_route.find(theme_idx))
+	biome_progress = float(_rpos) * THEME_LEN + 400.0   # keep the ROUTE router in step
+	_swap_theme_music()
+	_flash("%s — %s" % [THEMES[theme_idx].name, m.name], 2.4)
+	_say(String(m.desc), 2.6)
+	_sfx("chime", 0.9)
+	_sfx("splash_big", 0.8)                            # the arrival SLAM
+	_spawn_parts(duck_x, BASE_Y - 16.0, 24, Color(1.0, 0.9, 0.5), 260.0)
+	duck_shake = 0.25
+	_st("forks_taken")
+	if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
+		stretch_until = distance + maxf(SLIP_LEN, speed * 1.25 * 28.0)   # ~28s of course wherever it starts
+		slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
+		slip_count = 8.2
+		slip_lead_x = duck_x
+		hawk_done = false; hawk_timer = 0.2; hawk_summon = true
+		enemies.clear(); logs.clear(); items.clear()
+		next_draft = maxf(next_draft, stretch_until + 600.0)
+		if ev_id != "": ev_until = distance
+	if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
+		golden_t = GOLDEN_DUR
+
 func _fork_card_rect(i: int) -> Rect2:
 	return Rect2(22.0 + float(i) * (VIEW.x * 0.5 - 12.0), 470.0, VIEW.x * 0.5 - 32.0, 230.0)
 
@@ -1328,11 +1376,15 @@ func _fork_choose(side: int) -> void:
 		fork_next = distance + randf_range(105000.0, 135000.0)
 		_cloud_launch()
 		return
-	fork_auto = -1.0 if side == 0 else 1.0
+	fork_ride = {"t": 0.0, "side": side, "x0": duck_x}
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 130.0, "col": Color(1.0, 0.9, 0.5)})
 	_spawn_parts(duck_x, BASE_Y - 10.0, 18, Color(1.0, 0.88, 0.45), 200.0)
 	_float_text(duck_x, BASE_Y - 74.0, "go well, little one.", Color(1.0, 0.92, 0.6))
 	_sfx("chime", 1.5, -4.0)
+	_sfx("fwoosh", 1.2)
+	if state == St.GROUNDED:
+		hop()
+		_quack(species, -8.0)
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
@@ -1349,9 +1401,9 @@ func _ev_prop_mult() -> float:
 	return (3.0 if ev_id == "flush" else 1.0) * (2.2 if stretch_mod == "junk" else 1.0)
 
 func _ev_speed_mult() -> float:
-	# the current EASES through an unpicked split — reading two signs at full flow felt random
-	var fork_slow: float = 0.45 if (not fork.is_empty() and not fork.get("picked", false)) else 1.0
-	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * fork_slow   # his slipstream PULLS you
+	# the chooser froze the approach; post-choice the current GRABS you and rushes the branch
+	var ride_rush: float = 2.4 if not fork_ride.is_empty() else 1.0
+	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * ride_rush
 
 func _update_river_events(delta: float) -> void:
 	if tut_mode or boss != null or not alive:
@@ -1410,6 +1462,20 @@ func _update_river_events(delta: float) -> void:
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
 		_sfx("fwoosh", 0.7)
+	if not fork_ride.is_empty():                       # THE CURRENT TAKES HER — a whitewater rush, not a crawl
+		fork_ride.t = float(fork_ride.t) + delta / 1.1
+		var _rr: float = clampf(float(fork_ride.t), 0.0, 1.0)
+		var _re: float = 1.0 - pow(1.0 - _rr, 3.0)
+		duck_x = lerpf(float(fork_ride.x0), VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), _re)
+		target_x = duck_x; steer_anchor_x = duck_x
+		for _rs in 2:                                  # rooster-tail wake off the surge
+			parts.append({"x": duck_x + randf_range(-16.0, 16.0), "y": BASE_Y + randf_range(4.0, 16.0),
+				"vx": randf_range(-70.0, 70.0), "vy": randf_range(60.0, 150.0),
+				"t": 0.0, "life": 0.4, "col": Color(0.85, 0.94, 1.0)})
+		if _rr >= 1.0:
+			var _rside: int = int(fork_ride.side)
+			fork_ride = {}
+			_fork_commit(_rside)
 	if not fork.is_empty():
 		fork.y += speed * delta
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
@@ -1422,47 +1488,8 @@ func _update_river_events(delta: float) -> void:
 					and BOSS_MARKS[next_boss_idx] - int(distance / 10.0) < 2600 and randf() < 0.5:
 				fork_sky = randi() % 2
 			_sfx("chime", 0.7)
-		if fork_auto != 0.0 and not fork.get("picked", false):   # the traversal, ANIMATED: an eager duck
-			target_x = VIEW.x * (0.30 if fork_auto < 0.0 else 0.70)
-			if randf() < 0.4:                          # wake spray — she is EXCITED about this
-				parts.append({"x": duck_x + randf_range(-14.0, 14.0), "y": BASE_Y + 10.0,
-					"vx": randf_range(-40.0, 40.0) - fork_auto * 34.0, "vy": randf_range(30.0, 90.0),
-					"t": 0.0, "life": 0.35, "col": Color(0.8, 0.92, 1.0)})
-			if fmod(anim_t, 0.85) < delta and state == St.GROUNDED:
-				hop()                                  # skip-hopping into the new water, chattering
-				_quack(species, -8.0)
 		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
-			fork.picked = true
-			fork_auto = 0.0
-			var side: Dictionary = fork.l if duck_x < VIEW.x * 0.5 else fork.r
-			var m: Dictionary = side.mod
-			stretch_mod = String(m.id)
-			stretch_hit = false
-			stretch_snap = {"snacks": int(run_stats.get("snacks", 0)), "trash": run_trash}
-			stretch_until = distance + THEME_LEN * 0.85
-			theme_prev = theme_idx
-			theme_idx = int(side.theme)
-			theme_sweep = 0.0
-			region_t = anim_t
-			_see_shore(theme_idx)
-			var _rpos: int = maxi(0, theme_route.find(theme_idx))
-			biome_progress = float(_rpos) * THEME_LEN + 400.0   # keep the ROUTE router in step
-			_swap_theme_music()
-			_flash("%s — %s" % [THEMES[theme_idx].name, m.name], 2.4)
-			_say(String(m.desc), 2.6)
-			_sfx("chime", 0.9)
-			_st("forks_taken")
-			if stretch_mod == "rusty":                  # RUSTY'S THERMALS: he leads, you fly
-				stretch_until = distance + maxf(SLIP_LEN, speed * 1.25 * 28.0)   # ~28s of course wherever it starts
-				slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0
-				slip_count = 8.2
-				slip_lead_x = duck_x
-				hawk_done = false; hawk_timer = 0.2; hawk_summon = true
-				enemies.clear(); logs.clear(); items.clear()
-				next_draft = maxf(next_draft, stretch_until + 600.0)
-				if ev_id != "": ev_until = distance
-			if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
-				golden_t = GOLDEN_DUR
+			_fork_commit(0 if duck_x < VIEW.x * 0.5 else 1)   # fallback only — the ride commits first
 		if float(fork.y) > VIEW.y + 260.0:
 			fork = {}
 			fork_warned = false
@@ -1547,38 +1574,30 @@ func _update_river_events(delta: float) -> void:
 				hawk.dwell = 4.6; hawk.depart = true; hawk.leading = false
 		elif stretch_mod == "heron":                    # DANGER PAYS: the whole point is the sweat
 			if not stretch_hit:
-				run_feathers += 60
 				if shield_charges < 3:
 					shield_charges += 1
-				_flash("CONTRACT KEPT — UNHIT!\n+60 feathers · +1 bonk shield", 2.6)
-				_sfx("unlock", 1.2); _sfx("chime", 1.5)
+				_wager_payout(60, "CONTRACT KEPT — UNHIT!\n+60 feathers · +1 bonk shield", true)
+				_sfx("unlock", 1.2)
 			else:
 				_flash("the herons collected their toll.", 2.0)
 		elif stretch_mod == "feathers":
-			run_feathers += 40
-			_flash("EASY MONEY pays out: +40 feathers", 2.2)
-			_sfx("chime", 1.3)
+			_wager_payout(40, "EASY MONEY pays out: +40 feathers")
 		elif stretch_mod == "junk":
 			var _tg: int = run_trash - int(stretch_snap.get("trash", 0))
 			if _tg > 0:
-				run_feathers += _tg * 2
-				_flash("SCAVENGER'S RUN: %d junk x2 = +%d feathers" % [_tg, _tg * 2], 2.4)
-				_sfx("chime", 1.2)
+				_wager_payout(_tg * 2, "SCAVENGER'S RUN: %d junk x2 = +%d feathers" % [_tg, _tg * 2], _tg >= 8)
 			else:
 				_flash("scavenged... nothing. the river shrugs.", 2.0)
 		elif stretch_mod == "snacks":
 			var _sg: int = int(run_stats.get("snacks", 0)) - int(stretch_snap.get("snacks", 0))
 			if _sg >= 12:
-				run_feathers += 30
 				loft = 1.0; loft_ready = true
-				_flash("THE FEAST: %d devoured!\n+30 feathers · LOFT FILLED" % _sg, 2.5)
-				_sfx("unlock", 1.1); _sfx("chime", 1.4)
+				_wager_payout(30, "THE FEAST: %d devoured!\n+30 feathers · LOFT FILLED" % _sg, true)
+				_sfx("unlock", 1.1)
 			else:
 				_flash("%d snacks... the feast wanted 12." % _sg, 2.0)
 		elif stretch_mod == "golden":
-			run_feathers += 25
-			_flash("the golden hour's blessing: +25", 2.2)
-			_sfx("chime", 1.4)
+			_wager_payout(25, "the golden hour's blessing: +25")
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -5144,7 +5163,7 @@ func reset_game() -> void:
 	_swap_theme_music()
 	drafting = false
 	boss_draft = false
-	fork_choosing = false; fork_auto = 0.0; fork_sky = -1
+	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -13044,6 +13063,36 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
+	# LIVE CONTRACT CHIP: an active wager shows its own math, all stretch long
+	if stretch_mod != "" and stretch_mod != "rusty" and stretch_mod != "calm" and FORK_TAGS.has(stretch_mod):
+		var _wt := ""
+		var _wc := Color(1.0, 0.88, 0.4)
+		match stretch_mod:
+			"heron":
+				if stretch_hit:
+					_wt = "DANGER PAYS · the toll is due"
+					_wc = Color(0.75, 0.78, 0.86)
+				else:
+					_wt = "DANGER PAYS · UNHIT — hold on!"
+			"snacks":
+				var _fs: int = int(run_stats.get("snacks", 0)) - int(stretch_snap.get("snacks", 0))
+				_wt = "THE FEAST · %d / 12" % _fs
+				if _fs >= 12:
+					_wt = "THE FEAST · SECURED (%d)" % _fs
+			"junk":
+				var _fj: int = run_trash - int(stretch_snap.get("trash", 0))
+				_wt = "SCAVENGER · %d junk = +%d" % [_fj, _fj * 2]
+			"feathers":
+				_wt = "EASY MONEY · +40 at the end"
+			"golden":
+				_wt = "BLESSED · +25 ahead"
+		if _wt != "":
+			var _ww := font.get_string_size(_wt, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			var _wr := Rect2(VIEW.x * 0.5 - _ww * 0.5 - 12.0, 118.0, _ww + 24.0, 24.0)
+			draw_rect(_wr, Color(0.06, 0.10, 0.14, 0.6))
+			draw_rect(Rect2(_wr.position, Vector2(_wr.size.x, 2.0)), Color(_wc.r, _wc.g, _wc.b, 0.85))
+			draw_string(font, Vector2(_wr.position.x + 12.0, _wr.position.y + 17.0), _wt,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, _wc)
 	# RUSTY'S THERMALS 2.0: his golden SLIPSTREAM ribbon + the master himself at its head
 	if stretch_mod == "rusty" and slip_pts.size() > 1:
 		var _rib := PackedVector2Array()
