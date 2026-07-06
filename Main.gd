@@ -43,6 +43,7 @@ func _sfx_echo(snd: String, pitch: float, vol: float, delay: float) -> void:
 	sfx_echoes.append({"t": delay, "snd": snd, "pitch": pitch, "vol": vol})
 
 func _ouch() -> void:
+	stretch_hit = true                              # a wager stretch remembers every bonk
 	hurt_flash = 1.1
 var combo_n := 0                # SNACK COMBO chain length
 var combo_t := 0.0              # seconds left to keep the chain alive
@@ -225,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.29"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.30"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1257,14 +1258,16 @@ var fork_choosing := false      # THE ANCIENT DUCK holds the river while you wei
 var fork_ask_t := 0.0
 var fork_sky := -1              # which card (if any) is THE SKY ROUTE this split (-1 none)
 var fork_auto := 0.0            # after choosing: the duck paddles itself down the picked leg
-const FORK_TAGS := {            # honest risk/reward, card-front (ids match FORK_MODS)
-	"feathers": ["REWARD", "feather-rich water"],
-	"heron": ["RISK & REWARD", "herons hunt here — the river pays extra"],
-	"calm": ["SAFE", "gentle water · modest pickings"],
-	"junk": ["JUNK", "flotsam-rich — junk builds feast"],
-	"snacks": ["REWARD", "snack-rich water"],
-	"golden": ["BLESSED", "golden hour — everything glows"],
-	"rusty": ["TRIAL", "no danger · LEGENDARY stakes"],
+var stretch_hit := false        # tagged by _ouch() during a wager stretch (DANGER PAYS contract)
+var stretch_snap := {}          # counters at the branch mouth — settlements diff against these
+const FORK_TAGS := {            # each branch is a CONTRACT: the deal on the card, settled at the far end
+	"feathers": ["EASY MONEY", "rich water. clear it and collect\n+40 feathers, no questions asked."],
+	"heron": ["DANGER PAYS", "herons hunt DOUBLE here.\nfinish UNHIT: +60 feathers\nand a bonk shield."],
+	"calm": ["THE QUIET WATER", "nothing hunts here.\nnothing pays, either."],
+	"junk": ["SCAVENGER'S RUN", "flotsam-thick. every junk you\ngrab pays DOUBLE at the far end."],
+	"snacks": ["THE FEAST", "snacks everywhere. eat 12 before\nit ends: +30 and your LOFT fills."],
+	"golden": ["BLESSED", "the golden hour walks with you.\n+25 blessing at the end."],
+	"rusty": ["THE TRIAL", "no danger at all. fly it\nnear-PERFECT for a LEGENDARY."],
 }
 var fork_next := 12000.0        # forks split the river between boss marks
 
@@ -1326,17 +1329,21 @@ func _fork_choose(side: int) -> void:
 		_cloud_launch()
 		return
 	fork_auto = -1.0 if side == 0 else 1.0
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 130.0, "col": Color(1.0, 0.9, 0.5)})
+	_spawn_parts(duck_x, BASE_Y - 10.0, 18, Color(1.0, 0.88, 0.45), 200.0)
+	_float_text(duck_x, BASE_Y - 74.0, "go well, little one.", Color(1.0, 0.92, 0.6))
+	_sfx("chime", 1.5, -4.0)
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
 		return 0.0                                   # the Thermals are HIS course — nothing else exists
 	return (1.8 if ev_id == "patrol" else 1.0) \
-		* (1.5 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
+		* (2.2 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
 
 func _ev_snack_mult() -> float:
 	return (1.3 if ev_id == "squall" else 1.0) * (2.0 if ev_id == "tailwind" else 1.0) \
 		* (1.45 if stretch_mod == "feathers" else 1.0) * (1.3 if stretch_mod == "heron" else 1.0) \
-		* (0.8 if stretch_mod == "calm" else 1.0) * (1.5 if stretch_mod == "snacks" else 1.0)
+		* (0.8 if stretch_mod == "calm" else 1.0) * (2.0 if stretch_mod == "snacks" else 1.0)
 
 func _ev_prop_mult() -> float:
 	return (3.0 if ev_id == "flush" else 1.0) * (2.2 if stretch_mod == "junk" else 1.0)
@@ -1415,14 +1422,23 @@ func _update_river_events(delta: float) -> void:
 					and BOSS_MARKS[next_boss_idx] - int(distance / 10.0) < 2600 and randf() < 0.5:
 				fork_sky = randi() % 2
 			_sfx("chime", 0.7)
-		if fork_auto != 0.0 and not fork.get("picked", false):   # the traversal, animated: she paddles her line
+		if fork_auto != 0.0 and not fork.get("picked", false):   # the traversal, ANIMATED: an eager duck
 			target_x = VIEW.x * (0.30 if fork_auto < 0.0 else 0.70)
+			if randf() < 0.4:                          # wake spray — she is EXCITED about this
+				parts.append({"x": duck_x + randf_range(-14.0, 14.0), "y": BASE_Y + 10.0,
+					"vx": randf_range(-40.0, 40.0) - fork_auto * 34.0, "vy": randf_range(30.0, 90.0),
+					"t": 0.0, "life": 0.35, "col": Color(0.8, 0.92, 1.0)})
+			if fmod(anim_t, 0.85) < delta and state == St.GROUNDED:
+				hop()                                  # skip-hopping into the new water, chattering
+				_quack(species, -8.0)
 		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
 			fork.picked = true
 			fork_auto = 0.0
 			var side: Dictionary = fork.l if duck_x < VIEW.x * 0.5 else fork.r
 			var m: Dictionary = side.mod
 			stretch_mod = String(m.id)
+			stretch_hit = false
+			stretch_snap = {"snacks": int(run_stats.get("snacks", 0)), "trash": run_trash}
 			stretch_until = distance + THEME_LEN * 0.85
 			theme_prev = theme_idx
 			theme_idx = int(side.theme)
@@ -1529,6 +1545,40 @@ func _update_river_events(delta: float) -> void:
 				hawk.line = _gl
 				hawk.said = true; hawk.say_t = hawk.t
 				hawk.dwell = 4.6; hawk.depart = true; hawk.leading = false
+		elif stretch_mod == "heron":                    # DANGER PAYS: the whole point is the sweat
+			if not stretch_hit:
+				run_feathers += 60
+				if shield_charges < 3:
+					shield_charges += 1
+				_flash("CONTRACT KEPT — UNHIT!\n+60 feathers · +1 bonk shield", 2.6)
+				_sfx("unlock", 1.2); _sfx("chime", 1.5)
+			else:
+				_flash("the herons collected their toll.", 2.0)
+		elif stretch_mod == "feathers":
+			run_feathers += 40
+			_flash("EASY MONEY pays out: +40 feathers", 2.2)
+			_sfx("chime", 1.3)
+		elif stretch_mod == "junk":
+			var _tg: int = run_trash - int(stretch_snap.get("trash", 0))
+			if _tg > 0:
+				run_feathers += _tg * 2
+				_flash("SCAVENGER'S RUN: %d junk x2 = +%d feathers" % [_tg, _tg * 2], 2.4)
+				_sfx("chime", 1.2)
+			else:
+				_flash("scavenged... nothing. the river shrugs.", 2.0)
+		elif stretch_mod == "snacks":
+			var _sg: int = int(run_stats.get("snacks", 0)) - int(stretch_snap.get("snacks", 0))
+			if _sg >= 12:
+				run_feathers += 30
+				loft = 1.0; loft_ready = true
+				_flash("THE FEAST: %d devoured!\n+30 feathers · LOFT FILLED" % _sg, 2.5)
+				_sfx("unlock", 1.1); _sfx("chime", 1.4)
+			else:
+				_flash("%d snacks... the feast wanted 12." % _sg, 2.0)
+		elif stretch_mod == "golden":
+			run_feathers += 25
+			_flash("the golden hour's blessing: +25", 2.2)
+			_sfx("chime", 1.4)
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -6380,10 +6430,6 @@ func _update_play(delta: float) -> void:
 		theme_sweep = 0.0
 		region_t = anim_t                          # kick off the arrival banner
 		_see_shore(theme_idx)                      # its fixtures enter your LIFE LIST
-		if theme_idx == 5 and hawk == null:        # LAKE COCHICHEWICK: the Weir Hill red-tail
-			hawk_done = false                      # always patrols his own water — one more pass
-			hawk_summon = true
-			hawk_timer = randf_range(3.0, 6.0)
 		_sfx("chime", 0.75); _sfx("fwoosh", 0.6, -6.0)
 		_swap_theme_music()                        # the river's mood shifts the music too
 	theme_sweep = minf(theme_sweep + delta * 0.38, 1.0)   # gentler, slower wash
@@ -9194,8 +9240,7 @@ func _draw_fork_choice() -> void:
 				var _trc := Rect2(cx2 - _tw2 * 0.5 - 10.0, r.position.y + 76.0, _tw2 + 20.0, 24.0)
 				draw_rect(_trc, Color(1.0, 0.82, 0.35, 0.16))
 				_otext(Vector2(_trc.position.x, _trc.position.y + 17.0), String(_tag[0]), 12, Color(1.0, 0.88, 0.5), _trc.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-			_mtext(Vector2(r.position.x + 12.0, r.position.y + 126.0), String(m.desc), 13, Color(1, 1, 1, 0.85), r.size.x - 24.0)
-			_mtext(Vector2(r.position.x + 12.0, r.position.y + 176.0), String(_tag[1]), 12, Color(1, 1, 1, 0.62), r.size.x - 24.0)
+			_mtext(Vector2(r.position.x + 12.0, r.position.y + 124.0), String(_tag[1]), 13, Color(1, 1, 1, 0.88), r.size.x - 24.0)
 		_otext(Vector2(r.position.x, r.end.y - 14.0), "< take this water >" if not is_sky else "< take the sky >", 12, Color(1, 1, 1, 0.5), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _draw_pause() -> void:
