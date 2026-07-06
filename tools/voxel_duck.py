@@ -2401,7 +2401,7 @@ def generate_critters(art_dir):
     spin_set(shade(build_beaver(2)), "beaver_open", 20, 5.2, out=320)
     spin_set(shade(build_bongo(0)), "bongo", 20, 5.0, out=320)
     spin_set(shade(build_bongo(2)), "bongo_open", 20, 5.0, out=320)
-    spin_set(shade(build_hawk(0)), "rusty", 24, 3.2, out=180)
+    spin_set(shade(build_hawk(0)), "rustyguide", 24, 3.2, out=180)   # codex GUIDE turntable (rusty_* is his PLAYABLE set)
     spin_set(shade(build_sadie(0)), "sadie", 34, 1.7, out=80)
     spin_set(shade(build_loon(0)), "loon", HERO_PITCH, 2.6, out=128)
     _dboat = shade(build_boat())                           # DONNI turntable, offset 40deg to a hero 3/4

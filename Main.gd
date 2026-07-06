@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.20"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.21"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1825,13 +1825,13 @@ func _ready() -> void:
 			load("res://art/hawk_lead_2.png")]
 	if ResourceLoader.exists("res://art/hawk_screech.png"):
 		tex_hawk_screech = load("res://art/hawk_screech.png")
-	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rusty", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread", "heron"]:   # COMPENDIUM turntables (+ open-mouth react sets)
+	for cid in ["gerald", "snapz", "beaver", "bongo", "turtle", "rustyguide", "sadie", "elder", "loon", "gerald_open", "snapz_open", "beaver_open", "bongo_open", "turtle_open", "donni", "bread", "heron"]:   # COMPENDIUM turntables (+ open-mouth react sets)
 		if ResourceLoader.exists("res://art/%s_spin_00.png" % cid):
 			var frames: Array = []
 			for i in 16:
 				frames.append(load("res://art/%s_spin_%02d.png" % [cid, i]))
 			tex_codex_spin[cid] = frames
-	var _ctmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}   # GUARD against the recurring missing-codex-icon bug
+	var _ctmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie", "rusty": "rustyguide"}   # GUARD against the recurring missing-codex-icon bug
 	for _ce in CODEX:
 		if _ce.get("cat", "") in ["boss", "enemy", "friend"]:
 			var _cid: String = str(_ce.get("id", ""))
@@ -10830,7 +10830,7 @@ func _codex_rarity_disc(box: Rect2, tier: int) -> void:
 
 func _codex_icon(it: Dictionary, box: Rect2) -> void:
 	# voxel turntables keyed differently than the codex key (loon/donni/bread) -> use their frame 0
-	var tmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}
+	var tmap := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie", "rusty": "rustyguide"}
 	if tmap.has(it.key) and tex_codex_spin.has(tmap[it.key]):
 		var tf: Array = tex_codex_spin[tmap[it.key]]
 		if tf.size() > 0:
@@ -10961,7 +10961,7 @@ func _draw_codex_detail(it: Dictionary) -> void:
 	var sid := ""
 	if it.type == "char":
 		sid = "gerald" if it.key == "eternal" else it.key
-	var turn_map := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie"}   # turntables keyed differently
+	var turn_map := {"lucien": "loon", "donny": "donni", "bread_magic": "bread", "megasadie": "sadie", "rusty": "rustyguide"}   # turntables keyed differently
 	if turn_map.has(it.key):
 		sid = turn_map[it.key]
 	var frames: Array = tex_codex_spin.get(sid, [])
