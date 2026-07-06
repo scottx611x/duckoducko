@@ -85,7 +85,6 @@ const UPGRADES := [
 	{"id": "aftershock", "name": "AFTERSHOCK", "desc": "each log your blast smashes: +12% LOFT", "rarity": 1},
 	{"id": "bounce", "name": "BOUNCE CHARGE", "desc": "spring-log bounces refill +35% LOFT", "rarity": 1},
 	{"id": "buffet", "name": "LOG BUFFET", "desc": "EVERY log you destroy drops a snack", "rarity": 1},
-	{"id": "school", "name": "DUCKLING MAGNET", "desc": "ducklings tractor-beam in snacks they pass", "rarity": 2},
 	{"id": "thunder", "name": "THUNDER FEET", "desc": "every landing detonates adjacent logs and enemies", "rarity": 2},
 	# the JUNKYARD cluster: river trash stops being scenery and becomes a resource
 	{"id": "trashmag", "name": "TRASH MAGNET", "desc": "river trash drifts into your lane — every 5 you grab = a free BONK", "rarity": 1},
@@ -106,7 +105,7 @@ const ICON_MODELS := {
 	"gold": "coin", "pockets": "pouch", "nestegg": "egg", "clutch": "clutch", "egghead": "egghead",
 	"thunder": "bolt", "magnet": "magnet", "hotwheels": "flame", "wildfire": "wildfire", "phoenix": "phoenix", "thermal": "thermal",
 	"mega": "arrow", "loft": "loftgauge", "warmup": "hourglass", "double": "doublearrow", "wild": "star", "lucky": "clover",
-	"duckling": "chick", "trio": "trio", "school": "conga", "apex": "crown", "warlord": "warhelm",
+	"duckling": "chick", "trio": "trio", "apex": "crown", "warlord": "warhelm",
 	"secondwind": "heart", "buffet": "fork", "snackhawk": "snackwing", "wingducks": "vformation", "earlybird": "earlybird",
 	"spring": "spring", "springy": "trampoline", "snacks": "cookie", "cannon": "cannon", "highstakes": "die",
 	"bounce": "ball", "breadwinner": "loaf", "basket": "breadbasket", "nova": "burst", "aftershock": "shockring",
@@ -122,7 +121,7 @@ const SYNERGY := {
 	"snackhawk": ["spring", "double", "snacks", "magnet"],
 	"spring": ["snackhawk", "double"],
 	"double": ["spring", "snackhawk"],
-	"snacks": ["snackhawk", "school", "gold", "magnet"],
+	"snacks": ["snackhawk", "gold", "magnet"],
 	"magnet": ["snacks", "snackhawk", "gold"],
 	"aftershock": ["thunder", "loft"],
 	"thunder": ["aftershock", "shield"],
@@ -132,9 +131,8 @@ const SYNERGY := {
 	"buffet": ["loft", "gold"],
 	"gold": ["nestegg", "snacks", "buffet"],
 	"nestegg": ["gold"],
-	"school": ["duckling", "trio", "snacks"],
-	"duckling": ["school", "trio", "wingducks"],
-	"trio": ["school", "duckling", "wingducks"],
+	"duckling": ["trio", "wingducks"],
+	"trio": ["duckling", "wingducks"],
 	"shield": ["thunder", "wingducks"],
 	"cannon": ["buffet", "gold"],
 	"wingducks": ["shield", "duckling", "trio"],
@@ -225,7 +223,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.25"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.26"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -281,6 +279,7 @@ const GAME_MENU_BTN := Rect2(VIEW.x - 64.0, 14.0, 50.0, 50.0)   # in-run ✕ (mo
 const GAME_PAUSE_BTN := Rect2(VIEW.x - 124.0, 14.0, 50.0, 50.0) # ‖ pause, left of the ✕
 const PAUSE_RESUME_BTN := Rect2(120.0, 470.0, 300.0, 64.0)
 const PAUSE_MENU_BTN := Rect2(160.0, 552.0, 220.0, 52.0)
+const PAUSE_ASHORE_BTN := Rect2(160.0, 624.0, 220.0, 46.0)  # GIVE UP: bank the run, keep the loot
 const DEATH_MENU_BTN := Rect2(74.0, 632.0, 178.0, 44.0)
 const DEATH_STATS_BTN := Rect2(288.0, 632.0, 178.0, 44.0)   # death-screen LOGBOOK button (inset within the card)
 const DEATH_ENDLESS_BTN := Rect2(74.0, 574.0, 392.0, 46.0)  # post-bread "PADDLE ON" -> endless mode
@@ -801,7 +800,6 @@ const POWER_LORE := {
 	"aftershock": "Every log you shatter owes you a favor. The blast collects the debt immediately, with interest, in LOFT.",
 	"bounce": "The boost logs were spring-cut lumber from a trampoline factory that flooded in '88. They have never accepted their retirement.",
 	"buffet": "Inside every log there was always a snack, the way inside every block of marble there was always a statue. You simply have the appetite required to see it.",
-	"school": "Your ducklings have unionized their appetites. Anything edible within reach of the parade is collectively bargained into your bill.",
 	"thunder": "Land hard enough, often enough, and the river starts flinching first. Now every splash-down detonates the neighborhood. The frogs have started applauding — from a distance.",
 	"hotwheels": "Feet so fast the water can't tell them from weather. On fire, they leave a wake of steam and a rumor of a very fast duck.",
 	"junker": "One duck's flotsam is your ammunition. The sling was invented by a hen who ran out of patience before she ran out of trash.",
@@ -923,7 +921,6 @@ var hawk_summon := false        # a SUMMONS overrides his early-run-only rule (T
 var donny = null                # DONNY the wooden speedboat: a Sand Pond cameo (cosmetic, never bites)
 var donny_timer := 14.0         # cooldown before he can roar in
 var cloud = null                # RARE CLOUD GEYSER: ride it up to skip a boss -> {x,y,t}
-var cloud_timer := 60.0
 const SKY_GOAL := 7.0           # seconds to climb to the bread
 var in_sky := false             # CLOUD-LAUNCH sky sequence active
 var sky_t := 0.0
@@ -1251,6 +1248,19 @@ var ev_next := 6500.0           # distance of the next event roll
 var ev_duckling := {}           # LOST DUCKLING raft: {x, y, saved}
 var fork := {}                  # active fork: {y, l:{...}, r:{...}, picked}
 var fork_warned := false        # the "splits ahead!" call, once per fork
+var fork_choosing := false      # THE ANCIENT DUCK holds the river while you weigh the split
+var fork_ask_t := 0.0
+var fork_sky := -1              # which card (if any) is THE SKY ROUTE this split (-1 none)
+var fork_auto := 0.0            # after choosing: the duck paddles itself down the picked leg
+const FORK_TAGS := {            # honest risk/reward, card-front (ids match FORK_MODS)
+	"feathers": ["REWARD", "feather-rich water"],
+	"heron": ["RISK & REWARD", "herons hunt here — the river pays extra"],
+	"calm": ["SAFE", "gentle water · modest pickings"],
+	"junk": ["JUNK", "flotsam-rich — junk builds feast"],
+	"snacks": ["REWARD", "snack-rich water"],
+	"golden": ["BLESSED", "golden hour — everything glows"],
+	"rusty": ["TRIAL", "no danger · LEGENDARY stakes"],
+}
 var fork_next := 12000.0        # forks split the river between boss marks
 
 # BIG DAY: the daily seeded river (a birder's Big Day — everyone gets the SAME river today).
@@ -1296,6 +1306,21 @@ var slip_on := 0                # scored ticks ON his line
 var slip_total := 0             # total scored ticks (grade = on/total)
 var slip_tone := 0              # rising hum step while you hold the line
 var slip_count := 0.0           # pre-course countdown — grading starts at FLY!
+
+func _fork_card_rect(i: int) -> Rect2:
+	return Rect2(22.0 + float(i) * (VIEW.x * 0.5 - 12.0), 470.0, VIEW.x * 0.5 - 32.0, 230.0)
+
+func _fork_choose(side: int) -> void:
+	fork_choosing = false
+	_sfx("click")
+	if fork_sky == side:                            # THE SKY ROUTE: over the boss, not through it
+		_st("forks_taken")
+		fork = {}
+		fork_warned = false
+		fork_next = distance + randf_range(105000.0, 135000.0)
+		_cloud_launch()
+		return
+	fork_auto = -1.0 if side == 0 else 1.0
 
 func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
@@ -1375,6 +1400,18 @@ func _update_river_events(delta: float) -> void:
 		_sfx("fwoosh", 0.7)
 	if not fork.is_empty():
 		fork.y += speed * delta
+		if not fork.get("asked", false) and float(fork.y) > -30.0:
+			fork.asked = true
+			fork_choosing = true
+			fork_ask_t = anim_t
+			pressed = false; moved = false; target_x = duck_x; steer_anchor_x = duck_x
+			fork_sky = -1                              # THE SKY ROUTE: only offered when a boss looms ahead
+			if next_boss_idx < BOSS_MARKS.size() and int(distance / 10.0) < BOSS_MARKS[next_boss_idx] \
+					and BOSS_MARKS[next_boss_idx] - int(distance / 10.0) < 2600 and randf() < 0.5:
+				fork_sky = randi() % 2
+			_sfx("chime", 0.7)
+		if fork_auto != 0.0 and not fork.get("picked", false):   # the traversal, animated: she paddles her line
+			target_x = VIEW.x * (0.30 if fork_auto < 0.0 else 0.70)
 		# the island is LAND: ease the duck out of the wedge so it never paddles on grass
 		var wtop: float = float(fork.y) - 130.0
 		var wbot: float = float(fork.y) + 270.0
@@ -1388,6 +1425,7 @@ func _update_river_events(delta: float) -> void:
 				target_x = duck_x
 		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
 			fork.picked = true
+			fork_auto = 0.0
 			var side: Dictionary = fork.l if duck_x < VIEW.x * 0.5 else fork.r
 			var m: Dictionary = side.mod
 			stretch_mod = String(m.id)
@@ -2189,6 +2227,10 @@ func _ready() -> void:
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_fork.png")
+		fork_sky = 1                               # ...and the SKY ROUTE variant of the same split
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_sky.png")
 		get_tree().quit()
 	elif "--ponchointro" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -2241,15 +2283,6 @@ func _ready() -> void:
 		await get_tree().create_timer(0.3).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_sky.png")
-		get_tree().quit()
-	elif "--cloudshot" in OS.get_cmdline_user_args():
-		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
-		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
-		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
-		cloud = {"x": VIEW.x * 0.5, "y": 360.0, "t": 1.2}; duck_x = VIEW.x * 0.5
-		await get_tree().create_timer(0.3).timeout
-		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png("/tmp/s_cloud.png")
 		get_tree().quit()
 	elif "--bossshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -2393,7 +2426,7 @@ func _ready() -> void:
 		start_game()
 		tut_mode = false; in_shrine = false; drafting = false; shrine_boons = []
 		_pick_upgrade(_upg_def("trashmag")); _pick_upgrade(_upg_def("packrat")); _pick_upgrade(_upg_def("junker"))
-		_pick_upgrade(_upg_def("dumpster")); _pick_upgrade(_upg_def("scrapshell")); _pick_upgrade(_upg_def("school")); _pick_upgrade(_upg_def("trio"))
+		_pick_upgrade(_upg_def("dumpster")); _pick_upgrade(_upg_def("scrapshell")); _pick_upgrade(_upg_def("trio"))
 		for _tq in range(8): trash_queue.append({"tex": _tq % max(1, tex_props.size()), "rar": _tq % 4})
 		trash_hoard = trash_queue.size(); run_trash = 13
 		golden_t = GOLDEN_DUR * 0.5
@@ -2465,7 +2498,7 @@ func _smoke() -> void:
 	print("SMOKE picked=", picked, " drafting=", drafting)
 	# ducklings: pick a parade, then let one soak a bonk
 	_pick_upgrade(_upg_def("trio"))                    # trio
-	print("SMOKE ducklings=", ducklings_n, " synergy(school)=", _has_synergy("school"))
+	print("SMOKE ducklings=", ducklings_n, " synergy(trio)=", _has_synergy("trio"))
 	# spring log under the duck -> hyper jump
 	logs.append({"x": duck_x, "y": BASE_Y, "w": 160.0, "h": 46.0, "missed": false,
 		"spring": true, "phase": 0.0, "frog": false, "frog_gone": false})
@@ -3782,7 +3815,7 @@ func _upgrade_icon(id: String):
 			return tex_items.get("ducky")
 		"shield", "gold", "nestegg":
 			return tex_items.get("feather")
-		"duckling", "trio", "school":
+		"duckling", "trio":
 			return tex_duckling.get("idle", [null])[0]
 		"springy", "bounce", "aftershock", "thunder":
 			return tex_log
@@ -3820,7 +3853,6 @@ const DRAFT_TIPS := {
 	"aftershock":"AFTERSHOCK turns blast-smashed logs into LOFT — pairs with THUNDER FEET.",
 	"bounce":   "BOUNCE CHARGE refills LOFT off every boost log. Special-spam fuel.",
 	"buffet":   "LOG BUFFET drops a snack from EVERY log you wreck. Endless nibbles.",
-	"school":   "DUCKLING MAGNET lets your brood tractor in snacks they pass. Free food.",
 	"thunder":  "THUNDER FEET detonates logs on every landing — a constant lane-clear.",
 	"cannon":   "CRUMB CANNON auto-fires; stack it and it fans into a 3-way spread.",
 	"wingducks":"WINGDUCKS dive-bomb the herons FOR you. Hands-free heron defense.",
@@ -3830,8 +3862,8 @@ const DRAFT_TIPS := {
 
 # the build ARCHETYPES Rusty recognises — which powers, boons + wearables feed each playstyle
 const ARCH := {
-	"snacks":    {"name": "a SNACK economy", "up": ["magnet", "snacks", "gold", "snackhawk", "buffet", "school", "cannon", "nestegg"], "boon": ["breadwinner"], "wear": ["pirate", "chef", "vest", "crown"]},
-	"ducklings": {"name": "a DUCKLING brood", "up": ["duckling", "trio", "school", "wingducks"], "boon": ["clutch", "gosling_guard"], "wear": []},
+	"snacks":    {"name": "a SNACK economy", "up": ["magnet", "snacks", "gold", "snackhawk", "buffet", "cannon", "nestegg"], "boon": ["breadwinner"], "wear": ["pirate", "chef", "vest", "crown"]},
+	"ducklings": {"name": "a DUCKLING brood", "up": ["duckling", "trio", "wingducks"], "boon": ["clutch", "gosling_guard"], "wear": []},
 	"fire":      {"name": "an ON-FIRE rampage", "up": ["hotwheels", "thunder", "aftershock"], "boon": ["wildfire"], "wear": ["scarf"]},
 	"special":   {"name": "a SPECIAL-spam engine", "up": ["loft", "nova", "bounce"], "boon": [], "wear": ["party", "satchel"]},
 	"air":       {"name": "an AIR / hops build", "up": ["spring", "double", "springy", "snackhawk"], "boon": [], "wear": ["prop", "jetpack"]},
@@ -4395,25 +4427,6 @@ func _draw_boat(center: Vector2, roll: float, s: float) -> void:
 
 # a periodic snapping-turtle ambush during normal play: it lurks in the murk, locks
 # onto your lane, then ERUPTS in a snap — hop over it (be airborne) or be elsewhere.
-func _update_cloud(delta: float) -> void:
-	if boss != null or tut_mode:
-		cloud = null
-		return
-	if cloud == null:
-		cloud_timer -= delta
-		# offer it only when a boss is still ahead to skip + we are well before it
-		if cloud_timer <= 0.0 and next_boss_idx < BOSS_MARKS.size() and int(distance / 10.0) < BOSS_MARKS[next_boss_idx] - 400:
-			cloud = {"x": clampf(duck_x, BANK_W + 70.0, VIEW.x - BANK_W - 70.0), "y": -100.0, "t": 0.0}
-			cloud_timer = randf_range(150.0, 280.0)   # RARE — not every run
-		return
-	cloud.t = float(cloud.t) + delta
-	cloud.y = float(cloud.y) + speed * delta * 0.9
-	if absf(float(cloud.x) - duck_x) < 42.0 and absf(float(cloud.y) - BASE_Y) < 54.0 and state == St.GROUNDED:
-		_cloud_launch()
-		return
-	if float(cloud.y) > BASE_Y + 130.0:
-		cloud = null
-
 func _cloud_launch() -> void:
 	cloud = null
 	in_sky = true; sky_t = 0.0; sky_alt = 0.0; sky_duck_x = duck_x; sky_loot = 0
@@ -4508,29 +4521,6 @@ func _draw_sky() -> void:
 	if sky_t < 1.6:
 		var a2: float = clampf(1.6 - sky_t, 0.0, 1.0) * clampf(sky_t * 4.0, 0.0, 1.0)
 		_otext(Vector2(0, VIEW.y * 0.36), "above it all...", 26, Color(1, 1, 1, a2 * 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
-
-func _draw_cloud() -> void:
-	if cloud == null:
-		return
-	var cx: float = cloud.x
-	var cy: float = cloud.y
-	var t: float = anim_t * 3.0
-	for i in 9:                                   # rising updraft sparkle column
-		var pr: float = fposmod(t * 0.35 + i * 0.11, 1.0)
-		var py: float = cy + 36.0 - pr * 96.0
-		var pw: float = 13.0 - pr * 8.0
-		_fill_ellipse(Vector2(cx + sin(t * 1.3 + i) * 12.0, py), pw, pw * 0.5, Color(0.82, 0.92, 1.0, (1.0 - pr) * 0.5))
-	draw_circle(Vector2(cx, cy - 6.0), 34.0, Color(0.7, 0.9, 1.0, 0.12 + 0.07 * sin(t)))   # glow
-	for k in 5:                                   # puffy cloud (ride me up)
-		var ka: float = k * TAU / 5.0
-		draw_circle(Vector2(cx + cos(ka) * 20.0, cy - 46.0 + sin(ka) * 7.0), 15.0, Color(0.97, 0.99, 1.0, 0.95))
-	draw_circle(Vector2(cx, cy - 46.0), 20.0, Color(1, 1, 1))
-	for j in 2:                                   # up-chevrons telegraph
-		var fp: float = fposmod(t * 0.6 + j * 0.5, 1.0)
-		var jy: float = cy + 6.0 - fp * 26.0
-		var ca: float = 0.7 * (1.0 - fp)
-		draw_line(Vector2(cx - 9, jy + 6), Vector2(cx, jy), Color(0.8, 0.95, 1.0, ca), 3.0)
-		draw_line(Vector2(cx + 9, jy + 6), Vector2(cx, jy), Color(0.8, 0.95, 1.0, ca), 3.0)
 
 # stage manager: only ONE major ambient character on stage at a time
 func _cameo_busy() -> bool:
@@ -5084,6 +5074,7 @@ func reset_game() -> void:
 	_swap_theme_music()
 	drafting = false
 	boss_draft = false
+	fork_choosing = false; fork_auto = 0.0; fork_sky = -1
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -5351,6 +5342,11 @@ func _on_press(pos: Vector2) -> void:
 		if PAUSE_RESUME_BTN.has_point(pos):
 			_sfx("click")
 			paused = false
+		elif PAUSE_ASHORE_BTN.has_point(pos):     # end the run honestly — banks feathers/logbook like any death
+			paused = false
+			_sfx("click")
+			die("you paddled ashore on your own terms.", "ashore")
+			return
 		elif PAUSE_MENU_BTN.has_point(pos):
 			_sfx("click")
 			paused = false
@@ -5396,6 +5392,14 @@ func _on_press(pos: Vector2) -> void:
 			dev_menu = false; _sfx("click"); return     # tap off the menu closes it
 		if _dev_btn_rect().has_point(pos):
 			dev_menu = true; _sfx("click"); return
+	if fork_choosing:
+		if anim_t - fork_ask_t < 0.4:
+			return
+		for _fi in 2:
+			if _fork_card_rect(_fi).has_point(pos):
+				_fork_choose(_fi)
+				return
+		return
 	if drafting:
 		if anim_t - draft_open_t < 0.45:
 			return                                 # grace: no hop-spam click-through
@@ -6014,7 +6018,7 @@ func _process(delta: float) -> void:
 			select_line_t = anim_t
 	if ascending:                                  # the bonkers feast cinematic owns the frame
 		_update_ascend(delta)
-	elif not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and not in_codex and not in_settings and alive and not drafting and not paused and not dev_menu:
+	elif not in_menu and not in_select and not in_shop and not in_shrine and not in_stats and not in_codex and not in_settings and alive and not drafting and not fork_choosing and not paused and not dev_menu:
 		_update_play(delta)
 	if not in_menu and not in_select and not in_shop:
 		_update_parts(delta)               # confetti/sparkle keep falling when dead
@@ -6188,51 +6192,7 @@ func _update_play(delta: float) -> void:
 	_update_donny(delta)
 	_update_turtle(delta * sm)
 
-	# DUCKLING SCHOOL: the conga line TRACTOR-BEAMS snacks in — visibly. snacks in
-	# range get tagged with the pulling duckling and slide toward it until gulped.
-	if _up("school") > 0 and ducklings_n > 0:
-		for it in items:
-			if it.got:
-				continue
-			if it.has("pull_i") and int(it.pull_i) < ducklings_n:
-				var pp := _duckling_pos(int(it.pull_i))
-				var pv := Vector2(pp.x - it.x, pp.y - it.y)
-				if pv.length() < 26.0:
-					_collect(it)
-					_float_text(pp.x, pp.y - 24.0, "peep!", Color(0.97, 0.87, 0.45))
-					_sfx("peep", randf_range(1.1, 1.3), -6.0)
-				else:
-					var pd := pv.normalized() * 520.0 * delta   # a STRONG reel-in (beats the river scroll)
-					it.x += pd.x
-					it.y += pd.y
-					if randf() < 0.25:               # sparkle along the beam
-						_spawn_parts(it.x, it.y, 1, Color(1.0, 0.9, 0.45, 0.8), 30.0)
-			else:
-				for i in ducklings_n:
-					var dlp := _duckling_pos(i)
-					if Vector2(it.x - dlp.x, it.y - dlp.y).length() < 165.0:   # wider snag radius
-						it["pull_i"] = i             # locked on
-						break
-		for t in lane_trash:                             # the brood tractors TRASH too (junkyard synergy)
-			if t.got:
-				continue
-			var nd := 160.0
-			var near := -1
-			for i in ducklings_n:
-				var dl := _duckling_pos(i)
-				var dd: float = Vector2(t.x - dl.x, t.y - dl.y).length()
-				if dd < nd:
-					nd = dd; near = i
-			if near >= 0:
-				var pp := _duckling_pos(near)
-				var pv := Vector2(pp.x - t.x, pp.y - t.y)
-				if pv.length() < 28.0:
-					_collect_trash(t)
-				else:
-					var pd := pv.normalized() * 470.0 * delta
-					t.x += pd.x; t.y += pd.y
-
-	# CRUMB MAGNET: snacks in range visibly TRACTOR-BEAM toward the duck before the gulp
+	# CRUMB MAGNET: nearby snacks drift gently to the duck before the gulp
 	var _racc: float = _wf("raccoon") if _wear("raccoon") else 0.0   # RACCOON MASK: a trash-panda's reach
 	if _up("magnet") > 0 or _racc > 0.0:
 		var mpull := 130.0 + 60.0 * _up("magnet") + 130.0 * _racc
@@ -8769,12 +8729,6 @@ func _relic_glyph(id: String, c: Vector2, s: float, col: Color) -> void:
 				draw_circle(dpc, s * 0.3, col)
 				draw_circle(dpc + Vector2(0, -s * 0.32), s * 0.18, col)        # little head
 				draw_circle(dpc + Vector2(s * 0.14, -s * 0.34), s * 0.05, col.darkened(0.5))  # eye
-		"school":                                          # DUCKLING MAGNET — a duckling pulling snacks in
-			draw_circle(c + Vector2(-s * 0.3, 0), s * 0.34, col)
-			draw_circle(c + Vector2(-s * 0.3, -s * 0.36), s * 0.2, col)
-			for r in [s * 0.55, s * 0.85]:                  # tractor-beam rings reaching right
-				draw_arc(c + Vector2(-s * 0.3, 0), r, -PI * 0.45, PI * 0.45, 10, Color(col.r, col.g, col.b, 0.55), 1.5)
-			draw_circle(c + Vector2(s * 0.75, 0), s * 0.16, col.lightened(0.4))   # the snack being pulled
 		"trailblazer":                                     # a forward chevron — blazing ahead
 			for o in [-s * 0.5, s * 0.2]:
 				draw_colored_polygon(PackedVector2Array([c + Vector2(o - s * 0.2, -s * 0.8),
@@ -9129,6 +9083,51 @@ func _draw_shrine() -> void:
 		draw_multiline_string(font, Vector2(rc.position.x + 20, rc.position.y + 76), b.desc,
 			HORIZONTAL_ALIGNMENT_LEFT, tw, 14, -1, Color(1, 1, 1, 0.78 * ap))
 
+# THE ANCIENT DUCK holds the river at every split: two clear cards, honest stakes,
+# and (when a boss looms) THE SKY ROUTE — over the duel instead of through it.
+func _draw_fork_choice() -> void:
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.66))
+	var ep := Vector2(VIEW.x * 0.5, 328.0 + sin(anim_t * 1.6) * 6.0)
+	if tex_elder != null:
+		var _talking: bool = anim_t - fork_ask_t < 2.4 and fmod(anim_t, 0.5) < 0.22
+		var et: Texture2D = tex_elder_talk if (_talking and tex_elder_talk != null) else tex_elder
+		var es: Vector2 = et.get_size() * 2.6
+		draw_circle(ep, 74.0 + 4.0 * sin(anim_t * 2.2), Color(1.0, 0.9, 0.55, 0.10))
+		draw_texture_rect(et, Rect2(ep - es * 0.5, es), false)
+	_fancy_title("THE RIVER SPLITS", 128.0, 30, Color(1, 0.92, 0.5), Color(0.9, 0.6, 0.2), 4.0)
+	_otext(Vector2(0, 172.0), "the Ancient Duck holds the current. choose your water.", 15,
+		Color(1, 1, 1, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	for i in 2:
+		var r := _fork_card_rect(i)
+		var side: Dictionary = fork.l if i == 0 else fork.r
+		var m: Dictionary = side.mod
+		var is_sky: bool = fork_sky == i
+		var csb := StyleBoxFlat.new()
+		csb.bg_color = Color(0.07, 0.11, 0.17, 0.97)
+		csb.set_corner_radius_all(14)
+		csb.set_border_width_all(3)
+		csb.border_color = Color(0.55, 0.8, 1.0, 0.9) if is_sky else Color(1.0, 0.82, 0.35, 0.9)
+		draw_style_box(csb, r)
+		var cx2: float = r.get_center().x
+		if is_sky:
+			_otext(Vector2(r.position.x, r.position.y + 30.0), "THE SKY ROUTE", 19, Color(0.75, 0.9, 1.0), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+			_draw_cloud_puff(Vector2(cx2, r.position.y + 84.0), 1.0)
+			_mtext(Vector2(r.position.x + 12.0, r.position.y + 122.0), "a thermal lifts you clean OVER\nthe next boss.", 13, Color(1, 1, 1, 0.85), r.size.x - 24.0)
+			_otext(Vector2(r.position.x, r.position.y + 178.0), "SKIP THE DUEL", 13, Color(0.75, 0.9, 1.0), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+			_otext(Vector2(r.position.x, r.position.y + 198.0), "forfeit its power board", 12, Color(1, 1, 1, 0.6), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		else:
+			_otext(Vector2(r.position.x, r.position.y + 26.0), THEMES[int(side.theme)].name, 13, Color(0.6, 0.85, 1.0, 0.9), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+			_otext(Vector2(r.position.x, r.position.y + 54.0), String(m.name), 18, Color(1.0, 0.88, 0.4), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+			var _tag: Array = FORK_TAGS.get(String(m.id), ["", ""])
+			if String(_tag[0]) != "":
+				var _tw2 := font.get_string_size(String(_tag[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+				var _trc := Rect2(cx2 - _tw2 * 0.5 - 10.0, r.position.y + 76.0, _tw2 + 20.0, 24.0)
+				draw_rect(_trc, Color(1.0, 0.82, 0.35, 0.16))
+				_otext(Vector2(_trc.position.x, _trc.position.y + 17.0), String(_tag[0]), 12, Color(1.0, 0.88, 0.5), _trc.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+			_mtext(Vector2(r.position.x + 12.0, r.position.y + 126.0), String(m.desc), 13, Color(1, 1, 1, 0.85), r.size.x - 24.0)
+			_mtext(Vector2(r.position.x + 12.0, r.position.y + 176.0), String(_tag[1]), 12, Color(1, 1, 1, 0.62), r.size.x - 24.0)
+		_otext(Vector2(r.position.x, r.end.y - 14.0), "< take this water >" if not is_sky else "< take the sky >", 12, Color(1, 1, 1, 0.5), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+
 func _draw_pause() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.62))
 	var cx := VIEW.x * 0.5
@@ -9166,6 +9165,7 @@ func _draw_pause() -> void:
 			_mtext(Vector2(pr.position.x + 12.0, pr.position.y + 32.0 + font.get_ascent(16)), info.desc, 16, Color(1, 1, 1, 0.85), pr.size.x - 24.0)
 	_draw_button(PAUSE_RESUME_BTN, "RESUME", 30, true)
 	_draw_button(PAUSE_MENU_BTN, "quit to menu", 22)
+	_draw_button(PAUSE_ASHORE_BTN, "paddle ashore · end run", 17)
 
 func _draw_death() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.5))
@@ -9449,6 +9449,7 @@ func _killer_label(cat: String) -> String:
 		"bongo": return "BONGO"
 		"sadie": return "Sadie's zoomies"
 		"donny": return "CHRISSY's wake"
+		"ashore": return "your own good judgment"
 	return "the river"
 
 func _fmt_time(secs: int) -> String:
@@ -11879,6 +11880,10 @@ func _draw() -> void:
 
 	if paused:
 		_draw_pause()
+		return
+
+	if fork_choosing and not fork.is_empty():
+		_draw_fork_choice()
 		return
 
 	if not alive:
@@ -15250,7 +15255,7 @@ func _bot_persona_params() -> Vector2:
 		_:          return Vector2(1.00, 0.40)
 
 # draft/boon weights: defense keeps the bot alive to SEE bosses 2-3 (weights ~ what a decent player values)
-const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "school": 2.5, "double": 2.5,
+const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "double": 2.5,
 	"spring": 2.0, "zen": 2.0, "springy": 1.8, "wingducks": 1.8, "thunder": 1.6, "loft": 1.5,
 	"bounce": 1.4, "tiny": 1.4, "magnet": 1.2, "snacks": 1.2}
 const BOT_BOON_W := {"goosedown": 4.0, "secondwind": 3.5, "phoenix": 3.5, "clutch": 3.0,
@@ -15494,6 +15499,11 @@ func _sim_watch(delta: float) -> void:
 		_pick_boon(_bot_pick_weighted(shrine_boons, BOT_BOON_W)); return
 	if drafting and draft_choices.size() > 0:
 		_pick_upgrade(_bot_pick_weighted(draft_choices, BOT_DRAFT_W)); return
+	if fork_choosing:
+		var _fside: int = randi() % 2
+		if fork_sky >= 0 and randf() < 0.75:
+			_fside = 1 - fork_sky                  # bots mostly take the duel (boss coverage)
+		_fork_choose(_fside); return
 	if in_shop:
 		in_shop = false; return
 	if boss != null and not sim_saw_boss:
