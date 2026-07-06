@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.22"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.23"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3033,6 +3033,12 @@ func _dbg_codexshot() -> void:
 	await get_tree().create_timer(0.05).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("/tmp/codex_list.png")
+	for _sc in 8:                                     # sweep the whole list for icon audits
+		codex_scroll = float(_sc + 1) * 1400.0
+		await get_tree().create_timer(0.03).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/codex_list_%d.png" % (_sc + 1))
+	codex_scroll = 0.0
 	# open the bread detail
 	var items := _codex_items()
 	for i in items.size():
@@ -10857,15 +10863,16 @@ func _codex_icon(it: Dictionary, box: Rect2) -> void:
 			var dsp: String = it.ref.species
 			var dfr = _spin_frame(dsp, 0.8)
 			if dfr != null:
-				_blit_centered(dfr, box.get_center(), minf((box.size.x - 10.0) / dfr.get_size().x, (box.size.y - 10.0) / dfr.get_size().y))
+				_blit_fit(dfr, box, 10.0)
 		"char":
 			var t = _codex_tex(it.key)
 			if t != null:
-				var f: float = minf((box.size.x - 12.0) / t.get_size().x, (box.size.y - 12.0) / t.get_size().y)
+				var ur9 := _tex_used_rect(t)
+				var f: float = minf(minf((box.size.x - 12.0) / maxf(1.0, ur9.size.x), (box.size.y - 12.0) / maxf(1.0, ur9.size.y)), 3.0)
 				if it.key == "eternal":
-					_blit_modulated(t, box.get_center(), f, Color(1.5, 0.4, 0.42))
+					draw_texture_rect_region(t, Rect2(box.get_center() - ur9.size * f * 0.5, ur9.size * f), ur9, Color(1.5, 0.4, 0.42))
 				else:
-					_blit_centered(t, box.get_center(), f)
+					draw_texture_rect_region(t, Rect2(box.get_center() - ur9.size * f * 0.5, ur9.size * f), ur9)
 		"power":
 			var prc: Color = RARITY_COL[clampi(int(it.ref.get("rarity", 0)), 0, 3)]
 			draw_circle(box.get_center(), box.size.y * 0.34, Color(prc.r, prc.g, prc.b, 0.16))
@@ -13768,6 +13775,31 @@ func _btn_sb() -> StyleBoxFlat:
 	s.set_border_width_all(2)
 	s.border_color = Color(1, 1, 1, 0.4)
 	return s
+
+var _used_rect_cache := {}      # texture rid -> opaque-pixel Rect2 (codex icons crop their margins)
+func _tex_used_rect(tex: Texture2D) -> Rect2:
+	var key: int = tex.get_rid().get_id()
+	if _used_rect_cache.has(key):
+		return _used_rect_cache[key]
+	var r := Rect2(Vector2.ZERO, tex.get_size())
+	var img: Image = tex.get_image()
+	if img != null:
+		var ur: Rect2i = img.get_used_rect()
+		if ur.size.x > 0:
+			r = Rect2(Vector2(ur.position), Vector2(ur.size))
+	_used_rect_cache[key] = r
+	return r
+
+# fit a sprite into a box by its OPAQUE pixels — raw canvases carry fat transparent
+# margins that made codex icons render as specks
+func _blit_fit(tex, box: Rect2, pad := 8.0, max_up := 3.0) -> void:
+	if tex == null:
+		return
+	var ur := _tex_used_rect(tex)
+	var f: float = minf((box.size.x - pad) / maxf(1.0, ur.size.x), (box.size.y - pad) / maxf(1.0, ur.size.y))
+	f = minf(f, max_up)
+	var dsz: Vector2 = ur.size * f
+	draw_texture_rect_region(tex, Rect2(box.get_center() - dsz * 0.5, dsz), ur)
 
 func _blit_centered(tex, pos: Vector2, scale: float) -> void:
 	if tex == null:
