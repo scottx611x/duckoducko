@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.27"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.28"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -632,6 +632,7 @@ const DEV_MENU := [
 	{"name": "SNAPZ", "act": "snapz"}, {"name": "BARRY", "act": "beaver"},
 	{"name": "ETERNAL", "act": "eternal"}, {"name": "SADIE", "act": "megasadie"},
 	{"name": "THERMALS", "act": "thermals"}, {"name": "NEXT POND", "act": "pond"},
+	{"name": "NEXT SPLIT", "act": "fork"},
 	{"name": "BREAD", "act": "bread"},
 	{"name": "+5000 FT", "act": "warp"}, {"name": "+500 FTHR", "act": "feathers"},
 	{"name": "FILL LOFT", "act": "loft"}, {"name": "+3 SHIELD", "act": "shield"},
@@ -2941,6 +2942,11 @@ func _dev_do(act: String) -> void:
 				next_draft = maxf(next_draft, stretch_until + 600.0)
 				if ev_id != "": ev_until = distance
 				_flash("RUSTY'S THERMALS", 2.0)
+		"fork":                                     # summon the next river split (rounds the bend in seconds)
+			if alive and not in_menu and boss == null and fork.is_empty():
+				fork_next = distance + 400.0
+				if ev_id != "": ev_until = distance
+				_flash("SPLIT AHEAD!", 1.6)
 		"pond":                                     # WARP: jump to the next pond boundary (tap to cycle all 7)
 			if alive and not in_menu:
 				biome_progress = (floor(biome_progress / THEME_LEN) + 1.0) * THEME_LEN + 200.0
