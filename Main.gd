@@ -225,7 +225,8 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.28"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.29"   # release.sh stamps this at every release — never hand-bump again
+var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -1729,7 +1730,23 @@ var sfx := {}                   # name -> AudioStream
 var sfx_pool: Array = []        # round-robin AudioStreamPlayers
 var sfx_next := 0
 
+# the web build quietly asks the site which version is CURRENT — stale caches finally
+# announce themselves instead of gaslighting the playtester (Scott, twice now)
+func _check_web_update() -> void:
+	if not OS.has_feature("web"):
+		return
+	var hr := HTTPRequest.new()
+	add_child(hr)
+	hr.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray):
+		if code == 200:
+			var v := body.get_string_from_utf8().strip_edges().lstrip("v")
+			if v != "" and v != GAME_VERSION:
+				update_avail = v
+		hr.queue_free())
+	hr.request("version.txt?ts=%d" % Time.get_ticks_msec())
+
 func _ready() -> void:
+	_check_web_update.call_deferred()
 	_log("[boot] 1 ready start")
 	font = ThemeDB.fallback_font
 
@@ -10644,6 +10661,9 @@ func _draw_settings() -> void:
 		_blit_centered(fr, Vector2(VIEW.x * 0.5, (812.0 if cheat_unlock else 712.0) + sin(anim_t * 2.0) * 6.0), 3.5)
 	_otext(Vector2(0, (866.0 if cheat_unlock else 766.0)), "tap me to test SFX", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 922.0), "DUCKODUCKO  v%s" % GAME_VERSION, 12, Color(1, 1, 1, 0.3), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+	if update_avail != "":                             # a newer build is LIVE — this copy is cached
+		_otext(Vector2(0, 902.0), "v%s is OUT — close this tab & reopen to update" % update_avail, 13,
+			Color(1.0, 0.85, 0.35, 0.7 + 0.3 * sin(anim_t * 3.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 
 func _settings_press(pos: Vector2) -> void:
 	if SEL_BACK_BTN.has_point(pos):

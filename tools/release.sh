@@ -28,6 +28,7 @@ cp docs/index.* "$WORK/"
 rm -f "$WORK"/*.import                                   # editor import metadata not needed to serve
 touch "$WORK/.nojekyll"                                  # stop Jekyll from eating engine files
 echo "duckoducko.scott-ouellette.com" > "$WORK/CNAME"    # keep the Pages custom domain
+echo "${TAG#v}" > "$WORK/version.txt"                    # in-game update check pings this
 python3 tools/web_meta.py "$WORK"                        # social link-preview meta + installable PWA manifest
 git -C "$WORK" init -q
 git -C "$WORK" checkout -q -b gh-pages
