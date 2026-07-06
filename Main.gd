@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.33"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.34"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1362,6 +1362,11 @@ func _fork_commit(sidei: int) -> void:
 		enemies.clear(); logs.clear(); items.clear()
 		next_draft = maxf(next_draft, stretch_until + 600.0)
 		if ev_id != "": ev_until = distance
+	if stretch_mod == "calm":                   # THE QUIET WATER keeps its word: nothing hunts
+		for e in enemies:
+			ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 80.0})
+		enemies.clear()
+		haz_turtle = null
 	if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
 		golden_t = GOLDEN_DUR
 
@@ -4429,7 +4434,7 @@ func _update_donny(delta: float) -> void:
 		# a rare treat: only in SAND POND, mid-paddle, no duel
 		if alive and boss == null and state != St.MEGA and not tut_mode and not paused and distance > 1500.0:
 			donny_timer -= delta
-			if donny_timer <= 0.0 and stretch_mod != "rusty" and not _cameo_busy():
+			if donny_timer <= 0.0 and not stretch_mod in ["rusty", "calm"] and not _cameo_busy():
 				_spawn_donny()
 		return
 	var d = donny
@@ -4639,7 +4644,7 @@ func _update_turtle(delta: float) -> void:
 		# stops surfacing, all run long (STARVATION-era menace)
 		if distance > 4500.0 and (next_boss_idx < 2 or ascension >= 5):
 			turtle_timer -= delta
-			if turtle_timer <= 0.0 and not _cameo_busy():
+			if turtle_timer <= 0.0 and not _cameo_busy() and not stretch_mod in ["rusty", "calm"]:
 				haz_turtle = {"x": clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0),
 					"stage": "lurk", "t": 0.0, "snap_x": duck_x, "sub": 1.0, "yaw0": randf_range(-0.7, 0.7)}
 				_codex_see("turtle")
@@ -8156,7 +8161,7 @@ func _spawn(delta: float) -> void:
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
-	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and stretch_mod != "rusty":
+	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and not stretch_mod in ["rusty", "calm"]:
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
 		if ascension >= 6 and randf() < 0.25 + 0.05 * (ascension - 6):   # RELENTLESS FLOCK: herons hunt in packs
@@ -13115,7 +13120,7 @@ func _draw_river_events() -> void:
 			draw_line(Vector2(_sx, _sy), Vector2(_sx, _sy + _sl), Color(1, 1, 1, 0.16), 2.0)
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.75, 0.9, 1.0, 0.05))
 	# LIVE CONTRACT CHIP: an active wager shows its own math, all stretch long
-	if stretch_mod != "" and stretch_mod != "rusty" and stretch_mod != "calm" and FORK_TAGS.has(stretch_mod):
+	if stretch_mod != "" and stretch_mod != "rusty" and FORK_TAGS.has(stretch_mod):
 		var _wt := ""
 		var _wc := Color(1.0, 0.88, 0.4)
 		match stretch_mod:
@@ -13133,6 +13138,9 @@ func _draw_river_events() -> void:
 			"junk":
 				var _fj: int = run_trash - int(stretch_snap.get("trash", 0))
 				_wt = "SCAVENGER · %d junk = +%d feathers" % [_fj, _fj * 2]
+			"calm":
+				_wt = "THE QUIET WATER · shhh."
+				_wc = Color(0.75, 0.88, 1.0)
 			"feathers":
 				_wt = "EASY MONEY · +40 feathers at the end"
 			"golden":
