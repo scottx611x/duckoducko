@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.31"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.32"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1259,6 +1259,8 @@ var fork_ask_t := 0.0
 var fork_sky := -1              # which card (if any) is THE SKY ROUTE this split (-1 none)
 var fork_auto := 0.0            # after choosing: the duck paddles itself down the picked leg
 var fork_ride := {}             # THE CURRENT TAKES HER: {t, side, x0} — a 1.1s scripted rush into the branch
+var fork_pick := -1             # tapped card, held highlighted for a beat before the ride grabs her
+var fork_pick_t := 0.0
 var stretch_hit := false        # tagged by _ouch() during a wager stretch (DANGER PAYS contract)
 var stretch_snap := {}          # counters at the branch mouth — settlements diff against these
 const FORK_TAGS := {            # each branch is a CONTRACT: the deal on the card, settled at the far end
@@ -1338,7 +1340,7 @@ func _fork_commit(sidei: int) -> void:
 	stretch_until = distance + THEME_LEN * 0.85
 	theme_prev = theme_idx
 	theme_idx = int(side.theme)
-	theme_sweep = 0.0
+	theme_sweep = 0.22                                 # the wash is already ROLLING when you land
 	region_t = anim_t
 	_see_shore(theme_idx)
 	var _rpos: int = maxi(0, theme_route.find(theme_idx))
@@ -1465,7 +1467,9 @@ func _update_river_events(delta: float) -> void:
 	if not fork_ride.is_empty():                       # THE CURRENT TAKES HER — a whitewater rush, not a crawl
 		fork_ride.t = float(fork_ride.t) + delta / 1.1
 		var _rr: float = clampf(float(fork_ride.t), 0.0, 1.0)
-		var _re: float = 1.0 - pow(1.0 - _rr, 3.0)
+		var _bs: float = 1.35                          # back-ease: she CARVES past the line and settles
+		var _rt: float = _rr - 1.0
+		var _re: float = 1.0 + (_bs + 1.0) * _rt * _rt * _rt + _bs * _rt * _rt
 		duck_x = lerpf(float(fork_ride.x0), VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), _re)
 		target_x = duck_x; steer_anchor_x = duck_x
 		for _rs in 2:                                  # rooster-tail wake off the surge
@@ -1478,6 +1482,8 @@ func _update_river_events(delta: float) -> void:
 			_fork_commit(_rside)
 	if not fork.is_empty():
 		fork.y += speed * delta
+		if fork.get("picked", false):
+			fork.y += 950.0 * delta                    # decision made — the old signs hustle off stage
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
 			fork.asked = true
 			fork_choosing = true
@@ -2314,6 +2320,15 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_raw.png")
+		if "--film" in OS.get_cmdline_user_args():     # FILMSTRIP: the full choose->ride->arrive sequence
+			fork_sky = -1
+			fork.asked = false; fork.y = -20.0         # replay the ask cleanly
+			for _ff in 26:
+				await get_tree().create_timer(0.12).timeout
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png("/tmp/film_%02d.png" % _ff)
+				if _ff == 8:                           # tap the right card mid-film
+					fork_pick = 1; fork_pick_t = anim_t
 		get_tree().quit()
 	elif "--ponchointro" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -5163,7 +5178,7 @@ func reset_game() -> void:
 	_swap_theme_music()
 	drafting = false
 	boss_draft = false
-	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}
+	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}; fork_pick = -1
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -5482,11 +5497,14 @@ func _on_press(pos: Vector2) -> void:
 		if _dev_btn_rect().has_point(pos):
 			dev_menu = true; _sfx("click"); return
 	if fork_choosing:
-		if anim_t - fork_ask_t < 0.4:
+		if anim_t - fork_ask_t < 0.55 or fork_pick >= 0:
 			return
 		for _fi in 2:
 			if _fork_card_rect(_fi).has_point(pos):
-				_fork_choose(_fi)
+				fork_pick = _fi
+				fork_pick_t = anim_t
+				_sfx("click")
+				_sfx("chime", 1.3, -6.0)
 				return
 		return
 	if drafting:
@@ -6037,6 +6055,10 @@ func _record_run() -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
+	if fork_choosing and fork_pick >= 0 and anim_t - fork_pick_t > 0.42:
+		var _fp: int = fork_pick
+		fork_pick = -1
+		_fork_choose(_fp)
 	hurt_flash = maxf(0.0, hurt_flash - delta * 1.5)
 	if not sfx_echoes.is_empty():
 		var _keep_e: Array = []
@@ -9221,24 +9243,45 @@ func _draw_shrine() -> void:
 # THE ANCIENT DUCK holds the river at every split: two clear cards, honest stakes,
 # and (when a boss looms) THE SKY ROUTE — over the duel instead of through it.
 func _draw_fork_choice() -> void:
-	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.66))
-	var ep := Vector2(VIEW.x * 0.5, 328.0 + sin(anim_t * 1.6) * 6.0)
+	var _et2: float = anim_t - fork_ask_t
+	var _ein: float = clampf(_et2 / 0.4, 0.0, 1.0)      # global entrance progress
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.02, 0.05, 0.09, 0.66 * _ein))
+	# the elder SWOOPS down with a little overshoot bounce, robes fluttering (well, bobbing)
+	var _eb: float = _ein - 1.0
+	var _edrop: float = 1.0 + 2.3 * _eb * _eb * _eb + 1.3 * _eb * _eb
+	var ep := Vector2(VIEW.x * 0.5, lerpf(-90.0, 328.0, _edrop) + sin(anim_t * 1.6) * 6.0)
 	if tex_elder != null:
-		var _talking: bool = anim_t - fork_ask_t < 2.4 and fmod(anim_t, 0.5) < 0.22
+		var _talking: bool = _et2 > 0.4 and _et2 < 2.8 and fmod(anim_t, 0.5) < 0.22
 		var et: Texture2D = tex_elder_talk if (_talking and tex_elder_talk != null) else tex_elder
 		var es: Vector2 = et.get_size() * 2.6
-		draw_circle(ep, 74.0 + 4.0 * sin(anim_t * 2.2), Color(1.0, 0.9, 0.55, 0.10))
+		draw_circle(ep, 74.0 + 4.0 * sin(anim_t * 2.2), Color(1.0, 0.9, 0.55, 0.10 * _ein))
 		draw_texture_rect(et, Rect2(ep - es * 0.5, es), false)
-	_fancy_title("THE RIVER SPLITS", 128.0, 30, Color(1, 0.92, 0.5), Color(0.9, 0.6, 0.2), 4.0)
-	_otext(Vector2(0, 172.0), "the Ancient Duck holds the current. choose your water.", 15,
-		Color(1, 1, 1, 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		for _gs in 3:                                    # gold motes drifting off the old one
+			var _gp: float = fposmod(anim_t * 0.5 + _gs * 0.33, 1.0)
+			draw_circle(ep + Vector2(sin(anim_t * 1.1 + _gs * 2.1) * (30.0 + _gs * 14.0), -20.0 - _gp * 60.0),
+				2.2 * (1.0 - _gp), Color(1.0, 0.9, 0.55, 0.5 * (1.0 - _gp) * _ein))
+	if _et2 > 0.15:
+		_fancy_title("THE RIVER SPLITS", 128.0, 30, Color(1, 0.92, 0.5), Color(0.9, 0.6, 0.2), 4.0)
+		_otext(Vector2(0, 172.0), "the Ancient Duck holds the current. choose your water.", 15,
+			Color(1, 1, 1, 0.85 * clampf((_et2 - 0.15) / 0.3, 0.0, 1.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	for i in 2:
+		var _cin: float = clampf((_et2 - 0.18 - 0.14 * float(i)) / 0.35, 0.0, 1.0)   # cards DEAL IN, staggered
+		if _cin <= 0.0:
+			continue
+		var _cb: float = _cin - 1.0
+		var _crise: float = 1.0 + 2.0 * _cb * _cb * _cb + 1.0 * _cb * _cb
 		var r := _fork_card_rect(i)
+		r.position.y += (1.0 - _crise) * 320.0
+		if fork_pick >= 0:                               # the PICK beat: chosen card pops, the other bows out
+			if i == fork_pick:
+				var _pp: float = clampf((anim_t - fork_pick_t) / 0.18, 0.0, 1.0)
+				r = r.grow(6.0 * _pp)
+				draw_rect(r.grow(5.0 + 5.0 * sin(anim_t * 18.0)), Color(1.0, 0.9, 0.45, 0.35), false, 3.0)
 		var side: Dictionary = fork.l if i == 0 else fork.r
 		var m: Dictionary = side.mod
 		var is_sky: bool = fork_sky == i
 		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(0.07, 0.11, 0.17, 0.97)
+		csb.bg_color = Color(0.07, 0.11, 0.17, 0.97) if (fork_pick < 0 or fork_pick == i) else Color(0.05, 0.07, 0.11, 0.6)
 		csb.set_corner_radius_all(14)
 		csb.set_border_width_all(3)
 		csb.border_color = Color(0.55, 0.8, 1.0, 0.9) if is_sky else Color(1.0, 0.82, 0.35, 0.9)
@@ -13063,6 +13106,14 @@ func _draw_river_events() -> void:
 		if fmod(anim_t, 1.1) < 0.5:
 			var pw := font.get_string_size("peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 			draw_string(font, dpos + Vector2(-pw * 0.5, -26.0), "peep!", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.85))
+	# THE RIDE reads as SPEED: white water-streaks rushing past while the current has her
+	if not fork_ride.is_empty():
+		for _st2 in 12:
+			var _sx: float = BANK_W + fposmod(float(_st2) * 43.7 + float(_st2 * _st2) * 7.3, VIEW.x - BANK_W * 2.0)
+			var _sy: float = fposmod(float(_st2) * 173.0 + anim_t * 1500.0, VIEW.y + 120.0) - 60.0
+			var _sl: float = 40.0 + fposmod(float(_st2) * 29.0, 50.0)
+			draw_line(Vector2(_sx, _sy), Vector2(_sx, _sy + _sl), Color(1, 1, 1, 0.16), 2.0)
+		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.75, 0.9, 1.0, 0.05))
 	# LIVE CONTRACT CHIP: an active wager shows its own math, all stretch long
 	if stretch_mod != "" and stretch_mod != "rusty" and stretch_mod != "calm" and FORK_TAGS.has(stretch_mod):
 		var _wt := ""
