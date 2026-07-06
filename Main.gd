@@ -66,7 +66,7 @@ var nag_seed := 0
 
 # roguelike drafts (DESIGN §12): every 400m the river pauses and deals 3 upgrades.
 # rarity: 0=common, 1=rare (blue), 2=epic (gold) — weighted deal, colored cards.
-const DRAFT_EVERY := 4000.0     # distance units (10 = 1m)
+const DRAFT_EVERY := 6000.0     # distance units (10 = 1m) — powers should feel EARNED, not constant
 const UPGRADES := [
 	{"id": "spring", "name": "SPRING LEGS", "desc": "+15% hop height & hang time", "rarity": 0},
 	{"id": "magnet", "name": "CRUMB MAGNET", "desc": "+45% collect reach", "rarity": 0},
@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.21"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.22"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3714,7 +3714,7 @@ func _open_draft() -> void:
 	moved = false
 	draft_count += 1
 	# each checkpoint is further out than the last: 400m, 500m, 625m, 781m...
-	next_draft += DRAFT_EVERY * pow(1.25, draft_count) * (0.8 if _meta("flyer") else 1.0)  # FREQUENT FLYER
+	next_draft += DRAFT_EVERY * pow(1.32, draft_count) * (0.8 if _meta("flyer") else 1.0)  # FREQUENT FLYER
 	_bigday_reseed(100 + draft_count)                  # Big Day: draft N deals the same 3 cards today
 	draft_choices = _deal_draft()
 	center_label.visible = false
@@ -6322,7 +6322,7 @@ func _update_play(delta: float) -> void:
 		if (el > 1.2 and state == St.GROUNDED) or el > 2.6:
 			_fire_special()
 
-	# roguelike draft: deal 3 upgrades at each 400m mark (waits for a grounded duck;
+	# roguelike draft: deal 3 upgrades at widening marks (first ~600m; waits for a grounded duck;
 	# never mid-boss — Gerald does not pause for shopping)
 	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0 and boss == null and not tut_mode \
 			and stretch_mod != "rusty":               # NEVER mid-Thermals — the course is sacred
@@ -8915,7 +8915,7 @@ func _draw_run_timeline() -> void:
 					draw_circle(Vector2(ppx, y), 3.2, Color(0.45, 0.78, 1.0, 0.9))
 					draw_circle(Vector2(ppx, y), 1.5, Color(1.0, 0.96, 0.7, pp))
 					shown += 1
-			nd += DRAFT_EVERY * pow(1.25, dc) * (0.8 if _meta("flyer") else 1.0)
+			nd += DRAFT_EVERY * pow(1.32, dc) * (0.8 if _meta("flyer") else 1.0)
 			dc += 1
 	# the duck marker, with its LOFT special charge ringing it
 	var hero: Texture2D = ducks[species].get("hero") if ducks.has(species) else null
