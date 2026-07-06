@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.17"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.18"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -6064,7 +6064,10 @@ func _update_play(delta: float) -> void:
 	var junkboon: bool = _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0
 	if prop_timer <= 0.0 and not tex_props.is_empty():
 		var left := randf() < 0.5
-		props.append({"x": (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0)),
+		var _px: float = (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0))
+		if junkboon:                               # once trash is a RESOURCE it floats the whole river, reachable
+			_px = randf_range(BANK_W + 26.0, VIEW.x - BANK_W - 26.0)
+		props.append({"x": _px,
 			"y": -30.0, "kind": _pick_flotsam(), "phase": randf() * TAU})
 		var _fpn: String = PROP_NAMES[props[props.size() - 1].kind]
 		lifetime["flotsam_" + _fpn] = int(lifetime.get("flotsam_" + _fpn, 0)) + 1   # lifetime tally
@@ -6078,8 +6081,12 @@ func _update_play(delta: float) -> void:
 		pr.x += sin(anim_t * 0.8 + pr.phase) * 6.0 * delta
 		if junkboon and not pr.get("got", false) and alive:   # a junkyard boon makes the river's flotsam MAGNET in + collectable
 			var pmv := Vector2(duck_x - pr.x, BASE_Y - pr.y)
-			if pmv.length() < 165.0 + 45.0 * _up("magnet") + 120.0 * (_wf("raccoon") if _wear("raccoon") else 0.0):
-				var pd := pmv.normalized() * (195.0 + 100.0 * _up("magnet")) * delta
+			var _prad: float = 165.0 + 45.0 * _up("magnet") + 120.0 * (_wf("raccoon") if _wear("raccoon") else 0.0)
+			if _up("trashmag") > 0:                # TRASH MAGNET: it truly DRIFTS TO YOUR LANE, bank to bank
+				_prad = maxf(_prad, 330.0)
+			var _ppull: float = 195.0 + 100.0 * _up("magnet") + (160.0 if _up("trashmag") > 0 else 0.0)
+			if pmv.length() < _prad:
+				var pd := pmv.normalized() * _ppull * delta
 				pr.x += pd.x; pr.y += pd.y
 			if absf(pr.x - duck_x) < 50.0 + 26.0 * _up("magnet") and absf(pr.y - BASE_Y) < 50.0:
 				pr["tex"] = int(pr.kind)
