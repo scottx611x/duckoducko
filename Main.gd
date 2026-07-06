@@ -225,7 +225,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.23"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.24"   # release.sh stamps this at every release — never hand-bump again
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
 const META := [
@@ -3039,6 +3039,18 @@ func _dbg_codexshot() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/codex_list_%d.png" % (_sc + 1))
 	codex_scroll = 0.0
+	var _seen_types := {}
+	var _all_items := _codex_items()
+	for _di in _all_items.size():
+		var _dit: Dictionary = _all_items[_di]
+		if _seen_types.has(str(_dit.type)) or not _codex_seen_item(_dit):
+			continue
+		_seen_types[str(_dit.type)] = true
+		codex_sel = _di
+		await get_tree().create_timer(0.03).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/codex_detail_%s.png" % str(_dit.type))
+	codex_sel = -1
 	# open the bread detail
 	var items := _codex_items()
 	for i in items.size():
@@ -11030,6 +11042,18 @@ func _draw_codex_detail(it: Dictionary) -> void:
 			st = tex_items.get(it.ref.name); dtier = int(it.ref.get("tier", 0))
 		elif it.type == "wear":
 			st = tex_wear.get(it.ref.id)
+		elif it.type == "shore":                   # shoreline fixtures: the bank sprite itself, writ large
+			st = tex_env.get(str(it.ref))
+		elif it.type == "boon":                    # shrine boons: icon if one exists, else a gilded sigil
+			st = tex_boon.get(str(it.ref.id)) if typeof(it.ref) == TYPE_DICTIONARY else null
+			if st == null:
+				draw_circle(Vector2(cx, cyc), 86.0 * pop, Color(0.55, 0.42, 0.16, 0.35))
+				draw_arc(Vector2(cx, cyc), 86.0 * pop, 0, TAU, 40, Color(1.0, 0.82, 0.35, 0.85), 3.0)
+				_otext(Vector2(0, cyc + 22.0), String(it.ref.get("name", "?")).left(1), 64, Color(1.0, 0.9, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		elif it.type == "spec":                    # specials keep their letter-disc, sized up
+			draw_circle(Vector2(cx, cyc), 86.0 * pop, Color(0.5, 0.85, 1.0, 0.16))
+			draw_arc(Vector2(cx, cyc), 86.0 * pop, 0, TAU, 40, Color(0.5, 0.85, 1.0, 0.8), 3.0)
+			_otext(Vector2(0, cyc + 22.0), String(it.ref.name).left(1), 64, Color(0.8, 0.95, 1.0), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 		else:
 			dtier = int(PROP_TIERS.get(it.ref, 0))
 			var pi: int = PROP_NAMES.find(it.ref)
