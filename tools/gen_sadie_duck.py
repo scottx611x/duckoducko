@@ -35,19 +35,21 @@ def waterline(img):
 
 def main():
     gy = math.radians(GAME_YAW)
-    SH0 = shade(build_boss("idle", 0))
-    SH1 = shade(build_boss("idle", 1))
-    SHq = shade(build_boss("proud"))       # tongue out = her "quack"
+    from voxel_duck import build_sadie
+    SW0 = shade(build_sadie(0))            # THE swimming model, chuckit and all (Scott's pick)
+    SW1 = shade(build_sadie(1))
+    SH0 = shade(build_boss("idle", 0))     # seated good girl for menus
+    SHq = shade(build_boss("proud"))
     SHp = shade(build_boss("pounce"))
-    # gameplay back views: chest-deep swimmer
-    save(waterline(render(SH0, gy, PITCH, out=OUT, scale=SC)), "%s_idle_0.png" % SP)
-    save(waterline(render(SH1, gy, PITCH - math.radians(4), out=OUT, scale=SC)), "%s_idle_1.png" % SP)
+    # gameplay back views: she SWIMS (model is waterline-built — no crop needed)
+    save(render(SW0, gy, PITCH, out=OUT, scale=SC), "%s_idle_0.png" % SP)
+    save(render(SW1, gy, PITCH, out=OUT, scale=SC), "%s_idle_1.png" % SP)
     for i, off in enumerate(BANK_OFF):
-        save(waterline(render(SH0, math.radians(GAME_YAW + off), PITCH, out=OUT, scale=SC)), "%s_bank_%d.png" % (SP, i))
-    save(waterline(render(SH0, math.radians(GAME_YAW + 15), PITCH, out=OUT, scale=SC)), "%s_turn_left.png" % SP)
-    save(waterline(render(SH0, math.radians(GAME_YAW - 15), PITCH, out=OUT, scale=SC)), "%s_turn_right.png" % SP)
-    save(waterline(render(SH0, math.radians(GAME_YAW + SIDE_YAW), SIDE_PITCH, out=OUT, scale=SC)), "%s_side_left.png" % SP)
-    save(waterline(render(SH0, math.radians(GAME_YAW - SIDE_YAW), SIDE_PITCH, out=OUT, scale=SC)), "%s_side_right.png" % SP)
+        save(render(SW0 if i % 2 == 0 else SW1, math.radians(GAME_YAW + off), PITCH, out=OUT, scale=SC), "%s_bank_%d.png" % (SP, i))
+    save(render(SW0, math.radians(GAME_YAW + 15), PITCH, out=OUT, scale=SC), "%s_turn_left.png" % SP)
+    save(render(SW0, math.radians(GAME_YAW - 15), PITCH, out=OUT, scale=SC), "%s_turn_right.png" % SP)
+    save(render(SW0, math.radians(GAME_YAW + SIDE_YAW), SIDE_PITCH, out=OUT, scale=SC), "%s_side_left.png" % SP)
+    save(render(SW0, math.radians(GAME_YAW - SIDE_YAW), SIDE_PITCH, out=OUT, scale=SC), "%s_side_right.png" % SP)
     # hops: the POUNCE, whole dog airborne
     save(render(SHp, gy, PITCH, out=OUT, scale=SC * 0.92), "%s_hop_0.png" % SP)
     save(render(SHp, gy, PITCH - math.radians(6), out=OUT, scale=SC * 0.92), "%s_hop_1.png" % SP)
@@ -58,15 +60,15 @@ def main():
         save(render(SH0, math.radians(i * 15), math.radians(HERO_PITCH), out=OUT, scale=SC), "%s_spin_%02d.png" % (SP, i))
         save(render(SHq, math.radians(i * 15), math.radians(HERO_PITCH), out=OUT, scale=SC), "%s_spinq_%02d.png" % (SP, i))
         save(render(SHp, math.radians(i * 15), math.radians(HERO_PITCH), out=OUT, scale=SC * 0.92), "%s_flap_%02d.png" % (SP, i))
-    # the face: those amber eyes, close up
     save(render(SH0, math.radians(0), math.radians(12), out=FACE_CANVAS, scale=1.1, cy_frac=0.30), "%s_face.png" % SP)
-    # mega-hop voxel stack
-    Vf = build_boss("idle", 0)
+    # mega-hop voxel stack: the SWIMMING model tumbles, chuckit and all
+    from voxel_duck import build_sadie as _bs
+    Vf = _bs(0)
     n = 0
     for i, sl in enumerate(stack_slices(Vf, shade(Vf))):
         save(sl, "%s_stack_%02d.png" % (SP, i))
         n = i + 1
-    print("sadiedog set rendered (%d stack slices)" % n)
+    print("sadiedog set rendered (%d stack slices, swim model)" % n)
 
 
 if __name__ == "__main__":

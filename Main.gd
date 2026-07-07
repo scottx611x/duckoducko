@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.36"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.37"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -2855,8 +2855,8 @@ func _wear_slot(id: String) -> String:              # which of the two slots a w
 func _worn(id: String) -> bool:                     # is this item equipped in EITHER slot? (render/ownership)
 	return equipped_wear == id or equipped_body == id
 
-func _wear_fit_frac(sp := "") -> float:             # species whose HEAD sits off the duck template
-	return -0.08 if (sp if sp != "" else species) == "rusty" else 0.0
+func _wear_fit_frac(_sp := "") -> float:            # retired: exotic species have TRUE melds now
+	return 0.0
 
 func _worn_list() -> Array:                         # the items on the duck right now, head then body
 	var out: Array = []
@@ -4195,7 +4195,7 @@ func _update_sadie(delta: float) -> void:
 	if sadie == null:
 		if distance > 3000.0:                      # the dog park is past the 300m bend
 			sadie_timer -= delta
-			if sadie_timer <= 0.0 and stretch_mod != "rusty" and not _cameo_busy():
+			if sadie_timer <= 0.0 and stretch_mod != "rusty" and not _cameo_busy() and species != "sadiedog":
 				_spawn_sadie()
 		return
 	sadie.t += delta
@@ -6932,6 +6932,8 @@ func _start_boss(force_kind := "") -> void:
 	boss_waves.clear()
 	boss_globs.clear()
 	var kind: String = force_kind if force_kind != "" else (boss_kinds[idx] if idx < boss_kinds.size() else "gerald")   # shuffled per run (all 3 slots)
+	if kind == "megasadie" and species == "sadiedog":
+		kind = "gerald"                             # you ARE the good girl — the Eternal steps in
 	var final_gerald: bool = kind == "gerald" and idx >= 2
 	_codex_see("snapz" if kind == "snapz" else ("beaver" if kind == "beaver" else ("bongo" if kind == "bongo" else ("megasadie" if kind == "megasadie" else ("eternal" if final_gerald else "gerald")))))
 	var hp := 3 + 2 * idx + boss_hp_bonus + ascension   # stomp him this many times to win (ascension hardens every boss)
@@ -13516,14 +13518,19 @@ func _load_wear_stack(hid: String, sp: String) -> Dictionary:
 	return out
 
 func _load_wear3d(hid: String) -> Dictionary:
-	if wear3d.has(hid):
-		return wear3d[hid]
+	var vkey := hid if not species in ["rusty", "sadiedog"] else hid + "@" + species
+	if wear3d.has(vkey):
+		return wear3d[vkey]
 	var base := "res://art/wear3d_%s_" % hid
+	if species in ["rusty", "sadiedog"]:            # true melds rendered on THEIR bodies
+		var vbase := "res://art/wear3d_%s_%s_" % [species, hid]
+		if ResourceLoader.exists(vbase + "idle.png"):
+			base = vbase
 	if not ResourceLoader.exists(base + "idle.png"):
-		wear3d[hid] = {}
+		wear3d[vkey] = {}
 		return {}
-	wear3d[hid] = _load_wear_set(base)
-	return wear3d[hid]
+	wear3d[vkey] = _load_wear_set(base)
+	return wear3d[vkey]
 
 # load one camera-angle set (idle / 7 banks / 2 sides / hero / 24 spin) from a path prefix
 func _load_wear_set(base: String) -> Dictionary:
