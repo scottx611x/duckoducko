@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.35"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.36"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -325,6 +325,7 @@ const ROSTER := [
 	{"name": "Disco Duck", "species": "disco", "hop": 0.7, "steer": 0.85, "pace": 0.8, "size": 0.98, "trait": "reach hop #100 to boogie", "cost": 0, "secret": true},
 	{"name": "Shadow Drake", "species": "shadow", "hop": 0.95, "steer": 0.9, "pace": 0.85, "size": 1.02, "trait": "ascend the river to summon him", "cost": 0, "secret": true},
 	{"name": "Rusty", "species": "rusty", "hop": 0.92, "steer": 0.88, "pace": 0.88, "size": 0.95, "trait": "fly his thermals PERFECT to earn his wings", "cost": 0, "secret": true},
+	{"name": "Sadie", "species": "sadiedog", "hop": 0.95, "steer": 0.7, "pace": 0.9, "size": 1.15, "trait": "lose to the good girl 50 times", "cost": 0, "secret": true},
 ]
 # each duck has its OWN voice — roughly by size (big = deep honk, small = squeaky),
 # hand-tuned for character. rubber ducky is the exception: it squeaks.
@@ -506,6 +507,8 @@ func _quack(sp: String, vol := 0.0) -> void:
 		_sfx("squeak", randf_range(0.95, 1.08) * deep, vol - 11.0)   # the squeak was EAR-piercing
 	elif sp == "rusty":
 		_sfx("screech", randf_range(0.95, 1.08) * deep, vol - 7.0)   # a red-tail does not quack
+	elif sp == "sadiedog":
+		_sfx("bark", randf_range(0.92, 1.1) * deep, vol - 4.0)       # the good girl BOOFS
 	else:
 		_sfx("quack", float(QUACK_PITCH.get(sp, 1.0)) * randf_range(0.95, 1.05) * deep, vol)
 # boon "tier" = how many bosses you must have bested for it to enter the shrine pool.
@@ -994,18 +997,28 @@ const TUT := [
 ]
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
 const HAWK_LINES := [
-	"See those glowing BOOST LOGS — the ones with the rushing arrows? Hop one and you LAUNCH.",
-	"Stomp a heron by landing ON it from ABOVE. Leap UP into one and it's YOUR feathers — time it!",
-	"Each duckling eats ONE hit for you. They're tiny bodyguards — so guard them back.",
-	"Snacks are FUEL: fill the LOFT bar and your special fires on its own. Keep snacking!",
-	"Squeak PAST a hazard for a NEAR MISS — it charges your LOFT. Living dangerously pays off.",
-	"Bosses telegraph the big swing. DODGE it, THEN stomp them while they're seeing stars.",
-	"SNAPZ is armored — wait for his jaws to JAM after a lunge, then bonk his noggin.",
-	"Catch fire and you're a furnace: logs melt, bosses bleed. Snack streaks keep it lit.",
-	"Chaining hops keeps you airborne and safe — and it just feels good, doesn't it?",
-	"Need speed? The Canvasback and Golden Mallard RIP. The Pintail carves tight corners.",
-	"Bank your feathers, then splurge in my SHOP — those perks are PERMANENT, you know.",
-	"Beat a boss and the Ancient Duck blesses your NEXT run richer. Greed pays, friend.",
+	"you're flying BETTER every run.\ni notice these things. i'm a hawk.",
+	"that last stretch? clean.\ni'd have flown it the same. almost.",
+	"the river's lucky to have you, kid.",
+	"wind's at your tail today. i can FEEL it.",
+	"you belong out here. keep paddling.",
+	"some ducks paddle. YOU fly low.\nthere's a difference. i respect it.",
+	"i've watched a thousand ducks.\nyou've got the good stubbornness.",
+	"every great wing ate a few logs first.\nask me how i know.",
+	"the water reads different when YOU'RE on it.\nbetter. it reads better.",
+	"chin up, tail dry. you've got this river's number.",
+	"you hop like you MEAN it.\nnever lose that.",
+	"i told the herons about you.\nthey're nervous. good.",
+	"today's current likes you.\ni'd know — we talk.",
+	"you're the reason i still patrol this stretch.\nbest show on the water.",
+	"one more pond, kid.\nthere's always one more pond — and you're BUILT for it.",
+	"the way you threaded that last log?\npoetry. wet, waddling poetry.",
+	"scared money never made the far shore.\nyou? you'll make it.",
+	"even the Ancient one asks about you.\ni say: 'the kid's got WING.'",
+	"whatever's downstream, it should be\nworrying about YOU.",
+	"fly it like you stole it, kid.",
+	"your wake is getting STRAIGHTER.\nthat's the whole secret, you know.",
+	"good sky today. good duck, too.",
 ]
 # RUSTY's patter while he minds the shop counter (keep 'em SHORT — small bubble)
 const SHOP_GREETS := [
@@ -1048,7 +1061,7 @@ const CODEX := [
 	{"id": "lucien", "cat": "friend", "name": "LUCIEN", "tag": "the loon · DJ & boon sage",
 		"lore": "A common loon with an uncommon ear. By day he hunts the deep channels; by night he runs LUCIEN'S JUKEBOX, spinning the river's finest beds for a fistful of feathers and bobbing those headphones to a beat only he can hear. When you're picking boons he drifts up alongside to murmur which charm pairs with what — he's watched a thousand ducks build a thousand runs and forgotten none of them. That eerie wail across the water at dusk? That's just Lucien, soundchecking.",
 		"call": "laugh"},
-	{"id": "donny", "cat": "enemy", "name": "CHRISSY", "tag": "the rogue runabout",
+	{"id": "donny", "cat": "enemy", "name": "DONNI", "tag": "the rogue runabout · a Donzi",
 		"lore": "A driverless mahogany runabout that prowls every pond on the river, wherever the water's wide enough to open her up. Nobody knows who built her or where the captain went; she just ROARS up from astern, carves a few showboating passes around you while hollering about no-wake zones, and vanishes upriver in a curtain of spray. She isn't AIMING for you — but that varnished hull will bowl you clean off the water if you sit in her path. Hop her wake or steer wide. All bravado, no brakes."},
 ]
 const CODEX_CATS := [["duck", "DUCKS"], ["boss", "BOSSES"], ["enemy", "ENEMIES"], ["friend", "FRIENDS"],
@@ -1451,7 +1464,7 @@ func _update_river_events(delta: float) -> void:
 		_flash("the river SPLITS ahead!", 2.4)
 		_say("two channels coming up — pick a side!", 2.8)
 		_sfx("chime", 0.65)
-	if fork.is_empty() and distance >= fork_next and ev_id == "" and not drafting:
+	if fork.is_empty() and distance >= fork_next and ev_id == "" and not drafting and stretch_mod == "":
 		_bigday_reseed(500 + int(fork_next / 1000.0))   # Big Day: same fork choices today
 		var mods: Array = FORK_MODS.duplicate()
 		mods.shuffle()
@@ -1514,7 +1527,8 @@ func _update_river_events(delta: float) -> void:
 		var _sw2: float = sin(distance * 0.0037 + 1.7) * (VIEW.x * (0.11 + 0.11 * _cprog))
 		var _sw3: float = sin(distance * 0.0093 + 4.2) * (VIEW.x * 0.12) * _cprog   # the late-course JUKES
 		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2 + _sw3, BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
-		slip_pts.append({"x": slip_lead_x, "y": 148.0})
+		if slip_count <= 3.4:                          # the trail begins WITH the countdown, not before
+			slip_pts.append({"x": slip_lead_x, "y": 148.0})
 		for sp3 in slip_pts:
 			sp3.y += speed * delta
 		slip_pts = slip_pts.filter(func(sp4): return float(sp4.y) < VIEW.y + 30.0)
@@ -2046,8 +2060,9 @@ func _ready() -> void:
 	center_label.position = Vector2(0, VIEW.y * 0.28)
 	center_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	center_label.add_theme_font_size_override("font_size", 44)
-	center_label.add_theme_color_override("font_outline_color", Color(0.08, 0.10, 0.14, 0.9))
+	center_label.add_theme_font_size_override("font_size", 40)
+	center_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	center_label.add_theme_color_override("font_outline_color", Color(0.16, 0.09, 0.02, 0.95))
 	center_label.add_theme_constant_override("outline_size", 12)
 	center_label.visible = false
 	hud.add_child(center_label)
@@ -2839,6 +2854,9 @@ func _wear_slot(id: String) -> String:              # which of the two slots a w
 
 func _worn(id: String) -> bool:                     # is this item equipped in EITHER slot? (render/ownership)
 	return equipped_wear == id or equipped_body == id
+
+func _wear_fit_frac(sp := "") -> float:             # species whose HEAD sits off the duck template
+	return -0.08 if (sp if sp != "" else species) == "rusty" else 0.0
 
 func _worn_list() -> Array:                         # the items on the duck right now, head then body
 	var out: Array = []
@@ -4213,12 +4231,7 @@ func _update_sadie(delta: float) -> void:
 var rusty_last_advice := ""     # never the same read twice in a row
 
 func _rusty_advice() -> String:
-	var a := _rusty_advice_raw()
-	if a != "" and a == rusty_last_advice:
-		return ""
-	if a != "":
-		rusty_last_advice = a
-	return a
+	return ""   # catered coaching RETIRED (Scott: "advice is trash") — he's a hype-hawk now
 
 func _rusty_advice_raw() -> String:
 	# --- HISTORY reads (the psychic tier) ---
@@ -4410,7 +4423,7 @@ func _draw_hawk() -> void:
 # alongside ducko hopping driftwood in a silly way, weaves back and forth, then departs.
 # Purely a cameo: he never targets the duck and can't hurt you.
 const DONNY_LINES := ["VROOOM!", "eat my WAKE!", "she's all WOOD, baby!",
-	"can't catch CHRISSY!", "BRAAAP brap brap!", "outta the wake, featherbrain!",
+	"can't catch DONNI!", "BRAAAP brap brap!", "outta the wake, featherbrain!",
 	"top of the mornin', QUACKER!", "this is a NO-WAKE zone? since when!"]
 func _spawn_donny() -> void:
 	_codex_see("donny")
@@ -4491,12 +4504,13 @@ func _donny_hit_player() -> void:
 		_spawn_parts(duck_x, BASE_Y - 20.0, 14, Color(0.7, 0.5, 0.28), 240.0)
 	if shield_charges > 0:
 		shield_charges -= 1
-		_flash("CHRISSY BONK!")
+		_ouch()
+		_flash("DONNI BONK!")
 	elif ducklings_n > 0:
 		_lose_duckling()
-		_flash("CHRISSY got a duckling!")
+		_flash("DONNI got a duckling!")
 	else:
-		die("CHRISSY ran you down.", "donny")
+		die("DONNI ran you down.", "donny")
 
 func _draw_donny() -> void:
 	if donny == null:
@@ -4557,17 +4571,27 @@ func _update_sky(delta: float) -> void:
 		sky_phase = "land"; sky_land_t = 0.0
 		_sfx("chime", 1.1)
 
+func _next_boss_name() -> String:
+	if next_boss_idx >= boss_kinds.size():
+		return "the boss"
+	var k: String = boss_kinds[next_boss_idx]
+	if k == "gerald" and next_boss_idx >= 2:
+		return "GERALD THE ETERNAL"
+	return {"gerald": "GERALD", "snapz": "SNAPZ", "beaver": "BARRY",
+		"bongo": "BONGO", "megasadie": "MEGA SADIE"}.get(k, "the boss")
+
 func _sky_land() -> void:
 	in_sky = false
 	sky_phase = "fly"; sky_land_t = 0.0
 	sky_obs.clear(); sky_gems.clear()
 	duck_x = sky_duck_x                              # land where you were steering
 	target_x = duck_x
+	var _skipped := _next_boss_name()
 	if next_boss_idx < BOSS_MARKS.size():
 		next_boss_idx += 1                          # flew clean over the boss
 	var gained: int = 60
 	run_feathers += gained
-	_flash("SOARED PAST THE BOSS!\n+%d feathers" % gained, 2.0)
+	_flash("SOARED CLEAN OVER %s!\n+%d feathers" % [_skipped, gained], 2.4)
 	_sfx("splash_big", 0.6); _sfx("collect", 0.9)
 
 func _draw_cloud_puff(c: Vector2, s2: float, col := Color(1, 1, 1, 0.93)) -> void:
@@ -4620,7 +4644,23 @@ func _draw_sky() -> void:
 		var sz: Vector2 = fr.get_size() * 3.4
 		draw_set_transform(dpos, bank, Vector2.ONE)
 		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false)
+		var swl := _worn_list(); swl.reverse()           # she soars DRESSED
+		for wid in swl:
+			var wf = _wear3d_spin(wid, PI)
+			if wf != null:
+				var wsz: Vector2 = wf.get_size() * 3.4
+				draw_texture_rect(wf, Rect2(Vector2(-wsz.x * 0.5, -wsz.y * 0.5 + wsz.y * _wear_fit_frac()), wsz), false)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if ducklings_n > 0 and not tex_duckling.is_empty():  # the brood rides the thermal too, stepped V
+		var _dts: Array = tex_duckling.get("idle", [])
+		if _dts.size() > 0:
+			for i in ducklings_n:
+				var _vs: float = -1.0 if i % 2 == 0 else 1.0
+				var _vr: int = i / 2 + 1
+				var _dt2: Texture2D = _dts[int(anim_t * 6.0 + i) % _dts.size()]
+				var _dp2 := dpos + Vector2(_vs * float(_vr) * 36.0, 44.0 + float(_vr) * 24.0 + sin(anim_t * 2.4 + float(i)) * 5.0)
+				var _dsz2: Vector2 = _dt2.get_size() * 2.2
+				draw_texture_rect(_dt2, Rect2(_dp2 - _dsz2 * 0.5, _dsz2), false)
 	else:
 		draw_circle(dpos, 26.0, Color(1.0, 0.85, 0.3))
 	for c in 5:                                       # near foreground clouds (depth)
@@ -5635,7 +5675,7 @@ func _select_press(pos: Vector2) -> void:
 		equipped_body = (bodies[randi() % bodies.size()].id) if (not bodies.is_empty() and randf() < 0.7) else ""
 		hen_mode = randf() < 0.3 and ROSTER[sel_index].species != "hen"
 		select_line = ""; select_yaw = 0.32
-		_save(); _sfx("unlock", 1.25); _flash("? SURPRISE DUCK ?", 1.6)
+		_save(); _sfx("unlock", 1.25); _flash("SURPRISE DUCK!", 1.6)
 		return
 	if SEL_PLAY_BTN.has_point(pos):
 		if _is_unlocked(sel_index):
@@ -5955,6 +5995,10 @@ func _log_death_sub(l) -> String:
 
 func die(msg: String, cat := "other", sub := "") -> void:
 	if bot_mode: sim_hits += 1
+	if not bot_mode and not tut_mode and cat in ["sadie", "megasadie"]:
+		lifetime["deaths_sadie"] = int(lifetime.get("deaths_sadie", 0)) + 1
+		if int(lifetime["deaths_sadie"]) >= 50:
+			_unlock_secret("sadiedog", "SADIE — 50 defeats earned her leash-free run")
 	_log("[death] %s (%s) dist=%d" % [sub if sub != "" else cat, cat, int(distance)])
 	if bread_pending or bread_active or ascending:   # the MAGIC BREAD ceremony is sacred — nothing kills you mid-rite
 		enemies.clear(); logs.clear(); boss_globs.clear()
@@ -8382,6 +8426,7 @@ func _collide() -> void:
 				break
 			elif shield_charges > 0:
 				shield_charges -= 1              # THICK FEATHERS soaks the bonk
+				_ouch()
 				if boon_wildfire and shield_charges > 0:
 					shield_charges -= 1          # WILDFIRE: the blaze makes bonks bite double
 				smashed = l
@@ -8456,6 +8501,7 @@ func _collide() -> void:
 				if shield_charges > 0 or ducklings_n > 0:
 					if shield_charges > 0:
 						shield_charges -= 1
+						_ouch()
 						heat = 0.0               # a bonk breaks the ON FIRE streak
 						heat_warned = false
 						_sfx("bonk", 1.3, -6.0)
@@ -9295,7 +9341,7 @@ func _draw_fork_choice() -> void:
 		if is_sky:
 			_otext(Vector2(r.position.x, r.position.y + 30.0), "THE SKY ROUTE", 19, Color(0.75, 0.9, 1.0), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
 			_draw_cloud_puff(Vector2(cx2, r.position.y + 84.0), 1.0)
-			_mtext(Vector2(r.position.x + 12.0, r.position.y + 122.0), "a thermal lifts you clean OVER\nthe next boss.", 13, Color(1, 1, 1, 0.85), r.size.x - 24.0)
+			_mtext(Vector2(r.position.x + 12.0, r.position.y + 122.0), "a thermal lifts you clean OVER\n%s." % _next_boss_name(), 13, Color(1, 1, 1, 0.85), r.size.x - 24.0)
 			_otext(Vector2(r.position.x, r.position.y + 178.0), "SKIP THE DUEL", 13, Color(0.75, 0.9, 1.0), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 			_otext(Vector2(r.position.x, r.position.y + 198.0), "forfeit its power board", 12, Color(1, 1, 1, 0.6), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		else:
@@ -9320,7 +9366,11 @@ func _draw_pause() -> void:
 	if has_art:
 		var bob := sin(anim_t * 2.0) * 8.0
 		var fr = _spin_frame(_eff_species(), pause_yaw, anim_t - menu_quack_t < 0.45)
-		_blit_centered(fr, Vector2(cx, 196.0 + bob), 3.6 * ducks[species].get("size", 1.0) if ducks.has(species) else 3.6)
+		var _psc: float = 3.6 * ducks[species].get("size", 1.0) if ducks.has(species) else 3.6
+		_blit_centered(fr, Vector2(cx, 196.0 + bob), _psc)
+		var pwl := _worn_list(); pwl.reverse()          # she pauses DRESSED (body first, hat on top)
+		for wid in pwl:
+			_blit_centered(_wear3d_spin(wid, pause_yaw), Vector2(cx, 196.0 + bob + 64.0 * _psc * _wear_fit_frac()), _psc)
 		_otext(Vector2(0, 286), "< drag to spin · tap to chat >", 14, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 		if pause_line != "":
 			_speech_bubble(Vector2(cx, 104.0), pause_line,
@@ -9630,7 +9680,7 @@ func _killer_label(cat: String) -> String:
 		"beaver": return "BARRY"
 		"bongo": return "BONGO"
 		"sadie": return "Sadie's zoomies"
-		"donny": return "CHRISSY's wake"
+		"donny": return "DONNI's wake"
 		"ashore": return "your own good judgment"
 	return "the river"
 
@@ -10367,7 +10417,7 @@ func _stats_deaths(area: Rect2) -> void:
 		"beaver": {"name": "BARRY (boss)", "ic": "beaver", "col": Color(0.66, 0.46, 0.3)},
 		"bongo": {"name": "BONGO (boss)", "ic": "bongo", "col": Color(0.55, 0.8, 0.45)},
 		"sadie": {"name": "Sadie's zoomies", "ic": "sadie", "col": Color(0.85, 0.6, 0.38)},
-		"donny": {"name": "CHRISSY's wake", "ic": "", "col": Color(0.7, 0.5, 0.28)},
+		"donny": {"name": "DONNI's wake", "ic": "", "col": Color(0.7, 0.5, 0.28)},
 	}
 	# ...but LOGS — the river's #1 killer — split out by WHERE + HOW you clipped them
 	var rows := {}   # display name -> {n, col, ic}
@@ -11238,10 +11288,13 @@ func _draw_codex_detail(it: Dictionary) -> void:
 				draw_circle(Vector2(cx, cyc), 86.0 * pop, Color(0.55, 0.42, 0.16, 0.35))
 				draw_arc(Vector2(cx, cyc), 86.0 * pop, 0, TAU, 40, Color(1.0, 0.82, 0.35, 0.85), 3.0)
 				_otext(Vector2(0, cyc + 22.0), String(it.ref.get("name", "?")).left(1), 64, Color(1.0, 0.9, 0.55), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
-		elif it.type == "spec":                    # specials keep their letter-disc, sized up
-			draw_circle(Vector2(cx, cyc), 86.0 * pop, Color(0.5, 0.85, 1.0, 0.16))
-			draw_arc(Vector2(cx, cyc), 86.0 * pop, 0, TAU, 40, Color(0.5, 0.85, 1.0, 0.8), 3.0)
-			_otext(Vector2(0, cyc + 22.0), String(it.ref.name).left(1), 64, Color(0.8, 0.95, 1.0), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+		elif it.type == "spec":                    # specials play their LIVE mini-demo, like the picker
+			var _dmr := Rect2(cx - 120.0, cyc - 62.0, 240.0, 96.0)
+			var _dmb := StyleBoxFlat.new()
+			_dmb.bg_color = Color(0.03, 0.06, 0.10, 0.95); _dmb.set_corner_radius_all(12)
+			_dmb.set_border_width_all(2); _dmb.border_color = Color(0.5, 0.85, 1.0, 0.5)
+			draw_style_box(_dmb, _dmr)
+			_draw_special_demo(String(it.ref.id), _dmr.grow(-8.0))
 		else:
 			dtier = int(PROP_TIERS.get(it.ref, 0))
 			var pi: int = PROP_NAMES.find(it.ref)
@@ -12316,7 +12369,9 @@ func _duckling_h(i: int) -> float:
 		if p >= 0.0 and p < 1.0:
 			best = maxf(best, sin(p * PI))
 	# ducklings ALWAYS hop logs — a log crossing a duckling's row lifts it right over,
-	# no mama required. brave little souls.
+	# no mama required. brave little souls. (unless the brood is already AIRBORNE)
+	if glide_t > 0.0:
+		return best
 	var dpv := Vector2(_trail_x(0.22 * (i + 1)), BASE_Y + 92.0 + minf(34.0, 230.0 / maxf(1.0, float(ducklings_n))) * i)
 	for l in logs:
 		if absf(float(l.x) - dpv.x) < float(l.w) * 0.5 + 20.0:
@@ -12583,15 +12638,20 @@ func _draw_boss_gerald() -> void:
 				Color(0.62, 0.0, 0.02), Color(1.0, 0.16, 0.10), 0.0, boss.get("say_wiggle", false))
 	_draw_boss_intro()
 	# HP pips, top center — width adapts so a long health bar never clips off-screen
+	# slim segmented HP bar, tucked BELOW the top HUD (the old circle row sat on the timeline)
 	var pips: int = boss.max_hp
-	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
-	var pr: float = clampf(pw * 0.37, 5.0, 11.0)
-	var x0 := VIEW.x * 0.5 - pips * pw * 0.5
+	var bw3: float = minf(300.0, VIEW.x - 150.0)
+	var x0 := VIEW.x * 0.5 - bw3 * 0.5
+	var hy := 112.0
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 18.0), Color(0.03, 0.06, 0.10, 0.74))
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 2.0), Color(0.92, 0.3, 0.22, 0.9))
+	var segw: float = bw3 / float(maxi(pips, 1))
 	for i in pips:
-		var filled: bool = i < boss.hp
-		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr,
-			Color(0.9, 0.2, 0.18) if filled else Color(0.3, 0.3, 0.36, 0.6))
-		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
+		draw_rect(Rect2(x0 + segw * i + 1.0, hy, segw - 2.0, 8.0),
+			Color(0.94, 0.28, 0.2) if i < boss.hp else Color(1, 1, 1, 0.10))
+	var _bn2: String = str(boss.get("title", ""))
+	if _bn2 != "":
+		draw_string(font, Vector2(x0, hy - 10.0), _bn2, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
 
 # SNAPZ: the snapping turtle lunging from the water, with a submersion overlay.
 func _draw_boss_pike() -> void:
@@ -13034,21 +13094,26 @@ func _draw_boss_pips() -> void:
 	if boss_banner != "" and bage < 2.2 and boss != null:
 		var ba: float = clampf(bage / 0.15, 0.0, 1.0) * clampf((2.2 - bage) / 0.45, 0.0, 1.0)
 		var bw2 := font.get_string_size(boss_banner, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x
-		var brect := Rect2(VIEW.x * 0.5 - bw2 * 0.5 - 18.0, 118.0, bw2 + 36.0, 34.0)
+		var brect := Rect2(VIEW.x * 0.5 - bw2 * 0.5 - 18.0, 142.0, bw2 + 36.0, 34.0)
 		draw_rect(brect, Color(0.02, 0.04, 0.08, 0.72 * ba))
 		draw_rect(Rect2(brect.position.x, brect.position.y, 3.0, brect.size.y), Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
 		draw_rect(Rect2(brect.end.x - 3.0, brect.position.y, 3.0, brect.size.y), Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
 		draw_string(font, Vector2(brect.position.x + 18.0, brect.position.y + 24.0), boss_banner,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
+	# slim segmented HP bar, tucked BELOW the top HUD (the old circle row sat on the timeline)
 	var pips: int = boss.max_hp
-	var pw: float = minf(30.0, (VIEW.x - 80.0) / maxf(pips, 1))
-	var pr: float = clampf(pw * 0.37, 5.0, 11.0)
-	var x0 := VIEW.x * 0.5 - pips * pw * 0.5
+	var bw3: float = minf(300.0, VIEW.x - 150.0)
+	var x0 := VIEW.x * 0.5 - bw3 * 0.5
+	var hy := 112.0
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 18.0), Color(0.03, 0.06, 0.10, 0.74))
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 2.0), Color(0.92, 0.3, 0.22, 0.9))
+	var segw: float = bw3 / float(maxi(pips, 1))
 	for i in pips:
-		var filled: bool = i < boss.hp
-		draw_circle(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr,
-			Color(0.9, 0.2, 0.18) if filled else Color(0.3, 0.3, 0.36, 0.6))
-		draw_arc(Vector2(x0 + i * pw + pw * 0.5, 84.0), pr, 0, TAU, 16, Color(0, 0, 0, 0.5), 1.5)
+		draw_rect(Rect2(x0 + segw * i + 1.0, hy, segw - 2.0, 8.0),
+			Color(0.94, 0.28, 0.2) if i < boss.hp else Color(1, 1, 1, 0.10))
+	var _bn2: String = str(boss.get("title", ""))
+	if _bn2 != "":
+		draw_string(font, Vector2(x0, hy - 10.0), _bn2, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
 
 # a distant migrating V drifting across the sky — flapping silhouettes, pure ambiance (for the birder)
 func _draw_flock() -> void:
@@ -13723,7 +13788,7 @@ func _draw_duck() -> void:
 						# wings-out front pose) — so the wearable must stay FRONT too, or it banks
 						# TWICE (view-frame + transform) and rips off the head on quick maneuvers
 						var hf3 = _wear3d_idle(wid) if glide_t > 0.0 else _pick_wear3d(wid, h)
-						if hf3 != null: draw_texture_rect(hf3, Rect2(-ds * 0.5, ds), false)
+						if hf3 != null: draw_texture_rect(hf3, Rect2(Vector2(-ds.x * 0.5, -ds.y * 0.5 + ds.y * _wear_fit_frac()), ds), false)
 						if wid == "prop":
 							var pbd: Dictionary = _propblade_now()
 							var pb = (pbd.get("idle") if glide_t > 0.0 else _pose_frame(pbd, h))
@@ -13734,7 +13799,7 @@ func _draw_duck() -> void:
 				if state != St.MEGA:
 					for wid in _worn_list():
 						var hf3 = _pick_wear3d(wid, h)
-						if hf3 != null: draw_texture_rect(hf3, Rect2(duck_pos - ds * 0.5, ds), false)
+						if hf3 != null: draw_texture_rect(hf3, Rect2(duck_pos - ds * 0.5 + Vector2(0.0, ds.y * _wear_fit_frac()), ds), false)
 						if wid == "prop":
 							var pb2 = _pose_frame(_propblade_now(), h)
 							if pb2 != null: draw_texture_rect(pb2, Rect2(duck_pos - ds * 0.5, ds), false)
@@ -14584,9 +14649,10 @@ func _draw_select() -> void:
 		_blit_modulated(sfr, Vector2(cx, 276.0 + fbob), psc, _hen_tint() if is_hen else Color(1, 1, 1))
 		var wl := _worn_list(); wl.reverse()           # BODY first, then HEAD on top (hat over the life jacket)
 		for wid in wl:                                 # hat rides the CURRENT facing (matches body during the flap)
-			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx, 276.0 + fbob), psc)
+			var _swoff: float = 64.0 * psc * _wear_fit_frac(ROSTER[sel_index].species)
+			_blit_centered(_wear3d_spin(wid, select_yaw), Vector2(cx, 276.0 + fbob + _swoff), psc)
 			if wid == "prop":
-				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx, 276.0 + fbob), psc)
+				_blit_centered(_spin_from(_propblade_now(), select_yaw), Vector2(cx, 276.0 + fbob + _swoff), psc)
 	else:
 		# locked: a dark silhouette — keep the mystery (pure black for secrets)
 		var tint := Color(0.05, 0.05, 0.08, 1.0) if is_secret else Color(0.32, 0.35, 0.42, 1.0)
@@ -14717,7 +14783,8 @@ func _draw_select() -> void:
 		var atxt := "ASCENSION %d / %d" % [ascension, asc_unlocked] if ascension > 0 else "ASCENSION 0 · normal river"
 		if ascension > 0 and modn != "":
 			atxt += " · " + modn
-		draw_string(font, Vector2(SEL_ASC_BTN.position.x + 44, amid), atxt, HORIZONTAL_ALIGNMENT_CENTER, SEL_ASC_BTN.size.x - 88, 14, Color(1.0, 0.88, 0.62))
+		draw_string(font, Vector2(SEL_ASC_BTN.position.x + 44, amid), atxt + "  (?)", HORIZONTAL_ALIGNMENT_CENTER, SEL_ASC_BTN.size.x - 88, 14, Color(1.0, 0.88, 0.62))
+		_otext(Vector2(0, SEL_ASC_BTN.end.y + 12.0), "tap the tier for the full what's-different list", 10, Color(1, 1, 1, 0.4), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 
 	# roster thumbnails (locked ones ghosted to a silhouette)
 	for i in ROSTER.size():

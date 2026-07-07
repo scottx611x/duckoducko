@@ -616,6 +616,22 @@ Worklist (work top-down, ship each when green, add findings):
 - [x] **Sides cut AGAIN** v1.21.14 — bank slots 4->2 (ONE piece per side per screen), water scenery cap 4 + slower stream. Also: the rivershot harness was pre-seeding 16 pieces regardless of live caps — density shots LIED; now seeds 6.
 - [x] **Rusty's no-show ROOT-CAUSED** v1.21.14 — he's hard-gated to <1000 ft; the Thermals (3.6k+) and the Weir Hill pass have been silently DEAD since birth. New hawk_summon override + when the Thermals start he sweeps in IMMEDIATELY with the course briefing ("thread the GOLD RINGS — each one pays. CHAINS pay more. FLY!"), hoop hits float "+N", and his sendoff carries your tally ("12 of 15 rings!"). 🟡 needs Scott's re-verdict on the game itself.
 - [x] **The duck FLASHES RED when hurt** v1.21.14 (Scott's ask; edge pulse alone unobserved — most hits kill instantly, only shield/duckling saves show it) — red strobe on the duck sprite itself, plus the edges.
+## ➕ QUICK HITTERS (Scott, 2026-07-06 eve) — ALL 14 SHIPPED v1.21.37
+- [x] 1. Pause duck now wears the full fit (body + hat ride the turntable)
+- [x] 2. Duckling auto log-hops suppressed while the brood is airborne (glide/updraft)
+- [x] 3. Thermals ribbon now begins WITH the 3-2-1, not during the briefing
+- [x] 4. River splits can no longer spawn during ANY stretch (thermals or wagers)
+- [x] 5. Sky route: duck soars DRESSED with the brood in a stepped V, and both the card and the landing name the skipped boss ("SOARED CLEAN OVER SNAPZ!") via the run's real boss_kinds roll
+- [x] 6. DONNI is back (the Donzi) — codex, catchphrases, bonks, death screen, killer credit
+- [x] 7. Boss HP: slim segmented bar with backplate + boss name, tucked below the HUD (old red circle row sat ON the timeline); mid-fight ribbon moved below it
+- [x] 8. Rusty's catered coaching RETIRED — he draws from a 22-line pool of pure hawk encouragement
+- [x] 9. Species wear-fit offset: hats/bodywear shift toward Rusty's actual head everywhere (gameplay, pause, select, sky)
+- [x] 10. Ascension "what's different" panel already existed but was undiscoverable — the chip now shows "(?)" + a "tap the tier for the full list" hint
+- [x] 11. Center flash label restyled gold w/ warm outline ("? SURPRISE DUCK ?" → "SURPRISE DUCK!")
+- [x] 12. _ouch() added to the three shield-loss paths that lacked it (Donni bonk, THICK FEATHERS log soak, log-hit soak) — every hit flashes red now
+- [x] 13. PLAYABLE SADIE 🐾 — lose to the good girl (zoomies OR Mega) 50 times and she joins the roster: full sprite set from her true voxel model (tools/gen_sadie_duck.py — she SWIMS chest-deep in back view, hops are her POUNCE, menus show the seated good girl, 21-slice mega voxel stack), she BARKS instead of quacking, stats 0.95 hop/0.7 steer/0.9 pace/1.15 size. Bot drew her first try and WON a full campaign.
+- [x] 14. Codex specials now play the same live mini-demo clips as the picker/shop
+
 - [x] **Ducklings hop EVERY log + real-brood follow feel** v1.21.36 (Scott: "ducklings should always hop logs / brood follow logic should be snappier but subtly varied to mimic real world") — (1) a log crossing any duckling's row now lifts that duckling right over it, mama's hop or not (deterministic pass-arc, staggers naturally as the log crosses the conga); (2) conga lag tightened 0.34s→0.22s per slot, and each duckling got a PERSONALITY: its own reaction-time offset, its own little side-to-side weave (different speed + amplitude per bird), its own bob, and its own hop beat — the line reads as a family of individuals, not beads on a string. 🟡 in-motion feel.
 - [x] **CALM WATER was lying — FIXED** v1.21.35 (Scott: "I got wrecked by a heron during Calm water...? wtf") — the card promised "nothing hunts here" but calm only reduced heron spawns to 0.7x. Now the quiet water keeps its word: herons, the snapping turtle, AND Chrissy's wake are all gated off for the whole stretch, anything already mid-hunt poofs into ripples the moment you enter, and a soft blue chip confirms it on the HUD: "THE QUIET WATER · shhh."
 - [x] **"+30 what???" — units on every wager number** v1.21.34 (Scott) — THE FEAST card, BLESSED card, the EASY MONEY/BLESSED/SCAVENGER live chips, and the golden settlement all showed bare numbers; every one now says "feathers" explicitly.
