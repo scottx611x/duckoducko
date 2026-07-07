@@ -90,9 +90,10 @@ def build_boss(pose="idle", bob=0):
                 ellip(sx * 2.6, 0.5 - i * 0.7, -6.5 - i * 0.8, 1.3, 0.9, 1.3, COATD if i < 4 else PAW)
     elif crouch:
         # play-bow: chest DOWN at the front, rump HIGH at the back, tail flag up
-        ellip(0, 6.0, -5, 4.0, 3.2, 3.8, COAT)                        # raised rump, high + back
-        ellip(0, 8.0, -5, 2.8, 1.6, 2.8, COATL)
-        ellip(0, 3.0, -1, 3.6, 2.6, 3.6, COAT)                        # sloping back
+        ellip(0, 4.8, -5, 4.0, 3.0, 3.8, COAT)                        # raised rump (connected, not a ball)
+        ellip(0, 6.3, -5, 2.8, 1.5, 2.8, COATL)
+        ellip(0, 3.4, -2.8, 3.8, 2.8, 3.4, COAT)                      # upper slope off the rump
+        ellip(0, 1.6, -0.5, 3.7, 2.6, 3.4, COAT)                      # sloping back into the chest
         ellip(0, -1.0, 3, 3.8, 2.4, 4.2, COAT)                        # chest low + forward
         ellip(0, -2.0, 4.5, 2.8, 1.6, 2.8, CHEST, only_empty=True)
         for s in (1, -1):                                             # forelegs stretched flat on the water
@@ -106,8 +107,12 @@ def build_boss(pose="idle", bob=0):
         # seated tall (idle / proud / point)
         chest_up = 1 if proud else 0
         # she sits TALL: an upright torso column, chest proud, no humped back (the photo)
-        ellip(0, 2 + chest_up, 0, 4.0, 5.2, 4.0, COAT)                # upright torso
-        ellip(0, 5.5 + chest_up, -0.5, 2.8, 2.4, 2.8, COATL)          # shoulder light, high
+        # upright torso with the APEX FORWARD + a real neck — the old single column
+        # peaked at the rear and read as a hunchback from profile/back
+        ellip(0, 2 + chest_up, 0.4, 4.0, 4.7, 3.9, COAT)              # torso, apex shifted forward
+        ellip(0, 0.5 + chest_up, -1.6, 3.7, 3.6, 3.2, COAT)           # rear taper (lower than the withers)
+        ellip(0, 5.2 + chest_up, 1.1, 2.6, 2.2, 2.6, COATL)           # shoulder light, over the chest
+        ellip(0, 6.6 + chest_up, 1.8, 2.3, 2.7, 2.3, COAT)            # NECK: smooth bridge into the skull
         ellip(0, 1.5 + chest_up, 3.0, 2.8, 3.4, 2.0, CHEST)           # the proud chest column
         ellip(0, -3.5, -3.5, 5.0, 3.4, 4.6, COAT)                     # haunches
         ellip(0, -1.8, -5.2, 3.4, 2.0, 2.8, COATL)
@@ -162,8 +167,9 @@ def build_boss(pose="idle", bob=0):
     for s in (1, -1):
         if pounce or run:
             for i in range(4):
-                put(s * (3 + i), round(hy + 2 + i), round(hz - 1 - i * 0.4), COATD)
-                put(s * (3 + i), round(hy + 1 + i), round(hz - 1 - i * 0.4), COATD)
+                for dy in (0, 1):
+                    put(s * 3, round(hy + 1 + i * 0.5) + dy, round(hz - 1 - i), COATD)
+                    put(s * 4, round(hy + 0.5 + i * 0.5) + dy, round(hz - 1.4 - i), COATD)
         else:
             for yy in range(round(hy - 2), round(hy + 3)):
                 put(s * 3, yy, round(hz - 0.5), COATD)
