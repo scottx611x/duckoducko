@@ -226,7 +226,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.38"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.40"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -3876,6 +3876,12 @@ func cur_mega_dur() -> float:
 func _up(id: String) -> int:
 	return picked.get(id, 0)
 
+# ANY junkyard boon makes river trash a collectible resource — including the CONSUMERS
+# (scrapshell armor, dumpster snacks), which are useless if you can't stock the hoard
+func _junk_boon_on() -> bool:
+	return _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0 \
+		or _up("dumpster") > 0 or _up("scrapshell") > 0
+
 func _hop_boost() -> float:
 	return pow(1.15, float(_up("spring")))
 
@@ -4554,6 +4560,11 @@ func _cloud_launch() -> void:
 	cloud = null
 	in_sky = true; sky_t = 0.0; sky_alt = 0.0; sky_duck_x = duck_x; sky_loot = 0
 	sky_phase = "fly"; sky_land_t = 0.0; sky_obs.clear(); sky_gems.clear()
+	# a thermal's worth of golden feathers rides the glide path — passive treasure, pure delight
+	for gi in 6:
+		var gt: float = 0.7 + float(gi) * 0.52                        # when each one crosses the duck's row
+		sky_gems.append({"x": VIEW.x * 0.5 + sin(gt * 1.1) * 120.0,   # ...planted ON the scripted sine
+			"y": VIEW.y * 0.55 - 238.0 * gt, "got": false, "pop": -9.0})
 	_flash("UP WE GO!", 1.6)
 	_sfx("fwoosh", 1.1, 7.0); _sfx("mega", 0.6)
 	_spawn_parts(duck_x, BASE_Y - 20.0, 30, Color(0.85, 0.95, 1.0), 320.0)
@@ -4567,9 +4578,21 @@ func _update_sky(delta: float) -> void:
 	sky_t += delta
 	sky_alt += 280.0 * delta
 	sky_duck_x = VIEW.x * 0.5 + sin(sky_t * 1.1) * 120.0          # a graceful scripted glide (no controls)
-	if sky_t >= 2.8:
+	for g in sky_gems:                                            # sweep up the thermal's feathers
+		if not g.get("got", false):
+			var gy: float = g.y + sky_alt * 0.85
+			if absf(gy - VIEW.y * 0.55) < 34.0 and absf(g.x - sky_duck_x) < 60.0:
+				g["got"] = true; g["pop"] = sky_t
+				sky_loot += 2
+				_sfx("collect", 1.0 + 0.09 * float(sky_loot))     # rising as the haul grows
+	if sky_t >= 3.6:
 		sky_phase = "land"; sky_land_t = 0.0
 		_sfx("chime", 1.1)
+
+# what she yells down at the duel she's soaring over (Sadie gets kindness — always)
+const SKY_QUIPS := {"gerald": "not today, GERALD!", "eternal": "some other lifetime,\nold bird!",
+	"snapz": "later, turt!", "beaver": "chew on THAT, BARRY!",
+	"bongo": "ribbit at the sky,\nBONGO!", "megasadie": "next time, sweet girl!\nPROMISE!"}
 
 func _next_boss_name() -> String:
 	if next_boss_idx >= boss_kinds.size():
@@ -4589,7 +4612,7 @@ func _sky_land() -> void:
 	var _skipped := _next_boss_name()
 	if next_boss_idx < BOSS_MARKS.size():
 		next_boss_idx += 1                          # flew clean over the boss
-	var gained: int = 60
+	var gained: int = 60 + sky_loot
 	run_feathers += gained
 	_flash("SOARED CLEAN OVER %s!\n+%d feathers" % [_skipped, gained], 2.4)
 	_sfx("splash_big", 0.6); _sfx("collect", 0.9)
@@ -4625,6 +4648,43 @@ func _draw_sky() -> void:
 		var mox: float = fposmod(mt * 97.0 + anim_t * 7.0, VIEW.x)
 		var moy: float = fposmod(mt * 120.0 + sky_alt * 0.9, VIEW.y)
 		draw_circle(Vector2(mox, moy), 1.4 + float(mt % 2), Color(1.0, 0.98, 0.85, 0.35))
+	# THE WHOLE POINT of the sky route: the clouds part and there's the duel you're skipping,
+	# a tiny furious speck on the river far below
+	var _bk: String = boss_kinds[next_boss_idx] if next_boss_idx < boss_kinds.size() else ""
+	var _ba: float = clampf((sky_t - 1.0) / 0.35, 0.0, 1.0) * clampf((2.6 - sky_t) / 0.35, 0.0, 1.0)
+	if _bk != "" and _ba > 0.0:
+		var gap := Vector2(VIEW.x * 0.5, VIEW.y * 0.82)
+		for gr in range(4, 0, -1):                    # a soft hole through the cloud deck
+			draw_circle(gap, 34.0 + gr * 26.0, Color(0.36, 0.55, 0.72, _ba * 0.16))
+		draw_circle(gap, 92.0, Color(0.30, 0.52, 0.66, _ba * 0.8))
+		draw_rect(Rect2(gap.x - 24.0, gap.y - 88.0, 48.0, 176.0), Color(0.38, 0.62, 0.74, _ba * 0.85))  # the river, way down there
+		for lg in 3:                                  # toy logs on toy water
+			var lgy: float = gap.y - 70.0 + fposmod(float(lg) * 61.0 + sky_t * 44.0, 140.0)
+			draw_rect(Rect2(gap.x - 14.0 + float(lg % 2) * 12.0, lgy, 16.0, 5.0), Color(0.42, 0.30, 0.20, _ba * 0.8))
+		var _btex = _codex_tex("sadie" if _bk == "megasadie" else ("eternal" if _bk == "gerald" and next_boss_idx >= 2 else _bk))
+		if _btex != null:
+			var _bx: float = gap.x + (sky_t - 1.8) * 26.0
+			var _bsz: Vector2 = _btex.get_size() * (92.0 / maxf(float(_btex.get_size().x), 1.0))
+			draw_texture_rect(_btex, Rect2(Vector2(_bx, gap.y + sin(anim_t * 3.0) * 4.0) - _bsz * 0.5, _bsz), false,
+				Color(0.8, 0.85, 1.0, _ba))           # hazed by the distance
+			_otext(Vector2(_bx - 30.0, gap.y - _bsz.y * 0.5 - 30.0), "?!", 20, Color(1.0, 0.9, 0.4, _ba), 60.0, HORIZONTAL_ALIGNMENT_CENTER, 4)
+	# golden feathers riding the thermal (swept up in _update_sky)
+	var _gtex = tex_items.get("feather")
+	for g in sky_gems:
+		var gy: float = g.y + sky_alt * 0.85
+		if not g.get("got", false) and gy > -30.0 and gy < VIEW.y + 30.0:
+			draw_circle(Vector2(g.x, gy), 15.0 + sin(anim_t * 4.0 + g.x) * 2.0, Color(1.0, 0.88, 0.4, 0.25))
+			if _gtex != null:
+				var _gsz: Vector2 = _gtex.get_size() * 2.2
+				draw_set_transform(Vector2(g.x, gy), sin(anim_t * 2.2 + g.x) * 0.35, Vector2.ONE)
+				draw_texture_rect(_gtex, Rect2(-_gsz * 0.5, _gsz), false)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				draw_circle(Vector2(g.x, gy), 6.0, Color(1.0, 0.85, 0.3))
+		elif g.get("got", false) and sky_t - float(g.get("pop", -9.0)) < 0.45:   # the sweep-up burst
+			var pp: float = (sky_t - float(g.get("pop", 0.0))) / 0.45
+			draw_arc(Vector2(g.x, gy), 10.0 + pp * 26.0, 0.0, TAU, 16, Color(1.0, 0.88, 0.4, (1.0 - pp) * 0.8), 2.5)
+			_otext(Vector2(g.x - 40.0, gy - 26.0 - pp * 18.0), "+2", 16, Color(1.0, 0.88, 0.4, 1.0 - pp), 80.0, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	var _ddy: float = VIEW.y * 0.55
 	if sky_phase == "land":
 		_ddy = lerpf(VIEW.y * 0.55, VIEW.y + 90.0, clampf(sky_land_t / 1.0, 0.0, 1.0))
@@ -4634,7 +4694,9 @@ func _draw_sky() -> void:
 		var ftp := Vector2(sky_duck_x - (sin((sky_t - fpp) * 1.1) - sin(sky_t * 1.1)) * 120.0, dpos.y + 22.0 + fti * 16.0 + sin(anim_t * 3.0 + fti) * 4.0)
 		draw_circle(ftp, 3.0 - fti * 0.4, Color(1.0, 0.95, 0.7, 0.5 - fti * 0.08))
 	var bank: float = cos(sky_t * 1.1) * 0.28        # banks with the glide
-	var sp: Dictionary = ducks.get(species, {})
+	if sky_t > 2.7 and sky_t < 3.3:                  # the victory ROLL before the descent
+		bank += TAU * smoothstep(0.0, 1.0, (sky_t - 2.7) / 0.6)
+	var sp: Dictionary = ducks.get(_eff_species(), {})   # YOUR duck soars — hen sprites included
 	var fr: Texture2D = null
 	if sp.has("hop") and sp["hop"].size() > 0:
 		fr = sp["hop"][int(anim_t * 7.0) % sp["hop"].size()]
@@ -4643,7 +4705,7 @@ func _draw_sky() -> void:
 	if fr != null:
 		var sz: Vector2 = fr.get_size() * 3.4
 		draw_set_transform(dpos, bank, Vector2.ONE)
-		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false)
+		draw_texture_rect(fr, Rect2(-sz * 0.5, sz), false, _hen_tint())
 		var swl := _worn_list(); swl.reverse()           # she soars DRESSED
 		for wid in swl:
 			var wf = _wear3d_spin(wid, PI)
@@ -4651,6 +4713,8 @@ func _draw_sky() -> void:
 				var wsz: Vector2 = wf.get_size() * 3.4
 				draw_texture_rect(wf, Rect2(Vector2(-wsz.x * 0.5, -wsz.y * 0.5 + wsz.y * _wear_fit_frac()), wsz), false)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		draw_circle(dpos, 26.0, Color(1.0, 0.85, 0.3))   # asset-missing fallback ONLY
 	if ducklings_n > 0 and not tex_duckling.is_empty():  # the brood rides the thermal too, stepped V
 		var _dts: Array = tex_duckling.get("idle", [])
 		if _dts.size() > 0:
@@ -4661,12 +4725,15 @@ func _draw_sky() -> void:
 				var _dp2 := dpos + Vector2(_vs * float(_vr) * 36.0, 44.0 + float(_vr) * 24.0 + sin(anim_t * 2.4 + float(i)) * 5.0)
 				var _dsz2: Vector2 = _dt2.get_size() * 2.2
 				draw_texture_rect(_dt2, Rect2(_dp2 - _dsz2 * 0.5, _dsz2), false)
-	else:
-		draw_circle(dpos, 26.0, Color(1.0, 0.85, 0.3))
 	for c in 5:                                       # near foreground clouds (depth)
 		var nx: float = fposmod(c * 151.0 + 20.0, VIEW.x)
 		var ny: float = fposmod(c * 205.0 + sky_alt * 0.9, VIEW.y + 220.0) - 110.0
 		_draw_cloud_puff(Vector2(nx, ny), 0.95 + fposmod(c * 0.5, 1.0) * 0.7, Color(1, 1, 1, 0.72))
+	# she has WORDS for the duel she's skipping (and a wheee for the roll)
+	if _bk != "" and _ba > 0.0:
+		_say_bubble(Vector2(dpos.x, dpos.y - 98.0), SKY_QUIPS.get("eternal" if _bk == "gerald" and next_boss_idx >= 2 else _bk, "so long, sucker!"), _ba)
+	elif sky_t > 2.7 and sky_t < 3.4:
+		_say_bubble(Vector2(dpos.x, dpos.y - 98.0), "wheee!", clampf((sky_t - 2.7) / 0.2, 0.0, 1.0) * clampf((3.4 - sky_t) / 0.2, 0.0, 1.0))
 	if sky_t < 1.6:
 		var a2: float = clampf(1.6 - sky_t, 0.0, 1.0) * clampf(sky_t * 4.0, 0.0, 1.0)
 		_otext(Vector2(0, VIEW.y * 0.36), "above it all...", 26, Color(1, 1, 1, a2 * 0.85), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
@@ -6263,7 +6330,7 @@ func _update_play(delta: float) -> void:
 
 	# floating nonsense drifts by along the banks
 	prop_timer -= delta
-	var junkboon: bool = _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0
+	var junkboon: bool = _junk_boon_on()
 	if prop_timer <= 0.0 and not tex_props.is_empty() and stretch_mod != "rusty":
 		var left := randf() < 0.5
 		var _px: float = (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0))
@@ -6430,7 +6497,7 @@ func _update_play(delta: float) -> void:
 		crumbs = crumbs.filter(func(c): return c.y > -30.0 and not c.get("hit", false))
 
 	# the JUNKYARD cluster: river trash becomes a collectible resource
-	if _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0 or not lane_trash.is_empty():
+	if _junk_boon_on() or not lane_trash.is_empty():
 		_update_trash(delta)
 	if not trash_shots.is_empty():
 		_update_trash_shots(delta)
@@ -8532,7 +8599,9 @@ func _collect(it: Dictionary) -> void:
 	combo_t = 2.2
 	if combo_n >= 3:
 		_sfx("combo", 0.9 + 0.11 * minf(combo_n - 2, 8.0), -5.0)
-		_float_text(duck_x, BASE_Y - 128.0, "x%d!" % combo_n, Color(1.0, 0.85, 0.3) if combo_n >= 5 else Color(0.8, 0.95, 1.0))
+	# the chain lives in the AUDIO (rising scale); text only salutes milestones — per-snack "x3! x4!..." read as spam
+	if combo_n >= 5 and combo_n % 5 == 0:
+		_float_text(duck_x, BASE_Y - 128.0, "x%d!" % combo_n, Color(1.0, 0.85, 0.3))
 	if combo_n == 5 or combo_n == 10:
 		run_feathers += combo_n                       # a taste of gold for keeping the chain
 		_spawn_parts(duck_x, BASE_Y - 40.0, 10, Color(1.0, 0.85, 0.3), 220.0)
@@ -9116,7 +9185,7 @@ func _draw_run_timeline() -> void:
 	else:
 		draw_circle(Vector2(dx, y), mr - 4.0, Color(0.97, 0.84, 0.27))
 	# JUNKYARD: a subtle green SECOND RING shows your trash hoard (no clunky HUD meter)
-	if (_up("junker") > 0 or _up("trashmag") > 0 or _up("packrat") > 0) and trash_hoard > 0:
+	if _junk_boon_on() and trash_hoard > 0:
 		var tf: float = clampf(float(trash_hoard) / 12.0, 0.0, 1.0)
 		draw_arc(Vector2(dx, y), mr + 6.0, 0.0, TAU, 28, Color(0.5, 0.6, 0.45, 0.2), 2.0)   # the track
 		draw_arc(Vector2(dx, y), mr + 6.0, -PI * 0.5, -PI * 0.5 + tf * TAU, 28, Color(0.56, 0.86, 0.5, 0.8), 2.5)
@@ -11866,7 +11935,7 @@ func _draw() -> void:
 			Color(rcol.r, rcol.g, rcol.b, 0.5 * (1.0 - rp)), 5.0 if r.has("col") else 3.0)
 
 	# river FLOTSAM: scenery normally — but with a junkyard boon it's COLLECTABLE (a soft ring marks it)
-	var trash_on: bool = _up("trashmag") > 0 or _up("packrat") > 0 or _up("junker") > 0
+	var trash_on: bool = _junk_boon_on()
 	for pr in props:
 		if pr.kind < tex_props.size():
 			var ptex: Texture2D = tex_props[pr.kind]
