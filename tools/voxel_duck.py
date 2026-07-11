@@ -1625,6 +1625,18 @@ def build_icon(iid):
             put(x, 0, 2, CYAN)
         box(-6, -5, -5, -1, 0, 2, STEELD); box(5, 6, -5, -1, 0, 2, STEELD)
         ellip(0, 4, 1, 2.0, 2.0, 1.8, YEL); put(1, 5, 2, (30, 30, 36))
+    elif iid == "froglegs":                          # FROG LEGS — a frog mid-leap, legs loaded
+        DGREEN = (58, 148, 78)
+        ellip(0, 1, 1, 4.2, 3.2, 2.4, GREEN)         # the leaping body, nose tilted up
+        ellip(0, 3, 3, 2.6, 2.0, 1.6, GREEN)         # head
+        put(-2, 4, 4, WHITE); put(2, 4, 4, WHITE)    # bulge eyes
+        put(-2, 4, 5, (30, 30, 36)); put(2, 4, 5, (30, 30, 36))
+        ellip(0, 0, 2, 3.4, 2.2, 1.6, (150, 220, 130))   # pale belly
+        for s in (-1, 1):                            # the FAMOUS legs: folded thigh + long shin, mid-spring
+            box(min(s * 3, s * 4), max(s * 3, s * 4), -3, -1, 0, 2, DGREEN)   # thigh hugging the body
+            box(min(s * 4, s * 5), max(s * 4, s * 5), -6, -3, 0, 1, DGREEN)   # shin kicking down-back
+            box(min(s * 4, s * 6), max(s * 4, s * 6), -7, -6, 0, 1, GREEN)    # webbed foot, toes spread
+        put(0, -3, 0, CYAN); put(1, -5, 0, CYAN)     # spring-line droplets beneath
     elif iid == "breadbasket":                       # basket — a basket of loaves
         for x in range(-5, 6):
             put(x, -3, 0, BROWN); put(x, -5, 0, (120, 80, 48))
@@ -2818,7 +2830,7 @@ def generate_icons(art_dir):
               "feathershield", "lifevest", "goslingguard", "snackwing", "vformation", "earlybird",
               "wildfire", "phoenix", "thermal", "loftgauge", "hourglass", "doublearrow",
               "paperplane", "flag", "swoosh", "clutch", "egghead", "trio", "conga", "pouch",
-              "warhelm", "trampoline", "breadbasket", "shockring"]
+              "warhelm", "trampoline", "breadbasket", "shockring", "froglegs"]
     for m in models:
         im = render(shade(build_icon(m)), math.radians(16), math.radians(16), out=72, scale=3.2)
         b = im.getbbox()

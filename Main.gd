@@ -87,6 +87,7 @@ const UPGRADES := [
 	{"id": "bounce", "name": "BOUNCE CHARGE", "desc": "spring-log bounces refill +35% LOFT", "rarity": 1},
 	{"id": "buffet", "name": "LOG BUFFET", "desc": "EVERY log you destroy drops a snack", "rarity": 1},
 	{"id": "thunder", "name": "THUNDER FEET", "desc": "every landing detonates adjacent logs and enemies", "rarity": 2},
+	{"id": "froglegs", "name": "FROG LEGS", "desc": "come DOWN on a log and BOING right off it — chain bounces pay rising feathers, each a little lower", "rarity": 2},
 	# the JUNKYARD cluster: river trash stops being scenery and becomes a resource
 	{"id": "trashmag", "name": "TRASH MAGNET", "desc": "river trash drifts into your lane — every 5 you grab = a free BONK", "rarity": 1},
 	{"id": "packrat", "name": "PACK RAT", "desc": "one duck's trash is another's treasure: every bit you grab pays +3 feathers", "rarity": 1},
@@ -114,6 +115,7 @@ const ICON_MODELS := {
 	"famine": "bowl", "glasscannon": "gem", "tailwind": "gust", "flyer": "paperplane", "trailblazer": "flag",
 	"slipstream": "swoosh", "migration": "birds", "zen": "zen", "tiny": "tiny",
 	"trashmag": "trashcan", "packrat": "sack", "junker": "slingshot", "dumpster": "tire", "scrapshell": "junkshield",
+	"froglegs": "froglegs",
 }
 var tex_boon := {}             # id -> the loaded voxel icon sprite
 const RARITY_NAME := ["", "RARE", "EPIC", "LEGENDARY"]
@@ -121,15 +123,16 @@ const RARITY_NAME := ["", "RARE", "EPIC", "LEGENDARY"]
 # which upgrades amplify each other — owning one tags the other * in a draft
 const SYNERGY := {
 	"snackhawk": ["spring", "double", "snacks", "magnet"],
-	"spring": ["snackhawk", "double"],
-	"double": ["spring", "snackhawk"],
+	"spring": ["snackhawk", "double", "froglegs"],
+	"double": ["spring", "snackhawk", "froglegs"],
+	"froglegs": ["spring", "double", "springy", "bounce"],
 	"snacks": ["snackhawk", "school", "gold", "magnet"],
 	"magnet": ["snacks", "snackhawk", "gold"],
 	"aftershock": ["thunder", "loft"],
 	"thunder": ["aftershock", "shield"],
 	"loft": ["aftershock", "bounce", "buffet"],
-	"bounce": ["springy", "loft"],
-	"springy": ["bounce"],
+	"bounce": ["springy", "loft", "froglegs"],
+	"springy": ["bounce", "froglegs"],
 	"buffet": ["loft", "gold"],
 	"gold": ["nestegg", "snacks", "buffet"],
 	"nestegg": ["gold"],
@@ -226,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.40"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.41"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -792,6 +795,7 @@ const BODY_WEAR := ["scarf", "turtle", "cape", "vest", "jetpack", "satchel"]   #
 # DEEP LORE: the power-ups deserve mythos, not tooltip text. Every entry answers
 # "what does the river believe about this?"
 const POWER_LORE := {
+	"froglegs": "The bullfrogs watched ducks bonk off their logs for ten thousand years before one, out of pity, demonstrated: land soft, legs loaded, leave before the wood notices. The frogs consider every bounce since a tuition payment, and they are keeping the ledger.",
 	"spring": "Nobody taught the river's ducks to jump like this. One spring the water came up early and fast, and the ducks that season learned — and their ducklings learned it in the egg. The river remembers which legs are owed to it.",
 	"magnet": "Crumbs drift toward you as if called by name. The old drakes say the first CRUMB MAGNET was a wedding band lost off the Woodbury dock in 1974, and that bread has been trying to get back to it ever since.",
 	"snacks": "The radar isn't a machine. It's a feeling behind the left eye, the same one that tells a duck which picnic will be careless. Some are simply born tuned.",
@@ -1205,6 +1209,8 @@ var trash_shots: Array = []    # in-flight slung trash: {x, y, vx, spin, tex, ra
 var air_hops := 0               # double-hops spent since last landing
 var hyper := false              # current MEGA is a spring-log hyper jump
 var hop_lift_bonus := 1.0       # DOUBLE HOP stacks the arc higher, seamlessly
+var frog_chain := 0             # FROG LEGS: consecutive log bounces without touching water
+var land_grace := 0.0           # FROG LEGS: brief window after touchdown where a log underfoot still BOINGs
 
 # the duckling conga line (WHIMSY §4): derived from a position/hop history
 var ducklings_n := 0
@@ -2401,6 +2407,20 @@ func _ready() -> void:
 		await get_tree().create_timer(0.3).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_sky.png")
+		get_tree().quit()
+	elif "--bounceshot" in OS.get_cmdline_user_args():   # FROG LEGS: descend onto a frog's log -> BOING (prints frog_chain)
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear()
+		_pick_upgrade(_upg_def("froglegs"))
+		draft_grace = 0.0                        # the pick's invincibility window would swallow the landing
+		logs.append({"x": duck_x, "y": BASE_Y, "w": 150.0, "h": 46.0, "missed": false, "got": false,
+			"spring": false, "phase": 0.0, "frog": true, "frog_gone": false, "crazy": false, "thwomp": false, "hp": 1})
+		state = St.HOPPING; hop_t = cur_hop_dur() * 0.9
+		await get_tree().create_timer(0.25).timeout
+		print("[BOUNCE] frog_chain=", frog_chain, " state=", state, " alive=", alive, " feathers=", run_feathers)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_bounce.png")
 		get_tree().quit()
 	elif "--bossshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -5312,6 +5332,7 @@ func reset_game() -> void:
 	picked.clear()
 	shield_charges = 0
 	air_hops = 0
+	frog_chain = 0
 	hyper = false
 	hop_lift_bonus = 1.0
 	squash = 0.0
@@ -6747,6 +6768,9 @@ func _update_play(delta: float) -> void:
 	_refresh_hud()
 
 func _update_hop(delta: float) -> void:
+	land_grace = maxf(0.0, land_grace - delta)
+	if land_grace <= 0.0 and state == St.GROUNDED:
+		frog_chain = 0                             # settled on the water — the frogs' ledger closes
 	match state:
 		St.HOPPING:
 			hop_t += delta
@@ -6795,6 +6819,7 @@ func is_invincible() -> bool:
 func _land(mega: bool) -> void:
 	air_hops = 0
 	hop_lift_bonus = 1.0
+	land_grace = 0.12                              # FROG LEGS: a log underfoot RIGHT NOW still counts as landing on it
 	squash = 1.0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
@@ -6856,6 +6881,38 @@ func _stomp_critter(x: float, y: float, who: String) -> void:
 	ripples.append({"x": x, "y": y, "t": 0.0, "max": 120.0})
 	ripples.append({"x": x, "y": y, "t": 0.0, "max": 62.0, "col": Color(1.0, 0.95, 0.75)})
 	_float_text(x, y - 36.0, "STOMP!  +3", Color(1.0, 0.85, 0.4))
+
+# FROG LEGS: descending onto a log is a LAUNCH, not a bonk — the frogs taught her well.
+# each chained bounce starts deeper into the arc AND lifts a little less, so a chain is a
+# flourish through a dense field (3-5 boings), never a flight mode; water resets the chain.
+# herons still own the sky — that's the counter.
+func _frog_bounce(l: Dictionary) -> void:
+	frog_chain += 1
+	land_grace = 0.0
+	state = St.HOPPING
+	hop_t = cur_hop_dur() * minf(0.10 * float(frog_chain), 0.30)
+	hop_lift_bonus = maxf(pow(0.86, float(frog_chain)), 0.55)
+	air_hops = 0                                   # a fresh takeoff — DOUBLE HOP recharges
+	squash = 1.3
+	duck_shake = maxf(duck_shake, 0.15)
+	var pay: int = 2 * frog_chain
+	run_feathers += pay
+	_st("frog_bounces")
+	_add_loft(0.08)
+	_add_heat(0.12)                                # a clean trick stokes the ON FIRE streak
+	hop_events.append(anim_t)                      # the brood boings along
+	_sfx("mega", 1.5 + 0.08 * minf(float(frog_chain), 6.0), -6.0)
+	_sfx("ribbit", 1.05 + 0.07 * minf(float(frog_chain), 6.0), -4.0)
+	_float_text(l.x, l.y - 30.0, "BOING! +%d" % pay, Color(0.65, 0.9, 0.55))
+	_spawn_parts(l.x, l.y, 10, Color(0.6, 0.45, 0.3), 190.0)     # woodchips off the springboard
+	ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 70.0, "col": Color(0.65, 0.9, 0.55)})
+	if l.get("frog", false) and not l.get("frog_gone", true):    # his log! he LOVES it
+		l.frog_gone = true
+		_codex_see("frog")
+		_st("frogs")
+		_sfx("ribbit", 1.3, 2.0)
+		_float_text(l.x - l.w * 0.3, l.y - 18.0, "RIBBIT!!", Color(0.65, 0.9, 0.55))
+		ripples.append({"x": l.x - l.w * 0.3, "y": l.y, "t": 0.0, "max": 50.0})
 
 # ---- GERALD THE IMMENSE ------------------------------------------------------
 # the loaf drifts down and homes to the duck; when it arrives, the bonkers feast begins
@@ -8484,6 +8541,9 @@ func _collide() -> void:
 			elif l.get("spring", false):
 				smashed = l                      # golden log: it's a trampoline
 				hyper_jump()
+				break
+			elif _up("froglegs") > 0 and ((state == St.HOPPING and hop_t / cur_hop_dur() > 0.5) or land_grace > 0.0):
+				_frog_bounce(l)                  # FROG LEGS: came DOWN on it — BOING
 				break
 			elif fire_t > 0.0:
 				smashed = l                      # ON FIRE: the log simply melts
@@ -15631,7 +15691,7 @@ func _bot_persona_params() -> Vector2:
 # draft/boon weights: defense keeps the bot alive to SEE bosses 2-3 (weights ~ what a decent player values)
 const BOT_DRAFT_W := {"shield": 5.0, "duckling": 3.5, "trio": 3.0, "school": 2.5, "double": 2.5,
 	"spring": 2.0, "zen": 2.0, "springy": 1.8, "wingducks": 1.8, "thunder": 1.6, "loft": 1.5,
-	"bounce": 1.4, "tiny": 1.4, "magnet": 1.2, "snacks": 1.2}
+	"bounce": 1.4, "tiny": 1.4, "froglegs": 1.4, "magnet": 1.2, "snacks": 1.2}
 const BOT_BOON_W := {"goosedown": 4.0, "secondwind": 3.5, "phoenix": 3.5, "clutch": 3.0,
 	"gosling_guard": 3.0, "lucky": 2.0, "tailwind": 1.6, "slipstream": 1.6, "momentum": 1.4}
 
