@@ -35,11 +35,14 @@ HEAD = f"""{MARKER}
 <meta name="apple-mobile-web-app-title" content="DUCKODUCKO">
 <link rel="manifest" href="manifest.webmanifest">
 <script>
-// WEB PERF: cap the canvas backing store at CSS resolution (devicePixelRatio 1).
-// A DPR-3 phone otherwise rasterizes ~9x the pixels of the 540x960 design through
-// several full-screen layers. The compositor upscales with crisp nearest instead
-// (image-rendering below) — free, and correct for pixel art.
-try {{ Object.defineProperty(window, "devicePixelRatio", {{ value: 1 }}); }} catch (e) {{}}
+// WEB PERF: render at HALF device resolution. Full DPR made phones rasterize ~9x the
+// pixels of the 540x960 design (the lag); a hard DPR-1 cap made vector text upscale by
+// a FRACTIONAL factor (ragged stairs — unreadable). Half-DPR keeps ~4x the fill savings
+// AND the compositor upscale is exactly 2x: clean integer blocks, readable text.
+try {{
+  var _dpr = Math.max(1, (window.devicePixelRatio || 1) / 2);
+  Object.defineProperty(window, "devicePixelRatio", {{ value: _dpr }});
+}} catch (e) {{}}
 </script>
 <style>canvas {{ image-rendering: pixelated; }}</style>"""
 
