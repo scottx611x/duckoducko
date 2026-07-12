@@ -63,6 +63,19 @@ def main(docs):
         print("web_meta: already present")
         return
     html = html.replace("</head>", "\n" + HEAD + "\n</head>", 1)
+
+    # VERSION THE PCK: a stale-cached index.html can never mismatch its pck again — each
+    # release's html names its own pack file (Chrome's PWA cache bit us three times)
+    vt = os.path.join(docs, "version.txt")
+    pck = os.path.join(docs, "index.pck")
+    if os.path.exists(vt) and os.path.exists(pck):
+        ver = open(vt).read().strip()
+        newpck = "index-v%s.pck" % ver
+        os.rename(pck, os.path.join(docs, newpck))
+        html = html.replace('"executable":"index"', '"executable":"index","mainPack":"%s"' % newpck)
+        html = html.replace('"index.pck"', '"%s"' % newpck)
+        print("web_meta: pck versioned -> %s" % newpck)
+
     with open(index, "w", encoding="utf-8") as fh:
         fh.write(html)
     print("web_meta: injected social meta + PWA manifest")

@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.44"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.45"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -958,6 +958,10 @@ var setting_show_fps := false   # SHOW FPS — perf pill so mobile lag reports c
 var fps_worst_dt := 0.0         # worst frame delta in the current 3s window
 var fps_win_t := 0.0
 var fps_lo := 0.0               # the last window's worst moment (as fps)
+var gpu_unmasked := ""          # web: the REAL renderer string (Godot only sees "WebKit WebGL")
+var hitch_last := -9.0          # HITCH TRACER: last logged stall (throttle)
+var last_io := "-"              # what expensive thing happened most recently (save / lazy art load)
+var last_io_t := -999.0
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
 var tex_hawk_lead := []         # his BACK view — flying away, leading the Thermals
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
@@ -1836,9 +1840,12 @@ var sfx_next := 0
 
 # the web build quietly asks the site which version is CURRENT — stale caches finally
 # announce themselves instead of gaslighting the playtester (Scott, twice now)
+var _upd_last_check := 0.0      # unix time of the last version ping
+
 func _check_web_update() -> void:
 	if not OS.has_feature("web"):
 		return
+	_upd_last_check = Time.get_unix_time_from_system()
 	var hr := HTTPRequest.new()
 	add_child(hr)
 	hr.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray):
@@ -1847,7 +1854,9 @@ func _check_web_update() -> void:
 			if v != "" and v != GAME_VERSION:
 				update_avail = v
 		hr.queue_free())
-	hr.request("version.txt?ts=%d" % Time.get_ticks_msec())
+	# WALL-CLOCK buster — ticks_msec restarts every boot at near-identical values, so Chrome
+	# kept serving ONE cached version.txt forever (why the update banner never showed)
+	hr.request("version.txt?ts=%d" % int(Time.get_unix_time_from_system()))
 
 func _ready() -> void:
 	_check_web_update.call_deferred()
@@ -2168,6 +2177,17 @@ func _ready() -> void:
 	# the GPU the browser ACTUALLY handed us — "SwiftShader" here = Chrome blocklisted the real
 	# GPU and is software-rendering every frame on the CPU (the "tremendously laggy" smoking gun)
 	_log("[env] gpu: %s" % RenderingServer.get_video_adapter_name())
+	if OS.has_feature("web"):
+		# Godot only sees the MASKED string ("WebKit WebGL") — ask the browser for the real one
+		var _gv = JavaScriptBridge.eval("""(function(){try{
+			var c=document.createElement('canvas');
+			var g=c.getContext('webgl2')||c.getContext('webgl');
+			if(!g)return 'no-webgl';
+			var d=g.getExtension('WEBGL_debug_renderer_info');
+			return d?String(g.getParameter(d.UNMASKED_RENDERER_WEBGL)):'masked';
+		}catch(e){return 'err'}})()""", true)
+		gpu_unmasked = str(_gv) if _gv != null else ""
+		_log("[env] gpu unmasked: %s" % gpu_unmasked)
 	name_edit.text = duck_name
 	reset_game()
 	_enter_menu()
@@ -2832,6 +2852,7 @@ func _dev_reset_data() -> void:
 	get_tree().reload_current_scene()
 
 func _save() -> void:
+	last_io = "save"; last_io_t = anim_t             # hitch-tracer breadcrumb
 	if bot_mode:
 		return          # sims NEVER persist — mid-run saves (boss-clear, unlocks) kept
 		                # leaking scootybooty into the save even after the death/win gates
@@ -3717,6 +3738,10 @@ func _pick_menu_flotsam() -> void:
 
 func _enter_menu() -> void:
 	in_menu = true
+	# a long-lived PWA process only ever checked for updates at boot — re-ping on every
+	# menu return (throttled) so a phone that stays open for days still learns of releases
+	if update_avail == "" and Time.get_unix_time_from_system() - _upd_last_check > 300.0:
+		_check_web_update()
 	bigday = false                                  # Big Day ends at the menu (tap it again to retry today)
 	bigday_modal = false
 	in_select = false
@@ -6237,6 +6262,20 @@ func _process(delta: float) -> void:
 			fps_lo = 1.0 / maxf(fps_worst_dt, 0.0001)
 			fps_worst_dt = 0.0
 			fps_win_t = 0.0
+		# HITCH TRACER: any frame past 80ms logs its context to the app log (VIEW APP LOGS)
+		# — the phone tells us WHAT froze instead of us guessing from an ocean away
+		if delta > 0.08 and anim_t > 6.0 and anim_t - hitch_last > 0.5:
+			hitch_last = anim_t
+			var _scr := "play"
+			if in_menu: _scr = "menu"
+			elif in_settings: _scr = "settings"
+			elif in_select: _scr = "select"
+			elif in_shop: _scr = "shop"
+			elif in_codex: _scr = "codex"
+			elif in_stats: _scr = "stats"
+			_log("[hitch] %dms %s logs=%d parts=%d props=%d env=%d fx=%d boss=%s io=%s %.1fs-ago" % [
+				int(delta * 1000.0), _scr, logs.size(), parts.size(), props.size(), env_scenery.size(),
+				ripples.size() + floaties.size(), "y" if boss != null else "n", last_io, anim_t - last_io_t])
 	if fork_choosing and fork_pick >= 0 and anim_t - fork_pick_t > 0.42:
 		var _fp: int = fork_pick
 		fork_pick = -1
@@ -11001,7 +11040,8 @@ func _draw_settings() -> void:
 	_otext(Vector2(0, (884.0 if cheat_unlock else 784.0)), "tap me to test SFX", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 922.0), "DUCKODUCKO  v%s" % GAME_VERSION, 12, Color(1, 1, 1, 0.3), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	# which GPU the browser gave us — "SwiftShader" = software rendering (report that!)
-	_otext(Vector2(0, 940.0), "gpu: %s" % RenderingServer.get_video_adapter_name(), 11, Color(1, 1, 1, 0.28), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+	var _gstr := gpu_unmasked if gpu_unmasked != "" and gpu_unmasked != "masked" else RenderingServer.get_video_adapter_name()
+	_otext(Vector2(0, 940.0), "gpu: %s" % _gstr, 11, Color(1, 1, 1, 0.28), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	if update_avail != "":                             # a newer build is LIVE — this copy is cached
 		_otext(Vector2(0, 902.0), "v%s is OUT — close this tab & reopen to update" % update_avail, 13,
 			Color(1.0, 0.85, 0.35, 0.7 + 0.3 * sin(anim_t * 3.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
@@ -13719,6 +13759,7 @@ func _load_wear3d(hid: String) -> Dictionary:
 	if not ResourceLoader.exists(base + "idle.png"):
 		wear3d[vkey] = {}
 		return {}
+	last_io = "wear3d:" + hid; last_io_t = anim_t    # hitch-tracer breadcrumb (lazy art load)
 	wear3d[vkey] = _load_wear_set(base)
 	return wear3d[vkey]
 
@@ -14049,6 +14090,7 @@ func _pick_duck_tex(h: float, cur):
 var tex_flapspin := {}   # species -> [24] wings-out turntable frames (lazy) — flap plays at the CURRENT yaw
 func _flapspin(sp: String) -> Array:
 	if not tex_flapspin.has(sp):
+		last_io = "flapspin:" + sp; last_io_t = anim_t   # hitch-tracer breadcrumb (24 lazy loads)
 		var arr: Array = []
 		if ResourceLoader.exists("res://art/%s_flap_00.png" % sp):
 			for i in 24:
