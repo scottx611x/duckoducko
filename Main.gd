@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.41"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.42"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1848,6 +1848,7 @@ func _check_web_update() -> void:
 func _ready() -> void:
 	_check_web_update.call_deferred()
 	_log("[boot] 1 ready start")
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # lets water/banks tile in ONE draw_texture_rect (web frame budget)
 	font = ThemeDB.fallback_font
 
 	for r in ROSTER:
@@ -2407,6 +2408,24 @@ func _ready() -> void:
 		await get_tree().create_timer(0.3).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_sky.png")
+		get_tree().quit()
+	elif "--perfshot" in OS.get_cmdline_user_args():     # frame-time + draw-call census during busy gameplay
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear()
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = 0
+		distance = 12000.0                       # deep enough for full scenery/events
+		await get_tree().create_timer(1.5).timeout   # warm up: spawns fill in
+		var _pf := 0; var _pdc := 0.0; var _pproc := 0.0
+		var _pt0 := Time.get_ticks_usec()
+		while _pf < 300:
+			await get_tree().process_frame
+			_pdc += float(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+			_pproc += Performance.get_monitor(Performance.TIME_PROCESS)
+			_pf += 1
+		print("[PERF] avg_frame_ms=%.2f  avg_draw_calls=%.0f  avg_process_ms=%.2f" % [
+			(Time.get_ticks_usec() - _pt0) / 1000.0 / 300.0, _pdc / 300.0, _pproc / 300.0 * 1000.0])
 		get_tree().quit()
 	elif "--bounceshot" in OS.get_cmdline_user_args():   # FROG LEGS: descend onto a frog's log -> BOING (prints frog_chain)
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -11892,15 +11911,15 @@ func _draw() -> void:
 		var t := tex_water.get_size()
 		var off := fmod(scroll, t.y)
 		var y := -t.y + off
-		while y < VIEW.y:
-			# a SOFT gradient band across the sweep line (over ~160px) instead of a hard jagged cut
-			var fade: float = clampf((sweep_y - (y + t.y * 0.5)) / 220.0 + 0.5, 0.0, 1.0)
-			var tint := tint_old.lerp(tint_new, fade)
-			var x := 0.0
-			while x < VIEW.x:
-				draw_texture(tex_water, Vector2(x, y), tint)
-				x += t.x
-			y += t.y
+		if theme_sweep >= 1.0 or tint_old == tint_new:   # steady state: the WHOLE sheet in one tiled call
+			draw_texture_rect(tex_water, Rect2(0.0, y, VIEW.x, VIEW.y - y), true, tint_new)
+		else:
+			while y < VIEW.y:
+				# a SOFT gradient band across the sweep line (over ~160px) instead of a hard jagged cut
+				var fade: float = clampf((sweep_y - (y + t.y * 0.5)) / 220.0 + 0.5, 0.0, 1.0)
+				var tint := tint_old.lerp(tint_new, fade)
+				draw_texture_rect(tex_water, Rect2(0.0, y, VIEW.x, t.y), true, tint)   # one tiled ROW
+				y += t.y
 	else:
 		var base := Color(0.30, 0.62, 0.78)
 		draw_rect(Rect2(Vector2.ZERO, VIEW), base * tint_new)
@@ -11912,12 +11931,7 @@ func _draw() -> void:
 		var off2 := fmod(scroll * 1.22 + 31.0, t2.y)
 		var y2 := -t2.y + off2
 		var sha := 0.10 + 0.05 * sin(anim_t * 0.8)
-		while y2 < VIEW.y:
-			var x2 := 17.0 - t2.x
-			while x2 < VIEW.x:
-				draw_texture(tex_water, Vector2(x2, y2), Color(1, 1, 1, sha))
-				x2 += t2.x
-			y2 += t2.y
+		draw_texture_rect(tex_water, Rect2(17.0 - t2.x, y2, VIEW.x + t2.x, VIEW.y - y2), true, Color(1, 1, 1, sha))
 
 	# PER-BIOME WATER: a colour WASH so each pond differs (the variety), + GENTLE caustics (calm, non-distracting)
 	if has_art:
@@ -11931,12 +11945,16 @@ func _draw() -> void:
 		var bs := tex_bank_l.get_size()
 		var boff := fmod(scroll, bs.y)
 		var by := -bs.y + boff
-		while by < VIEW.y:
-			var bfade: float = clampf((sweep_y - (by + bs.y * 0.5)) / 220.0 + 0.5, 0.0, 1.0)
-			var btint := tint_old.lerp(tint_new, bfade)   # soft fade, matching the water (no hard cut)
-			draw_texture(tex_bank_l, Vector2(0, by), btint)
-			draw_texture(tex_bank_r, Vector2(VIEW.x - bs.x, by), btint)
-			by += bs.y
+		if theme_sweep >= 1.0 or tint_old == tint_new:   # steady state: each bank = one tiled strip
+			draw_texture_rect(tex_bank_l, Rect2(0.0, by, bs.x, VIEW.y - by), true, tint_new)
+			draw_texture_rect(tex_bank_r, Rect2(VIEW.x - bs.x, by, bs.x, VIEW.y - by), true, tint_new)
+		else:
+			while by < VIEW.y:
+				var bfade: float = clampf((sweep_y - (by + bs.y * 0.5)) / 220.0 + 0.5, 0.0, 1.0)
+				var btint := tint_old.lerp(tint_new, bfade)   # soft fade, matching the water (no hard cut)
+				draw_texture(tex_bank_l, Vector2(0, by), btint)
+				draw_texture(tex_bank_r, Vector2(VIEW.x - bs.x, by), btint)
+				by += bs.y
 
 	if in_menu:
 		_draw_menu()
