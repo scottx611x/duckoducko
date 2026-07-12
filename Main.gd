@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.47"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.48"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -2501,10 +2501,15 @@ func _ready() -> void:
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		start_game()
 		tut_mode = false; in_shrine = false; shrine_boons = []
-		_force_boss(1)                               # SNAPZ, mid SHELL CYCLONE
-		boss.phase = "fight"; boss.dive_stage = "warn"; boss.chomp_lane = 2; boss.dive_x = VIEW.x * 0.73; boss.t = 0.25
-		boss.x = VIEW.x * 0.46; boss.y = BASE_Y - 36.0; boss.spin_vx = 300.0; boss.spin_vy = 150.0
-		boss.sub = 0.0; boss.yaw = 1.4
+		var _bk2 := _arg_val(OS.get_cmdline_user_args(), "--kind", "")
+		if _bk2 != "":                               # any boss at his float pose (HP-bar overlap checks etc.)
+			_force_boss(0, _bk2)
+			boss.phase = "fight"; boss.x = VIEW.x * 0.5; boss.y = 150.0
+		else:
+			_force_boss(1)                           # default: SNAPZ, mid SHELL CYCLONE
+			boss.phase = "fight"; boss.dive_stage = "warn"; boss.chomp_lane = 2; boss.dive_x = VIEW.x * 0.73; boss.t = 0.25
+			boss.x = VIEW.x * 0.46; boss.y = BASE_Y - 36.0; boss.spin_vx = 300.0; boss.spin_vy = 150.0
+			boss.sub = 0.0; boss.yaw = 1.4
 		await get_tree().create_timer(0.3).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_boss.png")
@@ -12928,21 +12933,7 @@ func _draw_boss_gerald() -> void:
 				Color(0.06, 0.01, 0.02, 0.95), Color(0.7, 0.05, 0.08, 0.95), 19, 1.0 if s_above else -1.0, true,
 				Color(0.62, 0.0, 0.02), Color(1.0, 0.16, 0.10), 0.0, boss.get("say_wiggle", false))
 	_draw_boss_intro()
-	# HP pips, top center — width adapts so a long health bar never clips off-screen
-	# slim segmented HP bar, tucked BELOW the top HUD (the old circle row sat on the timeline)
-	var pips: int = boss.max_hp
-	var bw3: float = minf(300.0, VIEW.x - 150.0)
-	var x0 := VIEW.x * 0.5 - bw3 * 0.5
-	var hy := 112.0
-	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 18.0), Color(0.03, 0.06, 0.10, 0.74))
-	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 2.0), Color(0.92, 0.3, 0.22, 0.9))
-	var segw: float = bw3 / float(maxi(pips, 1))
-	for i in pips:
-		draw_rect(Rect2(x0 + segw * i + 1.0, hy, segw - 2.0, 8.0),
-			Color(0.94, 0.28, 0.2) if i < boss.hp else Color(1, 1, 1, 0.10))
-	var _bn2: String = str(boss.get("title", ""))
-	if _bn2 != "":
-		draw_string(font, Vector2(x0, hy - 10.0), _bn2, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
+	_draw_boss_hpbar()
 
 # SNAPZ: the snapping turtle lunging from the water, with a submersion overlay.
 func _draw_boss_pike() -> void:
@@ -13391,20 +13382,28 @@ func _draw_boss_pips() -> void:
 		draw_rect(Rect2(brect.end.x - 3.0, brect.position.y, 3.0, brect.size.y), Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
 		draw_string(font, Vector2(brect.position.x + 18.0, brect.position.y + 24.0), boss_banner,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(boss_banner_col.r, boss_banner_col.g, boss_banner_col.b, ba))
-	# slim segmented HP bar, tucked BELOW the top HUD (the old circle row sat on the timeline)
+	_draw_boss_hpbar()
+
+# slim segmented HP bar, tucked BELOW the top HUD (the old circle row sat on the timeline).
+# when the boss himself drifts up under it (Bongo floats at y=150, face-first into the
+# backplate) the whole bar GHOSTS so the chrome never hides the character.
+func _draw_boss_hpbar() -> void:
 	var pips: int = boss.max_hp
 	var bw3: float = minf(300.0, VIEW.x - 150.0)
 	var x0 := VIEW.x * 0.5 - bw3 * 0.5
 	var hy := 112.0
-	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 18.0), Color(0.03, 0.06, 0.10, 0.74))
-	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 2.0), Color(0.92, 0.3, 0.22, 0.9))
+	var ba := 1.0
+	if boss.y < 300.0 and absf(boss.x - VIEW.x * 0.5) < bw3 * 0.5 + 90.0:
+		ba = 0.34
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 18.0), Color(0.03, 0.06, 0.10, 0.74 * ba))
+	draw_rect(Rect2(x0 - 5.0, hy - 5.0, bw3 + 10.0, 2.0), Color(0.92, 0.3, 0.22, 0.9 * ba))
 	var segw: float = bw3 / float(maxi(pips, 1))
 	for i in pips:
 		draw_rect(Rect2(x0 + segw * i + 1.0, hy, segw - 2.0, 8.0),
-			Color(0.94, 0.28, 0.2) if i < boss.hp else Color(1, 1, 1, 0.10))
+			Color(0.94, 0.28, 0.2, ba) if i < boss.hp else Color(1, 1, 1, 0.10 * ba))
 	var _bn2: String = str(boss.get("title", ""))
 	if _bn2 != "":
-		draw_string(font, Vector2(x0, hy - 10.0), _bn2, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6))
+		draw_string(font, Vector2(x0, hy - 10.0), _bn2, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.6 * ba))
 
 # a distant migrating V drifting across the sky — flapping silhouettes, pure ambiance (for the birder)
 func _draw_flock() -> void:
