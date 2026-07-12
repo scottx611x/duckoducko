@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.43"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.44"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -2165,6 +2165,9 @@ func _ready() -> void:
 	_log("[env] %s · godot %s · view %dx%d · mem %.0fMB" % [
 		OS.get_name(), Engine.get_version_info().get("string", "?"),
 		int(VIEW.x), int(VIEW.y), OS.get_static_memory_usage() / 1048576.0])
+	# the GPU the browser ACTUALLY handed us — "SwiftShader" here = Chrome blocklisted the real
+	# GPU and is software-rendering every frame on the CPU (the "tremendously laggy" smoking gun)
+	_log("[env] gpu: %s" % RenderingServer.get_video_adapter_name())
 	name_edit.text = duck_name
 	reset_game()
 	_enter_menu()
@@ -10997,6 +11000,8 @@ func _draw_settings() -> void:
 		_blit_centered(fr, Vector2(VIEW.x * 0.5, (830.0 if cheat_unlock else 730.0) + sin(anim_t * 2.0) * 6.0), 3.5)
 	_otext(Vector2(0, (884.0 if cheat_unlock else 784.0)), "tap me to test SFX", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 922.0), "DUCKODUCKO  v%s" % GAME_VERSION, 12, Color(1, 1, 1, 0.3), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
+	# which GPU the browser gave us — "SwiftShader" = software rendering (report that!)
+	_otext(Vector2(0, 940.0), "gpu: %s" % RenderingServer.get_video_adapter_name(), 11, Color(1, 1, 1, 0.28), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	if update_avail != "":                             # a newer build is LIVE — this copy is cached
 		_otext(Vector2(0, 902.0), "v%s is OUT — close this tab & reopen to update" % update_avail, 13,
 			Color(1.0, 0.85, 0.35, 0.7 + 0.3 * sin(anim_t * 3.0)), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
