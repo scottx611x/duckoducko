@@ -33,7 +33,15 @@ HEAD = f"""{MARKER}
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DUCKODUCKO">
-<link rel="manifest" href="manifest.webmanifest">"""
+<link rel="manifest" href="manifest.webmanifest">
+<script>
+// WEB PERF: cap the canvas backing store at CSS resolution (devicePixelRatio 1).
+// A DPR-3 phone otherwise rasterizes ~9x the pixels of the 540x960 design through
+// several full-screen layers. The compositor upscales with crisp nearest instead
+// (image-rendering below) — free, and correct for pixel art.
+try {{ Object.defineProperty(window, "devicePixelRatio", {{ value: 1 }}); }} catch (e) {{}}
+</script>
+<style>canvas {{ image-rendering: pixelated; }}</style>"""
 
 MANIFEST = {
     "name": "DUCKODUCKO",

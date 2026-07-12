@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.46"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.47"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -970,6 +970,12 @@ var _pf_prev_d2n := 0           # PREVIOUS frame: draw-callback -> next process 
 var sfx_window := 0             # sfx plays this second
 var sfx_last1s := 0             # ...and the last full second's count
 var sfx_win_t := 0.0
+var jank33 := 0                 # frames >33ms in the current 3s window ("feels laggy" quantified)
+var jank33_shown := 0           # ...and last window's count (the pill)
+var pace_frames := 0            # [pace] census: frames + time since the last 10s report
+var pace_t := 0.0
+var pace_j33 := 0
+var pace_j50 := 0
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
 var tex_hawk_lead := []         # his BACK view — flying away, leading the Thermals
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
@@ -6285,10 +6291,24 @@ func _process(delta: float) -> void:
 	if setting_show_fps:                              # track the worst moment per 3s window
 		fps_worst_dt = maxf(fps_worst_dt, delta)
 		fps_win_t += delta
+		if delta > 0.033:
+			jank33 += 1
 		if fps_win_t >= 3.0:
 			fps_lo = 1.0 / maxf(fps_worst_dt, 0.0001)
+			jank33_shown = jank33
+			jank33 = 0
 			fps_worst_dt = 0.0
 			fps_win_t = 0.0
+		# [pace] census every 10s -> app log: the "carpet of small jank" the hitch tracer
+		# can't see (avg frame cost + how many frames missed 30/20 fps)
+		pace_frames += 1
+		pace_t += delta
+		if delta > 0.033: pace_j33 += 1
+		if delta > 0.05: pace_j50 += 1
+		if pace_t >= 10.0:
+			_log("[pace] avg=%.1fms j33=%d j50=%d over %ds" % [
+				pace_t * 1000.0 / float(maxi(pace_frames, 1)), pace_j33, pace_j50, int(pace_t)])
+			pace_frames = 0; pace_t = 0.0; pace_j33 = 0; pace_j50 = 0
 		sfx_win_t += delta                            # rolling 1s sfx census
 		if sfx_win_t >= 1.0:
 			sfx_last1s = sfx_window
@@ -12516,7 +12536,7 @@ func _draw_fps_pill() -> void:
 		return
 	var _ftxt := "%d fps" % Engine.get_frames_per_second()
 	if fps_lo > 0.0:
-		_ftxt += " · worst %d" % int(fps_lo + 0.5)
+		_ftxt += " · worst %d · jank %d" % [int(fps_lo + 0.5), jank33_shown]
 	_otext(Vector2(8.0, VIEW.y - 10.0), _ftxt, 13, Color(0.6, 1.0, 0.7, 0.85), 300.0, HORIZONTAL_ALIGNMENT_LEFT, 3)
 
 func _dev_icon(act: String):

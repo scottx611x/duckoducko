@@ -22,6 +22,12 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 window/handheld/orientation=1
 
+[audio]
+
+; half the main-thread mixing DSP on the no-threads web build (chiptune audio
+; barely notices 22kHz; phones notice the reclaimed frame budget)
+driver/mix_rate=22050
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
