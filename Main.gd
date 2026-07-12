@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.42"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.43"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -954,6 +954,10 @@ var big_quacks := false         # whimsy toggle: every quack is comically deep
 var ducklings_wear := true      # cosmetic toggle: your brood sports your equipped hat too
 var setting_shake := true       # SCREEN SHAKE — impact judder (off for comfort)
 var setting_reduce_flash := false  # REDUCED FLASHING — dampen strobes/flashes (photosensitivity)
+var setting_show_fps := false   # SHOW FPS — perf pill so mobile lag reports come with numbers
+var fps_worst_dt := 0.0         # worst frame delta in the current 3s window
+var fps_win_t := 0.0
+var fps_lo := 0.0               # the last window's worst moment (as fps)
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
 var tex_hawk_lead := []         # his BACK view — flying away, leading the Thermals
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
@@ -2409,6 +2413,16 @@ func _ready() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_sky.png")
 		get_tree().quit()
+	elif "--settingsshot" in OS.get_cmdline_user_args():  # settings screen incl. dev rows + FPS pill
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		setting_show_fps = true
+		in_menu = false; in_settings = true
+		if name_edit != null:
+			name_edit.visible = false
+		await get_tree().create_timer(3.4).timeout       # long enough for a full fps window
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_settings.png")
+		get_tree().quit()
 	elif "--perfshot" in OS.get_cmdline_user_args():     # frame-time + draw-call census during busy gameplay
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
 		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
@@ -2754,6 +2768,7 @@ func _load_save() -> void:
 		big_quacks = cfg.get_value("save", "big_quacks", false)
 		setting_shake = cfg.get_value("save", "setting_shake", true)
 		setting_reduce_flash = cfg.get_value("save", "setting_reduce_flash", false)
+		setting_show_fps = cfg.get_value("save", "setting_show_fps", false)
 		jukebox_owned = cfg.get_value("save", "jukebox_owned", ["music_default"])
 		jukebox_bed = cfg.get_value("save", "jukebox_bed", "music_default")
 		tutorial_seen = cfg.get_value("save", "tutorial_seen", false)
@@ -2841,6 +2856,7 @@ func _save() -> void:
 	cfg.set_value("save", "big_quacks", big_quacks)
 	cfg.set_value("save", "setting_shake", setting_shake)
 	cfg.set_value("save", "setting_reduce_flash", setting_reduce_flash)
+	cfg.set_value("save", "setting_show_fps", setting_show_fps)
 	cfg.set_value("save", "jukebox_owned", jukebox_owned)
 	cfg.set_value("save", "jukebox_bed", jukebox_bed)
 	cfg.set_value("save", "tutorial_seen", tutorial_seen)
@@ -6211,6 +6227,13 @@ func _record_run() -> void:
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
 	anim_t += delta
+	if setting_show_fps:                              # track the worst moment per 3s window
+		fps_worst_dt = maxf(fps_worst_dt, delta)
+		fps_win_t += delta
+		if fps_win_t >= 3.0:
+			fps_lo = 1.0 / maxf(fps_worst_dt, 0.0001)
+			fps_worst_dt = 0.0
+			fps_win_t = 0.0
 	if fork_choosing and fork_pick >= 0 and anim_t - fork_pick_t > 0.42:
 		var _fp: int = fork_pick
 		fork_pick = -1
@@ -10951,18 +10974,19 @@ func _draw_settings() -> void:
 	_settings_slider(276.0, "MUSIC", music_vol, -40.0, 0.0, "music")
 	_settings_slider(338.0, "SFX", sfx_vol, -40.0, 6.0, "sfx")
 	_settings_toggle(400.0, "MEGA-DEEP QUACKS", big_quacks, "bigquacks")
-	_settings_toggle(450.0, "DUCKLING BROOD MATCHES YOU", ducklings_wear, "broodwear")
-	_settings_toggle(500.0, "SCREEN SHAKE", setting_shake, "shake")
-	_settings_toggle(550.0, "REDUCED FLASHING", setting_reduce_flash, "reduceflash")
-	var rtb := Rect2(40.0, 602.0, VIEW.x - 80.0, 40.0)   # replay RUSTY's tutorial
+	_settings_toggle(446.0, "DUCKLING BROOD MATCHES YOU", ducklings_wear, "broodwear")
+	_settings_toggle(492.0, "SCREEN SHAKE", setting_shake, "shake")
+	_settings_toggle(538.0, "REDUCED FLASHING", setting_reduce_flash, "reduceflash")
+	_settings_toggle(584.0, "SHOW FPS", setting_show_fps, "showfps")
+	var rtb := Rect2(40.0, 632.0, VIEW.x - 80.0, 40.0)   # replay RUSTY's tutorial
 	_draw_button(rtb, "> PLAY TUTORIAL", 18, true)
 	settings_hits.append({"rect": rtb, "act": "replaytut"})
 	# DEV (scootybooty only): wipe the save back to a fresh install
 	if cheat_unlock:
-		var lvb := Rect2(40.0, 652.0, VIEW.x - 80.0, 38.0)   # scootybooty: VIEW the in-app diagnostic log
+		var lvb := Rect2(40.0, 682.0, VIEW.x - 80.0, 38.0)   # scootybooty: VIEW the in-app diagnostic log
 		_draw_button(lvb, "> VIEW APP LOGS (%d lines)" % app_log.size(), 16)
 		settings_hits.append({"rect": lvb, "act": "viewlogs"})
-		var dvb := Rect2(40.0, 698.0, VIEW.x - 80.0, 38.0)
+		var dvb := Rect2(40.0, 726.0, VIEW.x - 80.0, 38.0)
 		var armed: bool = anim_t - devreset_arm < 3.0
 		_draw_button(dvb, "! TAP AGAIN TO CONFIRM WIPE" if armed else "~ RESET ALL DATA (dev)", 17)
 		settings_hits.append({"rect": dvb, "act": "devreset"})
@@ -10970,8 +10994,8 @@ func _draw_settings() -> void:
 	if has_art:
 		var sp: String = last_species if ducks.has(last_species) else "mallard"
 		var fr = _spin_frame(sp, anim_t * 0.4, anim_t - menu_quack_t < 0.4)
-		_blit_centered(fr, Vector2(VIEW.x * 0.5, (812.0 if cheat_unlock else 712.0) + sin(anim_t * 2.0) * 6.0), 3.5)
-	_otext(Vector2(0, (866.0 if cheat_unlock else 766.0)), "tap me to test SFX", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		_blit_centered(fr, Vector2(VIEW.x * 0.5, (830.0 if cheat_unlock else 730.0) + sin(anim_t * 2.0) * 6.0), 3.5)
+	_otext(Vector2(0, (884.0 if cheat_unlock else 784.0)), "tap me to test SFX", 13, Color(1, 1, 1, 0.45), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 3)
 	_otext(Vector2(0, 922.0), "DUCKODUCKO  v%s" % GAME_VERSION, 12, Color(1, 1, 1, 0.3), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 2)
 	if update_avail != "":                             # a newer build is LIVE — this copy is cached
 		_otext(Vector2(0, 902.0), "v%s is OUT — close this tab & reopen to update" % update_avail, 13,
@@ -10994,6 +11018,7 @@ func _settings_press(pos: Vector2) -> void:
 				"broodwear": ducklings_wear = not ducklings_wear; _sfx("click")
 				"shake": setting_shake = not setting_shake; _sfx("click")
 				"reduceflash": setting_reduce_flash = not setting_reduce_flash; _sfx("click")
+				"showfps": setting_show_fps = not setting_show_fps; _sfx("click")
 				"viewlogs":                            # scootybooty: open the in-app diagnostic log
 					in_settings = false; in_logs = true; _sfx("click")
 					return
@@ -11899,6 +11924,7 @@ func _draw() -> void:
 		return
 	if in_settings:
 		_draw_settings()
+		_draw_fps_pill()
 		return
 	var scroll: float = anim_t * 80.0 if in_menu else distance
 
@@ -11958,6 +11984,7 @@ func _draw() -> void:
 
 	if in_menu:
 		_draw_menu()
+		_draw_fps_pill()
 		return
 
 	if in_select:
@@ -12396,6 +12423,17 @@ func _draw() -> void:
 	if cheat_unlock and alive and boss == null and not drafting and not paused and not in_menu \
 			and not in_select and not in_shop and not in_shrine:
 		_draw_dev_menu()
+	_draw_fps_pill()
+
+# SHOW FPS (settings): live rate + the worst moment of the last 3s window, bottom-left.
+# turns mobile "it's laggy" reports into numbers.
+func _draw_fps_pill() -> void:
+	if not setting_show_fps or booting:
+		return
+	var _ftxt := "%d fps" % Engine.get_frames_per_second()
+	if fps_lo > 0.0:
+		_ftxt += " · worst %d" % int(fps_lo + 0.5)
+	_otext(Vector2(8.0, VIEW.y - 10.0), _ftxt, 13, Color(0.6, 1.0, 0.7, 0.85), 300.0, HORIZONTAL_ALIGNMENT_LEFT, 3)
 
 func _dev_icon(act: String):
 	match act:
