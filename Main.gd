@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.45"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.46"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -962,6 +962,14 @@ var gpu_unmasked := ""          # web: the REAL renderer string (Godot only sees
 var hitch_last := -9.0          # HITCH TRACER: last logged stall (throttle)
 var last_io := "-"              # what expensive thing happened most recently (save / lazy art load)
 var last_io_t := -999.0
+var save_dirty := false         # codex discovery mid-run: save deferred to death/menu
+var _pf_proc_us := 0            # tracer v2: this frame's _process start (usec)
+var _pf_draw_us := 0            # ...and its _draw-callback start
+var _pf_prev_p2d := 0           # PREVIOUS frame: process-start -> draw-callback ms (script side)
+var _pf_prev_d2n := 0           # PREVIOUS frame: draw-callback -> next process ms (draw+engine+audio)
+var sfx_window := 0             # sfx plays this second
+var sfx_last1s := 0             # ...and the last full second's count
+var sfx_win_t := 0.0
 var tex_hawk := []              # RUSTY's 3 glide-flap frames
 var tex_hawk_lead := []         # his BACK view — flying away, leading the Thermals
 var tex_hawk_screech: Texture2D # RUSTY mid-SCREECH, beak agape (shop tap reaction)
@@ -2174,6 +2182,11 @@ func _ready() -> void:
 	_log("[env] %s · godot %s · view %dx%d · mem %.0fMB" % [
 		OS.get_name(), Engine.get_version_info().get("string", "?"),
 		int(VIEW.x), int(VIEW.y), OS.get_static_memory_usage() / 1048576.0])
+	# warm the menu duck's flap turntable NOW (24 PNGs) — lazy-loading it caused a measured
+	# 142ms hitch the first time the menu duck flapped on Scott's phone
+	_flapspin(last_species)
+	if ducks.has(last_species + "hen"):
+		_flapspin(last_species + "hen")
 	# the GPU the browser ACTUALLY handed us — "SwiftShader" here = Chrome blocklisted the real
 	# GPU and is software-rendering every frame on the CPU (the "tremendously laggy" smoking gun)
 	_log("[env] gpu: %s" % RenderingServer.get_video_adapter_name())
@@ -2754,6 +2767,7 @@ func _sfx(snd: String, pitch := 1.0, vol_db := 0.0) -> void:
 		return
 	var pl: AudioStreamPlayer = sfx_pool[sfx_next % sfx_pool.size()]
 	sfx_next += 1
+	sfx_window += 1                                 # hitch-tracer census
 	pl.stream = sfx[snd]
 	pl.pitch_scale = pitch
 	pl.volume_db = vol_db + sfx_vol
@@ -2853,6 +2867,7 @@ func _dev_reset_data() -> void:
 
 func _save() -> void:
 	last_io = "save"; last_io_t = anim_t             # hitch-tracer breadcrumb
+	save_dirty = false
 	if bot_mode:
 		return          # sims NEVER persist — mid-run saves (boss-clear, unlocks) kept
 		                # leaking scootybooty into the save even after the death/win gates
@@ -2909,7 +2924,12 @@ func _codex_see(id: String) -> void:
 	if id in codex_seen:
 		return
 	codex_seen.append(id)
-	_save()
+	# mid-run, DEFER the disk hit — a full save on "first time seeing a snack" was a
+	# guaranteed frame stall on phones; it flushes at death/menu (both already save)
+	if alive and not in_menu and not paused:
+		save_dirty = true
+	else:
+		_save()
 
 func _codex_new_count() -> int:
 	var n := 0
@@ -3738,6 +3758,8 @@ func _pick_menu_flotsam() -> void:
 
 func _enter_menu() -> void:
 	in_menu = true
+	if save_dirty:
+		_save()                                     # flush any run-deferred codex discoveries
 	# a long-lived PWA process only ever checked for updates at boot — re-ping on every
 	# menu return (throttled) so a phone that stays open for days still learns of releases
 	if update_avail == "" and Time.get_unix_time_from_system() - _upd_last_check > 300.0:
@@ -6254,6 +6276,11 @@ func _record_run() -> void:
 
 # ---- per-frame ---------------------------------------------------------------
 func _process(delta: float) -> void:
+	var _now_us := Time.get_ticks_usec()             # tracer v2: split each frame into segments
+	if _pf_draw_us > 0:
+		_pf_prev_p2d = int(float(_pf_draw_us - _pf_proc_us) / 1000.0)
+		_pf_prev_d2n = int(float(_now_us - _pf_draw_us) / 1000.0)
+	_pf_proc_us = _now_us
 	anim_t += delta
 	if setting_show_fps:                              # track the worst moment per 3s window
 		fps_worst_dt = maxf(fps_worst_dt, delta)
@@ -6262,8 +6289,14 @@ func _process(delta: float) -> void:
 			fps_lo = 1.0 / maxf(fps_worst_dt, 0.0001)
 			fps_worst_dt = 0.0
 			fps_win_t = 0.0
-		# HITCH TRACER: any frame past 80ms logs its context to the app log (VIEW APP LOGS)
-		# — the phone tells us WHAT froze instead of us guessing from an ocean away
+		sfx_win_t += delta                            # rolling 1s sfx census
+		if sfx_win_t >= 1.0:
+			sfx_last1s = sfx_window
+			sfx_window = 0
+			sfx_win_t = 0.0
+		# HITCH TRACER v2: any frame past 80ms logs its context + WHERE the time went —
+		# p2d (process-start -> draw callback = script/physics) vs d2n (draw -> next frame =
+		# canvas render + audio mix + GC + engine). big d2n with tiny script = engine-side.
 		if delta > 0.08 and anim_t > 6.0 and anim_t - hitch_last > 0.5:
 			hitch_last = anim_t
 			var _scr := "play"
@@ -6273,9 +6306,14 @@ func _process(delta: float) -> void:
 			elif in_shop: _scr = "shop"
 			elif in_codex: _scr = "codex"
 			elif in_stats: _scr = "stats"
-			_log("[hitch] %dms %s logs=%d parts=%d props=%d env=%d fx=%d boss=%s io=%s %.1fs-ago" % [
-				int(delta * 1000.0), _scr, logs.size(), parts.size(), props.size(), env_scenery.size(),
-				ripples.size() + floaties.size(), "y" if boss != null else "n", last_io, anim_t - last_io_t])
+			elif tut_mode: _scr = "tut"
+			elif not alive: _scr = "dead"
+			elif drafting: _scr = "draft"
+			elif paused: _scr = "pause"
+			_log("[hitch] %dms(p2d=%d d2n=%d) %s logs=%d e=%d it=%d parts=%d fx=%d sfx=%d boss=%s io=%s %.1fs-ago" % [
+				int(delta * 1000.0), _pf_prev_p2d, _pf_prev_d2n, _scr, logs.size(), enemies.size(),
+				items.size(), parts.size(), ripples.size() + floaties.size(), sfx_last1s + sfx_window,
+				"y" if boss != null else "n", last_io, anim_t - last_io_t])
 	if fork_choosing and fork_pick >= 0 and anim_t - fork_pick_t > 0.42:
 		var _fp: int = fork_pick
 		fork_pick = -1
@@ -11955,6 +11993,7 @@ func _draw_ascend() -> void:
 		_fancy_title("ASCENDING!", by, int(46 + 8 * sin(anim_t * 6.0)), c1, c2, 7.0)
 
 func _draw() -> void:
+	_pf_draw_us = Time.get_ticks_usec()              # tracer v2: draw-callback segment stamp
 	if dbg_iconsheet:
 		_draw_icon_sheet()
 		return
