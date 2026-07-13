@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.51"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.52"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1022,25 +1022,30 @@ const TUT := [
 	{"id": "done",    "goal": 0, "say": "You're a natural, kid! That's the lot — now get out there and make a splash."},
 ]
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
-# RUSTY is a red-tail: an old pilot, terse and unimpressed. short lines, dry delivery,
-# real airmanship — the game's "well." register, never a comedy bit.
+# RUSTY (canon, Scott 2026-07-12): the wise sage of the mountain — and a lil kooky.
+# warm mystical hawk wisdom, delivered earnestly, slightly unglued. he makes folks HAPPY.
+# not a cheerleader, not a drill instructor, not a comedian: a beloved odd guru.
 const HAWK_LINES := [
-	"steer before the log.\nnot at it.",
-	"herons drop from up-sun.\nnow you know.",
-	"hop less. mean it more.",
-	"wind's good today.\ndon't waste it.",
-	"eyes up. rivers repeat themselves.",
-	"logs don't move. you do.\nadvantage: you.",
-	"eat something.\nloft doesn't fill itself.",
-	"watch the shadow, not the bird.",
-	"slow is smooth.\nsmooth is fast.",
-	"quack less near herons.\nfree advice.",
-	"every trick i know\ncost some bird its feathers.",
-	"storm coming.\nthere's free lift in it.",
-	"i circle because it works.",
-	"the water's cold.\nstay out of it.",
-	"you're doing fine.\ndon't make it a thing.",
-	"still alive. good.\nkeep doing that.",
+	"the wind remembers every wing.\nit told me it likes yours.",
+	"i once meditated a whole winter\non one updraft. worth it.",
+	"ah, the river. my old rival.\nwe're very close.",
+	"a wise bird asks the storm questions.\na wiser bird just enjoys the ride.",
+	"i dreamed of a duck last night.\nit was you. you were magnificent.",
+	"secret of the mountain:\nthere is no mountain. only UP.",
+	"herons fear what they don't understand.\nbe confusing.",
+	"i asked the moon about you.\nshe's rooting for you. we all are.",
+	"feathers grow back.\ndignity too. mostly.",
+	"i have seen one thousand sunrises.\nthis one's top ten. feel it?",
+	"float like you know a secret.\n(you do. i just told you.)",
+	"the log is your teacher.\na terrible one. hop the teacher.",
+	"when in doubt, spiral.\nworks for hawks. works for galaxies.",
+	"i keep my wisdom in my tail feathers.\nthe red ones. that's why.",
+	"listen to the water... hear that?\nit's cheering. quietly.",
+	"an old updraft once told me: 'rise.'\nthat's it. best advice i ever got.",
+	"you smell like adventure\nand a little like pondweed. perfect.",
+	"somewhere, a mountain\nis proud of you. i checked.",
+	"every ripple you make\nreaches somewhere wonderful.",
+	"the sun sets, the sun rises.\nbetween the two: SNACKS.",
 ]
 # RUSTY's patter while he minds the shop counter (keep 'em SHORT — small bubble)
 const SHOP_GREETS := [
@@ -1614,7 +1619,7 @@ func _update_river_events(delta: float) -> void:
 				draft_choices = _deal_rusty_draft(false)  # EPIC ceiling — the legendary is for 90%+
 				_sfx("chime", 1.2)
 			else:
-				_gl = "%d%%. the wind won this one.\nagain." % int(_gr * 100)
+				_gl = "%d%%. the wind is a fussy teacher.\nwe'll charm her yet. again!" % int(_gr * 100)
 				run_feathers += 10
 			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
 			if hawk != null:                            # he wheels around to face you for the grade
@@ -2806,7 +2811,7 @@ func _load_save() -> void:
 		asc_breads = int(cfg.get_value("save", "asc_breads", 0))
 		runs_started = cfg.get_value("save", "runs_started", 0)
 		hawk_tips_seen = cfg.get_value("save", "hawk_tips_seen", [])
-		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 3:
+		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 4:
 			hawk_tips_seen = []                        # the pool was rewritten — deal the new lines fresh
 		music_vol = cfg.get_value("save", "music_vol", -17.0)
 		sfx_vol = cfg.get_value("save", "sfx_vol", -8.0)
@@ -2898,7 +2903,7 @@ func _save() -> void:
 	cfg.set_value("save", "asc_breads", asc_breads)
 	cfg.set_value("save", "runs_started", runs_started)
 	cfg.set_value("save", "hawk_tips_seen", hawk_tips_seen)
-	cfg.set_value("save", "hawk_pool_v", 3)
+	cfg.set_value("save", "hawk_pool_v", 4)
 	cfg.set_value("save", "music_vol", music_vol)
 	cfg.set_value("save", "sfx_vol", sfx_vol)
 	cfg.set_value("save", "broodwear", ducklings_wear)
@@ -4409,7 +4414,7 @@ func _rusty_advice_raw() -> String:
 	if int(run_stats.get("snacks", 0)) < int(distance / 4000.0) and distance > 8000.0:
 		return "you're paddling PAST the snacks.\neat, duckling. loft doesn't fill itself."
 	if combo_n >= 5:
-		return "that snack chain was nearly hawk-grade.\nnearly."
+		return "i felt that snack chain\nin my tail feathers. the red ones."
 	return ""
 
 func _spawn_hawk() -> void:
