@@ -229,7 +229,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.50"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.51"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1022,31 +1022,25 @@ const TUT := [
 	{"id": "done",    "goal": 0, "say": "You're a natural, kid! That's the lot — now get out there and make a splash."},
 ]
 # RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
-# RUSTY is a red-tail: a grizzled old pilot with a predator's manners. no pep talks —
-# deadpan, faintly threatening, secretly fond, and occasionally actually useful.
+# RUSTY is a red-tail: an old pilot, terse and unimpressed. short lines, dry delivery,
+# real airmanship — the game's "well." register, never a comedy bit.
 const HAWK_LINES := [
-	"i eat things your size, you know.\nfly like you remember that.",
-	"saw you hit that log from two ponds away.\nthe whole SKY saw it.",
-	"keep the sun over your shoulder.\nworks on fish, herons, and regret.",
-	"you fly like prey.\n...flattering. for prey.",
-	"i don't do pep talks.\nthe wind's free. take it or don't.",
-	"hold that thought — vole. 400 feet.\n...it's fine. it knows what it did.",
-	"a heron telegraphs with its NECK.\nyou'd see it if you stopped quacking.",
-	"i've dropped snakes with more altitude\nthan you. you're doing fine. ish.",
-	"the wind goes dirty past the pines.\ntrust the feathers, not the eyeballs.",
-	"eat the bugs. skip the bread.\nthat's it. that's the whole secret.",
-	"that last hop needed more hate in it.",
-	"SKREE. ...apologies. force of habit\nwhen something small moves.",
-	"altitude is honesty.\neverything else is opinion.",
-	"i watched a heron trip over its own legs\nonce. best day of my life. top five, anyway.",
-	"don't race your shadow.\nit's slow. lately, you're not.",
-	"rivers stopped surprising me years ago.\nyou still might. jury's out.",
-	"a merganser asked about you upriver.\ni said nothing. i'm no gossip.",
-	"i can spot a snail blink from a mile up.\nso yes. i saw that landing.",
-	"the log is never sorry.\nbe faster than the log.",
-	"storm smell means free lift.\nold wings know. now you know.",
-	"molt comes for everyone, kid.\npreen now, ask questions later.",
-	"you want empowerment, find a loon.\nyou want ALTITUDE, watch me.",
+	"steer before the log.\nnot at it.",
+	"herons drop from up-sun.\nnow you know.",
+	"hop less. mean it more.",
+	"wind's good today.\ndon't waste it.",
+	"eyes up. rivers repeat themselves.",
+	"logs don't move. you do.\nadvantage: you.",
+	"eat something.\nloft doesn't fill itself.",
+	"watch the shadow, not the bird.",
+	"slow is smooth.\nsmooth is fast.",
+	"quack less near herons.\nfree advice.",
+	"every trick i know\ncost some bird its feathers.",
+	"storm coming.\nthere's free lift in it.",
+	"i circle because it works.",
+	"the water's cold.\nstay out of it.",
+	"you're doing fine.\ndon't make it a thing.",
+	"still alive. good.\nkeep doing that.",
 ]
 # RUSTY's patter while he minds the shop counter (keep 'em SHORT — small bubble)
 const SHOP_GREETS := [
@@ -1620,7 +1614,7 @@ func _update_river_events(delta: float) -> void:
 				draft_choices = _deal_rusty_draft(false)  # EPIC ceiling — the legendary is for 90%+
 				_sfx("chime", 1.2)
 			else:
-				_gl = "%d%%. i've seen LEAVES do better.\n...the wind was tricky today. again." % int(_gr * 100)
+				_gl = "%d%%. the wind won this one.\nagain." % int(_gr * 100)
 				run_feathers += 10
 			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
 			if hawk != null:                            # he wheels around to face you for the grade
@@ -2812,7 +2806,7 @@ func _load_save() -> void:
 		asc_breads = int(cfg.get_value("save", "asc_breads", 0))
 		runs_started = cfg.get_value("save", "runs_started", 0)
 		hawk_tips_seen = cfg.get_value("save", "hawk_tips_seen", [])
-		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 2:
+		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 3:
 			hawk_tips_seen = []                        # the pool was rewritten — deal the new lines fresh
 		music_vol = cfg.get_value("save", "music_vol", -17.0)
 		sfx_vol = cfg.get_value("save", "sfx_vol", -8.0)
@@ -2904,7 +2898,7 @@ func _save() -> void:
 	cfg.set_value("save", "asc_breads", asc_breads)
 	cfg.set_value("save", "runs_started", runs_started)
 	cfg.set_value("save", "hawk_tips_seen", hawk_tips_seen)
-	cfg.set_value("save", "hawk_pool_v", 2)
+	cfg.set_value("save", "hawk_pool_v", 3)
 	cfg.set_value("save", "music_vol", music_vol)
 	cfg.set_value("save", "sfx_vol", sfx_vol)
 	cfg.set_value("save", "broodwear", ducklings_wear)
