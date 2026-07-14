@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.53"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.54"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -474,6 +474,7 @@ var devreset_arm := -9.0         # anim_t when the dev RESET DATA button was fir
 var stats_win := 12.0            # live window size — PINCH the graph to zoom in/out (fewer/more runs)
 var touches := {}                # active touch points (index -> pos) for pinch-zoom
 var pinch_d := 0.0               # last two-finger distance (0 = not pinching)
+var steer_finger := 0            # which finger owns the steering drag (others tap to HOP)
 # the logbook's plottable series: pulled either straight off the record or its stats{} tally
 const STAT_METRICS := [
 	# ROW 1 — the run headliners (per-run trends over time)
@@ -5548,15 +5549,29 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventScreenTouch:                 # track fingers for pinch-zoom
 			if event.pressed:
 				touches[event.index] = event.position
+				if touches.size() == 1:
+					steer_finger = event.index             # first finger down owns the drag
 			else:
 				touches.erase(event.index); pinch_d = 0.0
 		if event.pressed:
-			if touches.size() >= 2:                        # a second finger = pinch gesture, not a tap
+			if touches.size() >= 2:
+				# SECOND FINGER = HOP (Kez's wish: "tap with my other finger to jump while
+				# my first is dragging"). pinch stays a gesture only where a graph can zoom.
+				if not _is_button_ui() and not in_stats and not in_codex and not booting \
+						and not fork_choosing and not in_sky:
+					hop()
 				return
 			held_pos = event.position                       # light up the pressed button
 			if not _is_button_ui():
 				_on_press(event.position)                   # gameplay / drag-graphs act on press as before
 		else:
+			if event is InputEventScreenTouch and not touches.is_empty():
+				# a finger lifted but another remains — the steer drag LIVES ON
+				if event.index == steer_finger:            # steer hand left: the helper takes over, seamless
+					steer_finger = int(touches.keys()[0])
+					press_pos = touches[steer_finger]
+					steer_anchor_x = target_x
+				return
 			if _is_button_ui() and held_pos.x > -900.0 and event.position.distance_to(held_pos) < 42.0:
 				_on_press(event.position)                   # buttons fire on RELEASE (slide off to cancel)
 			held_pos = Vector2(-1000.0, -1000.0)
@@ -5570,6 +5585,8 @@ func _input(event: InputEvent) -> void:
 				_stats_pinch(d / pinch_d)
 			pinch_d = d
 			return
+		if touches.size() >= 2 and event.index != steer_finger:
+			return                                         # only the steer finger drives the duck
 		_on_drag(event.position)
 	elif event is InputEventMagnifyGesture:                 # trackpad pinch (desktop)
 		if in_stats:
