@@ -152,6 +152,7 @@ const SYNERGY := {
 }
 const MAX_DUCKLINGS := 8
 const BANK_W := 26.0            # reed-lined banks frame the river
+var bankw: float = BANK_W       # EFFECTIVE bank width — THE NARROWS pinches the river in (branch waters)
 const SPRING_LOG_CHANCE := 0.12
 
 # user-curated deck (2026-06-12 review): survivors + two new entries
@@ -229,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.52"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.21.53"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1369,6 +1370,22 @@ func _wager_payout(amount: int, line: String, big := false) -> void:
 	_spawn_parts(duck_x, BASE_Y - 30.0, 26 if big else 16, Color(1.0, 0.88, 0.4), 250.0)
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 110.0, "col": Color(1.0, 0.9, 0.5)})
 
+# THE STILLS: a low-pass on the Music bus — the world drops to a hush for the branch
+var calm_lpf := false
+func _set_calm_audio(on: bool) -> void:
+	if on == calm_lpf:
+		return
+	calm_lpf = on
+	var _bi := AudioServer.get_bus_index("Music")
+	if _bi < 0:
+		return
+	if on:
+		var _f := AudioEffectLowPassFilter.new()
+		_f.cutoff_hz = 2000.0
+		AudioServer.add_bus_effect(_bi, _f)
+	elif AudioServer.get_bus_effect_count(_bi) > 0:
+		AudioServer.remove_bus_effect(_bi, AudioServer.get_bus_effect_count(_bi) - 1)
+
 func _fork_commit(sidei: int) -> void:
 	if fork.is_empty() or fork.get("picked", false):
 		return
@@ -1409,6 +1426,7 @@ func _fork_commit(sidei: int) -> void:
 			ripples.append({"x": e.x, "y": e.y, "t": 0.0, "max": 80.0})
 		enemies.clear()
 		haz_turtle = null
+		_set_calm_audio(true)                   # the world goes soft-spoken in THE STILLS
 	if stretch_mod == "golden":                 # GOLDEN REACH: a golden hour bathes the branch
 		golden_t = GOLDEN_DUR
 
@@ -1425,7 +1443,7 @@ func _fork_choose(side: int) -> void:
 		fork_next = distance + randf_range(105000.0, 135000.0)
 		_cloud_launch()
 		return
-	fork_ride = {"t": 0.0, "side": side, "x0": duck_x}
+	fork_ride = {"ph": "glide", "t": 0.0, "side": side, "x0": duck_x}
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 130.0, "col": Color(1.0, 0.9, 0.5)})
 	_spawn_parts(duck_x, BASE_Y - 10.0, 18, Color(1.0, 0.88, 0.45), 200.0)
 	_float_text(duck_x, BASE_Y - 74.0, "go well, little one.", Color(1.0, 0.92, 0.6))
@@ -1451,7 +1469,9 @@ func _ev_prop_mult() -> float:
 
 func _ev_speed_mult() -> float:
 	# the chooser froze the approach; post-choice the current GRABS you and rushes the branch
-	var ride_rush: float = 2.4 if not fork_ride.is_empty() else 1.0
+	var ride_rush := 1.0                               # sign glide = readable; only the rush surges
+	if not fork_ride.is_empty():
+		ride_rush = 1.15 if str(fork_ride.get("ph", "rush")) == "glide" else 2.4
 	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * ride_rush
 
 func _update_river_events(delta: float) -> void:
@@ -1485,7 +1505,7 @@ func _update_river_events(delta: float) -> void:
 		_say(e.desc, 2.4)
 		_sfx("chime", 0.8)
 		if ev_id == "lost_duckling":
-			ev_duckling = {"x": randf_range(BANK_W + 60.0, VIEW.x - BANK_W - 60.0), "y": -50.0, "saved": false}
+			ev_duckling = {"x": randf_range(bankw + 60.0, VIEW.x - bankw - 60.0), "y": -50.0, "saved": false}
 			ev_until = distance + 2600.0               # one pass — catch it or it's gone
 	# FORKS: the river splits; your side of the wedge picks the branch
 	if fork.is_empty() and not fork_warned and distance >= fork_next - 8000.0:
@@ -1511,26 +1531,48 @@ func _update_river_events(delta: float) -> void:
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
 		_sfx("fwoosh", 0.7)
-	if not fork_ride.is_empty():                       # THE CURRENT TAKES HER — a whitewater rush, not a crawl
-		fork_ride.t = float(fork_ride.t) + delta / 1.1
-		var _rr: float = clampf(float(fork_ride.t), 0.0, 1.0)
-		var _bs: float = 1.35                          # back-ease: she CARVES past the line and settles
-		var _rt: float = _rr - 1.0
-		var _re: float = 1.0 + (_bs + 1.0) * _rt * _rt * _rt + _bs * _rt * _rt
-		duck_x = lerpf(float(fork_ride.x0), VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), _re)
-		target_x = duck_x; steer_anchor_x = duck_x
-		for _rs in 2:                                  # rooster-tail wake off the surge
-			parts.append({"x": duck_x + randf_range(-16.0, 16.0), "y": BASE_Y + randf_range(4.0, 16.0),
-				"vx": randf_range(-70.0, 70.0), "vy": randf_range(60.0, 150.0),
-				"t": 0.0, "life": 0.4, "col": Color(0.85, 0.94, 1.0)})
-		if _rr >= 1.0:
-			var _rside: int = int(fork_ride.side)
-			fork_ride = {}
-			_fork_commit(_rside)
+	if not fork_ride.is_empty():
+		if str(fork_ride.get("ph", "rush")) == "glide":
+			# THE SIGN COMES FIRST (Scott: "friggin rushed through to go past the signs") —
+			# she drifts gently into her channel and passes UNDER her sign at reading speed;
+			# only once the sign is behind her does the current take hold.
+			fork_ride.t = float(fork_ride.t) + delta
+			duck_x = move_toward(duck_x, VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), 120.0 * delta)
+			target_x = duck_x; steer_anchor_x = duck_x
+			if not fork.is_empty() and not fork.get("passed", false) and float(fork.y) > BASE_Y - 76.0:
+				fork.passed = true                     # right under her sign: it swings, the river chimes
+				_sfx("chime", 1.35, -3.0)
+				_sfx("click", 0.6, -6.0)               # the board knocks on its post
+				ripples.append({"x": VIEW.x * (0.24 if int(fork_ride.side) == 0 else 0.76),
+					"y": BASE_Y, "t": 0.0, "max": 90.0, "col": Color(1.0, 0.9, 0.5)})
+			if (not fork.is_empty() and float(fork.y) > BASE_Y + 44.0) or float(fork_ride.t) > 4.0:
+				fork_ride.ph = "rush"; fork_ride.t = 0.0; fork_ride.x0 = duck_x
+				_sfx("fwoosh", 1.2)
+				# the road not taken drifts away behind the wedge — a last glimpse of it
+				if not fork.is_empty():
+					var _oth: Dictionary = (fork.r if int(fork_ride.side) == 0 else fork.l)
+					_float_text(VIEW.x * (0.76 if int(fork_ride.side) == 0 else 0.24), BASE_Y - 130.0,
+						"%s drifts away..." % String(_oth.mod.name).to_lower(), Color(0.78, 0.84, 0.9, 0.85))
+		else:                                          # THE CURRENT TAKES HER — the whitewater rush
+			fork_ride.t = float(fork_ride.t) + delta / 1.1
+			var _rr: float = clampf(float(fork_ride.t), 0.0, 1.0)
+			var _bs: float = 1.35                      # back-ease: she CARVES past the line and settles
+			var _rt: float = _rr - 1.0
+			var _re: float = 1.0 + (_bs + 1.0) * _rt * _rt * _rt + _bs * _rt * _rt
+			duck_x = lerpf(float(fork_ride.x0), VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), _re)
+			target_x = duck_x; steer_anchor_x = duck_x
+			for _rs in 2:                              # rooster-tail wake off the surge
+				parts.append({"x": duck_x + randf_range(-16.0, 16.0), "y": BASE_Y + randf_range(4.0, 16.0),
+					"vx": randf_range(-70.0, 70.0), "vy": randf_range(60.0, 150.0),
+					"t": 0.0, "life": 0.4, "col": Color(0.85, 0.94, 1.0)})
+			if _rr >= 1.0:
+				var _rside: int = int(fork_ride.side)
+				fork_ride = {}
+				_fork_commit(_rside)
 	if not fork.is_empty():
 		fork.y += speed * delta
-		if fork.get("picked", false):
-			fork.y += 950.0 * delta                    # decision made — the old signs hustle off stage
+		if fork.get("picked", false) or (not fork_ride.is_empty() and str(fork_ride.get("ph", "")) == "rush"):
+			fork.y += 950.0 * delta                    # signs are BEHIND her now — hustle off stage
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
 			fork.asked = true
 			fork_choosing = true
@@ -1555,7 +1597,7 @@ func _update_river_events(delta: float) -> void:
 		var _sw1: float = sin(distance * 0.0011) * (VIEW.x * 0.27)
 		var _sw2: float = sin(distance * 0.0037 + 1.7) * (VIEW.x * (0.11 + 0.11 * _cprog))
 		var _sw3: float = sin(distance * 0.0093 + 4.2) * (VIEW.x * 0.12) * _cprog   # the late-course JUKES
-		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2 + _sw3, BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
+		slip_lead_x = clampf(VIEW.x * 0.5 + _sw1 + _sw2 + _sw3, bankw + 40.0, VIEW.x - bankw - 40.0)
 		if slip_count <= 3.4:                          # the trail begins WITH the countdown, not before
 			slip_pts.append({"x": slip_lead_x, "y": 148.0})
 		for sp3 in slip_pts:
@@ -1652,6 +1694,7 @@ func _update_river_events(delta: float) -> void:
 				_flash("%d snacks... the feast wanted 12." % _sg, 2.0)
 		elif stretch_mod == "golden":
 			_wager_payout(25, "the golden hour's blessing: +25 feathers")
+		_set_calm_audio(false)
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
@@ -2127,6 +2170,10 @@ func _ready() -> void:
 		music_player = AudioStreamPlayer.new()
 		music_player.stream = ms
 		music_player.volume_db = -15.0
+		if AudioServer.get_bus_index("Music") < 0:  # music gets its own bus so THE STILLS can muffle it
+			AudioServer.add_bus()
+			AudioServer.set_bus_name(AudioServer.bus_count - 1, "Music")
+		music_player.bus = "Music"
 		add_child(music_player)
 		music_player.play()
 		theme_tracks["music_default"] = ms         # the iconic DUCKODUCKO theme — never lost
@@ -2268,7 +2315,7 @@ func _ready() -> void:
 		distance = 6000.0; biome_progress = float(_rth) * THEME_LEN + 800.0
 		theme_idx = _rth; theme_prev = _rth; theme_sweep = 1.0
 		if HERO_NAMES[theme_idx] != "" and tex_env.has(HERO_NAMES[theme_idx]):          # the biome's LANDMARK anchors the shot
-			env_scenery.append({"n": HERO_NAMES[theme_idx], "x": BANK_W + 86.0, "y": 300.0,
+			env_scenery.append({"n": HERO_NAMES[theme_idx], "x": bankw + 86.0, "y": 300.0,
 				"rooted": true, "hero": true, "phase": 0.0, "flip": false})
 		for _ri in 6:                                   # pre-seed at LIVE density (16 lied about the cut)
 			var _rtbl: Array = ENV_TABLE[theme_idx].filter(func(e): return tex_env.has(e[0]))
@@ -2284,7 +2331,7 @@ func _ready() -> void:
 					break
 			var _rooted: bool = String(_rentry[0]) in ENV_ROOTED
 			var _rmargin: float = randf_range(10.0, 96.0) if _rooted else randf_range(30.0, 170.0)
-			env_scenery.append({"n": _rentry[0], "x": (BANK_W + _rmargin) if randf() < 0.5 else (VIEW.x - BANK_W - _rmargin),
+			env_scenery.append({"n": _rentry[0], "x": (bankw + _rmargin) if randf() < 0.5 else (VIEW.x - bankw - _rmargin),
 				"y": randf_range(20.0, VIEW.y - 40.0), "rooted": _rooted, "phase": randf() * TAU, "flip": randf() < 0.5})
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
@@ -2497,6 +2544,22 @@ func _ready() -> void:
 		print("[BOUNCE] frog_chain=", frog_chain, " state=", state, " alive=", alive, " feathers=", run_feathers)
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_bounce.png")
+		get_tree().quit()
+	elif "--branchshot" in OS.get_cmdline_user_args():   # BRANCH WATERS: any stretch dressing at full strength
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear()
+		stretch_mod = _arg_val(OS.get_cmdline_user_args(), "--mod", "heron")
+		stretch_until = distance + 900000.0
+		if stretch_mod == "heron":
+			bankw = BANK_W + 62.0                    # pre-pinched: the shot shows the Narrows fully closed
+		if stretch_mod == "calm":
+			_set_calm_audio(true)
+		distance = 9000.0
+		next_draft = distance + 900000.0             # no draft modal over the vista
+		await get_tree().create_timer(1.2).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_branch_%s.png" % stretch_mod)
 		get_tree().quit()
 	elif "--bossshot" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -4308,7 +4371,7 @@ func _next_enemy_id() -> int:
 # She is not an obstacle, not a snack, not a target. She is a visitor.
 func _spawn_sadie() -> void:
 	var dir := -1.0 if randf() < 0.5 else 1.0
-	var sx := (BANK_W - 50.0) if dir > 0.0 else (VIEW.x - BANK_W + 50.0)
+	var sx := (bankw - 50.0) if dir > 0.0 else (VIEW.x - bankw + 50.0)
 	sadie = {"x": sx, "y": randf_range(200.0, 430.0), "dir": dir, "t": 0.0, "greeted": false}
 	_codex_see("sadie")
 	_sfx("quack", 0.5, -6.0)                       # the distant BOOF of a happy dog
@@ -4342,8 +4405,8 @@ func _update_sadie(delta: float) -> void:
 		_say("a doggo!! hi!!", 1.8)                    # the duck greets Sadie in its bubble
 		_sfx("quack", 1.2, -4.0)
 	# reached the far bank (or drifted off-screen): she got the chuckit. she always does.
-	var gone_x: bool = (sadie.dir > 0.0 and sadie.x > VIEW.x - BANK_W + 60.0) \
-		or (sadie.dir < 0.0 and sadie.x < BANK_W - 60.0)
+	var gone_x: bool = (sadie.dir > 0.0 and sadie.x > VIEW.x - bankw + 60.0) \
+		or (sadie.dir < 0.0 and sadie.x < bankw - 60.0)
 	if gone_x or sadie.y > VIEW.y + 80.0:
 		sadie = null
 		sadie_timer = randf_range(18.0, 32.0) if theme_idx == 3 else randf_range(45.0, 80.0)   # at SAND POND she's home — camp dog visits often
@@ -4554,11 +4617,11 @@ const DONNY_LINES := ["VROOOM!", "eat my WAKE!", "she's all WOOD, baby!",
 func _spawn_donny() -> void:
 	_codex_see("donny")
 	donny = {
-		"x": clampf(duck_x + randf_range(-130.0, 130.0), BANK_W + 30.0, VIEW.x - BANK_W - 30.0),
+		"x": clampf(duck_x + randf_range(-130.0, 130.0), bankw + 30.0, VIEW.x - bankw - 30.0),
 		"y": VIEW.y + 90.0, "t": 0.0, "phase": "rise", "weaves": 0,
 		"target_x": 0.0, "hop_t": 0.0, "roll": 0.0, "say": "", "say_t": -9.0, "wake": 0.0, "cool": 0.0, "dwell": 0.0,
 	}
-	donny.target_x = clampf(duck_x + 80.0, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+	donny.target_x = clampf(duck_x + 80.0, bankw + 30.0, VIEW.x - bankw - 30.0)
 	_sfx("fwoosh", 0.7, -2.0)
 	_donny_say()
 
@@ -4602,7 +4665,7 @@ func _update_donny(delta: float) -> void:
 					if d.weaves % 2 == 0:
 						_donny_say()
 					var side: float = -1.0 if d.target_x > duck_x else 1.0
-					d.target_x = clampf(duck_x + side * randf_range(90.0, 170.0), BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+					d.target_x = clampf(duck_x + side * randf_range(90.0, 170.0), bankw + 30.0, VIEW.x - bankw - 30.0)
 					if d.weaves >= 8:                    # a few more passes — she's showing off
 						d.phase = "depart"
 						_donny_say()
@@ -4872,7 +4935,7 @@ func _update_turtle(delta: float) -> void:
 		if distance > 4500.0 and (next_boss_idx < 2 or ascension >= 5):
 			turtle_timer -= delta
 			if turtle_timer <= 0.0 and not _cameo_busy() and not stretch_mod in ["rusty", "calm"]:
-				haz_turtle = {"x": clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0),
+				haz_turtle = {"x": clampf(duck_x, bankw + 50.0, VIEW.x - bankw - 50.0),
 					"stage": "lurk", "t": 0.0, "snap_x": duck_x, "sub": 1.0, "yaw0": randf_range(-0.7, 0.7)}
 				_codex_see("turtle")
 				_sfx("fwoosh", 0.5, -6.0)
@@ -4901,7 +4964,7 @@ func _update_turtle(delta: float) -> void:
 	match tt.stage:
 		"lurk":                                    # drift toward the duck under the murk
 			tt.sub = move_toward(tt.sub, 1.0, delta * 3.0)
-			tt.x = move_toward(tt.x, clampf(duck_x, BANK_W + 50.0, VIEW.x - BANK_W - 50.0), 110.0 * delta)
+			tt.x = move_toward(tt.x, clampf(duck_x, bankw + 50.0, VIEW.x - bankw - 50.0), 110.0 * delta)
 			if fmod(tt.t, 0.4) < delta:
 				ripples.append({"x": tt.x, "y": BASE_Y - 30.0, "t": 0.0, "max": 40.0})
 			if tt.t > 1.4:
@@ -4930,7 +4993,7 @@ func _update_turtle(delta: float) -> void:
 				turtle_timer = randf_range(30.0, 55.0) / (1.0 + 0.12 * ascension)
 
 func _wingduck_pos(side: int) -> Vector2:
-	return Vector2(clampf(duck_x + 76.0 * side, BANK_W + 20.0, VIEW.x - BANK_W - 20.0),
+	return Vector2(clampf(duck_x + 76.0 * side, bankw + 20.0, VIEW.x - bankw - 20.0),
 		BASE_Y + 10.0 + sin(anim_t * 3.0 + side) * 5.0)
 
 func _heron_by_id(tid: int):
@@ -5093,7 +5156,7 @@ func _collect_trash(t: Dictionary) -> void:
 			if int(ITEM_DEFS[i].get("tier", 0)) >= 2:
 				rares.append(i)
 		if not rares.is_empty():
-			items.append({"x": clampf(t.x, BANK_W + 26.0, VIEW.x - BANK_W - 26.0), "y": -34.0,
+			items.append({"x": clampf(t.x, bankw + 26.0, VIEW.x - bankw - 26.0), "y": -34.0,
 				"got": false, "kind": rares[randi() % rares.size()]})
 			_float_text(t.x, t.y - 38.0, "dumpster treasure!", Color(1.0, 0.85, 0.4))
 			_sfx("chime", 1.1, -2.0)
@@ -5251,7 +5314,7 @@ func hyper_jump() -> void:
 	# TUTORIAL: drop a SMASH log at the EXACT distance the bounce arc will bring the duck down on
 	if tut_mode and tut_step < TUT.size() and TUT[tut_step].id == "spring":
 		logs = logs.filter(func(l): return l.get("spring", false))   # keep the boost log, ditch any stale one
-		logs.append({"x": clampf(duck_x, BANK_W + 90.0, VIEW.x - BANK_W - 90.0),
+		logs.append({"x": clampf(duck_x, bankw + 90.0, VIEW.x - bankw - 90.0),
 			"y": BASE_Y - speed * cur_mega_dur(),  # so it reaches the duck's lane right as it lands
 			"w": 150.0, "h": 46.0, "missed": false, "spring": false, "vx": 0.0, "phase": 0.0, "frog": false, "frog_gone": false})
 	hop_events.append(anim_t)                  # boing for everyone
@@ -5450,6 +5513,8 @@ func reset_game() -> void:
 	slip_pts.clear(); slip_on = 0; slip_total = 0; slip_tone = 0; slip_count = 0.0
 	ev_id = ""; ev_until = 0.0; ev_next = randf_range(25000.0, 33000.0); ev_duckling = {}
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
+	_set_calm_audio(false)
+	bankw = BANK_W
 	sadie = null
 	sadie_timer = 40.0
 	hawk = null
@@ -5792,7 +5857,7 @@ func _on_drag(pos: Vector2) -> void:
 	# relative steering: finger delta moves the duck from where it was at touch-down.
 	# (absolute pos.x made the duck lurch hard toward wherever you touched.)
 	target_x = clampf(steer_anchor_x + (pos.x - press_pos.x) * 1.25,
-		BANK_W + DUCK_R, VIEW.x - BANK_W - DUCK_R)
+		bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
 
 func _select_press(pos: Vector2) -> void:
 	if asc_info:
@@ -6297,6 +6362,9 @@ func _process(delta: float) -> void:
 		_pf_prev_d2n = int(float(_now_us - _pf_draw_us) / 1000.0)
 	_pf_proc_us = _now_us
 	anim_t += delta
+	# THE NARROWS (danger-pays branch water): the banks physically close in — less river,
+	# nowhere to hide. eases in/out so the squeeze reads as the water changing, not a snap.
+	bankw = move_toward(bankw, BANK_W + (62.0 if stretch_mod == "heron" else 0.0), 46.0 * delta)
 	if setting_show_fps:                              # track the worst moment per 3s window
 		fps_worst_dt = maxf(fps_worst_dt, delta)
 		fps_win_t += delta
@@ -6505,9 +6573,9 @@ func _update_play(delta: float) -> void:
 	var junkboon: bool = _junk_boon_on()
 	if prop_timer <= 0.0 and not tex_props.is_empty() and stretch_mod != "rusty":
 		var left := randf() < 0.5
-		var _px: float = (BANK_W + randf_range(16.0, 52.0)) if left else (VIEW.x - BANK_W - randf_range(16.0, 52.0))
+		var _px: float = (bankw + randf_range(16.0, 52.0)) if left else (VIEW.x - bankw - randf_range(16.0, 52.0))
 		if junkboon:                               # once trash is a RESOURCE it floats the whole river, reachable
-			_px = randf_range(BANK_W + 26.0, VIEW.x - BANK_W - 26.0)
+			_px = randf_range(bankw + 26.0, VIEW.x - bankw - 26.0)
 		props.append({"x": _px,
 			"y": -30.0, "kind": _pick_flotsam(), "phase": randf() * TAU})
 		var _fpn: String = PROP_NAMES[props[props.size() - 1].kind]
@@ -6555,7 +6623,7 @@ func _update_play(delta: float) -> void:
 					var rooted: bool = String(entry[0]) in ENV_ROOTED
 					# everything shelves near the banks — the middle of the river belongs to GAMEPLAY
 					var margin: float = randf_range(8.0, 54.0) if rooted else randf_range(20.0, 100.0)
-					var ex: float = (BANK_W + margin) if randf() < 0.5 else (VIEW.x - BANK_W - margin)
+					var ex: float = (bankw + margin) if randf() < 0.5 else (VIEW.x - bankw - margin)
 					env_scenery.append({"n": entry[0], "x": ex, "y": -46.0, "rooted": rooted,
 						"phase": randf() * TAU, "flip": randf() < 0.5})
 					break
@@ -6564,7 +6632,7 @@ func _update_play(delta: float) -> void:
 		hero_next = distance + randf_range(7000.0, 9500.0)
 		var _hright := randf() < 0.5
 		# landmarks live at the SHORE like real pond things, leaning into the river
-		env_scenery.append({"n": HERO_NAMES[theme_idx], "x": (BANK_W + randf_range(14.0, 40.0)) if not _hright else (VIEW.x - BANK_W - randf_range(14.0, 40.0)),
+		env_scenery.append({"n": HERO_NAMES[theme_idx], "x": (bankw + randf_range(14.0, 40.0)) if not _hright else (VIEW.x - bankw - randf_range(14.0, 40.0)),
 			"y": -110.0, "rooted": true, "hero": true, "phase": randf() * TAU, "flip": _hright})
 	for es in env_scenery:
 		es.y += speed * delta * (1.0 if es.rooted else 0.85)
@@ -6797,8 +6865,8 @@ func _update_play(delta: float) -> void:
 	if gust_t > 0.0:
 		gust_t -= delta
 		# a steady SHOVE — but your steering still works, so you fight it rather than lose control
-		duck_x = clampf(duck_x + gust_dir * 115.0 * delta, BANK_W + DUCK_R, VIEW.x - BANK_W - DUCK_R)
-		target_x = clampf(target_x + gust_dir * 40.0 * delta, BANK_W + DUCK_R, VIEW.x - BANK_W - DUCK_R)
+		duck_x = clampf(duck_x + gust_dir * 115.0 * delta, bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
+		target_x = clampf(target_x + gust_dir * 40.0 * delta, bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
 		if randf() < 0.5:                          # streaks of blown spray
 			_spawn_parts(duck_x - gust_dir * 30.0, BASE_Y - randf_range(0, 60), 1, Color(0.8, 0.9, 1.0, 0.7), 90.0)
 	duck_vx = (duck_x - last_duck_x) / maxf(delta, 0.0001)
@@ -6965,7 +7033,10 @@ func is_airborne() -> bool:
 	return state == St.MEGA or (state == St.HOPPING and hop_height() > AIR_THRESHOLD)
 
 func is_invincible() -> bool:
-	return state == St.MEGA or laser_t > 0.0 or dash_t > 0.0 or tornado_t > 0.0 or draft_grace > 0.0 or glide_t > 0.0
+	# fork_ride: she's ON RAILS gliding under her sign / riding the current — a cinematic
+	# can't kill you (the longer sign-glide beat gave logs time to sneak in. rude.)
+	return state == St.MEGA or laser_t > 0.0 or dash_t > 0.0 or tornado_t > 0.0 or draft_grace > 0.0 or glide_t > 0.0 \
+		or not fork_ride.is_empty()
 
 func _land(mega: bool) -> void:
 	air_hops = 0
@@ -7654,7 +7725,7 @@ func _boss_fight(delta: float) -> void:
 				_gerald_say("HOP, fool!" if randf() < 0.5 else "INCOMING!")
 			else:
 				boss.dive_stage = "tele"; boss.t = 0.0
-				boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+				boss.dive_x = clampf(duck_x, bankw + 30.0, VIEW.x - bankw - 30.0)
 				if randf() < 0.5:                        # a little trash talk before he strikes
 					_gerald_say((GERALD_ETERNAL_TAUNTS if boss.get("eternal", false) else GERALD_TAUNTS).pick_random())
 	elif boss.dive_stage == "tele":          # telegraph: the reticle locks onto the duck
@@ -7681,7 +7752,7 @@ func _boss_fight(delta: float) -> void:
 			if (boss.eternal or ascension >= 3) and not boss.combo2 and randf() < clampf((0.6 if boss.eternal else 0.0) + 0.07 * ascension, 0.0, 0.92):
 				boss.combo2 = true
 				boss.dive_stage = "tele"; boss.t = 0.0
-				boss.dive_x = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+				boss.dive_x = clampf(duck_x, bankw + 30.0, VIEW.x - bankw - 30.0)
 				_gerald_say("AGAIN.")
 			else:
 				boss.dive_stage = "dazed"; boss.t = 0.0
@@ -7731,7 +7802,7 @@ func _boss_fight(delta: float) -> void:
 		if boss.t >= 1.4:
 			boss.dive_stage = "ultcast"; boss.t = 0.0
 			boss.ult_wave = 0; boss.spit_t = 0.0
-			boss.ult_gap = randf_range(BANK_W + 70.0, VIEW.x - BANK_W - 70.0)
+			boss.ult_gap = randf_range(bankw + 70.0, VIEW.x - bankw - 70.0)
 	elif boss.dive_stage == "ultcast":           # rains a WALL of feather-darts with a drifting GAP — weave through it
 		boss.x = VIEW.x * 0.5 + sin(anim_t * 4.0) * 28.0
 		boss.y = 88.0
@@ -7740,9 +7811,9 @@ func _boss_fight(delta: float) -> void:
 		if boss.spit_t <= 0.0:
 			boss.spit_t = 0.44
 			boss.ult_wave = int(boss.get("ult_wave", 0)) + 1
-			boss.ult_gap = clampf(float(boss.ult_gap) + randf_range(-54.0, 54.0), BANK_W + 56.0, VIEW.x - BANK_W - 56.0)
-			var gx := BANK_W + 18.0
-			while gx < VIEW.x - BANK_W - 18.0:
+			boss.ult_gap = clampf(float(boss.ult_gap) + randf_range(-54.0, 54.0), bankw + 56.0, VIEW.x - bankw - 56.0)
+			var gx := bankw + 18.0
+			while gx < VIEW.x - bankw - 18.0:
 				if absf(gx - float(boss.ult_gap)) > 68.0:    # leave a survivable GAP
 					boss_globs.append({"x": gx, "y": boss.y + 22.0, "vx": 0.0, "vy": 150.0 + 12.0 * int(boss.idx)})
 				gx += 36.0
@@ -7757,7 +7828,7 @@ func _boss_fight(delta: float) -> void:
 			boss.spit_t = 0.4
 			boss.swarm_n = int(boss.get("swarm_n", 0)) + 1
 			for k in 2:                          # two kin per wave at staggered x — weave the gaps
-				_summon_heron_add_at(randf_range(BANK_W + 36.0, VIEW.x - BANK_W - 36.0))
+				_summon_heron_add_at(randf_range(bankw + 36.0, VIEW.x - bankw - 36.0))
 			_sfx("screech", 0.55)
 			if int(boss.swarm_n) >= 8:           # a long, punishing flurry
 				boss.dive_stage = ""; boss.dive_t = boss.dive_gap
@@ -7772,7 +7843,7 @@ func _snapz_spit() -> void:
 	var n: int = 2 if boss.phase2 else 1
 	_sfx("fwoosh", 0.7, -6.0)
 	for i in n:
-		var tx: float = clampf(duck_x + randf_range(-70.0, 70.0), BANK_W, VIEW.x - BANK_W)
+		var tx: float = clampf(duck_x + randf_range(-70.0, 70.0), bankw, VIEW.x - bankw)
 		var d := Vector2(tx - boss.x, BASE_Y - boss.y).normalized() * 235.0
 		boss_globs.append({"x": boss.x, "y": boss.y + 18.0, "vx": d.x, "vy": d.y, "water": true})
 
@@ -7809,7 +7880,7 @@ func _pike_fight(delta: float) -> void:
 		boss.dive_t -= delta
 		if boss.dive_t <= 0.0:
 			boss.dive_stage = "ptele"; boss.t = 0.0
-			boss.dive_x = clampf(duck_x, BANK_W + 36.0, VIEW.x - BANK_W - 36.0)
+			boss.dive_x = clampf(duck_x, bankw + 36.0, VIEW.x - bankw - 36.0)
 			_sfx("fwoosh", 0.7, -4.0)
 	elif st == "ptele":                                # lock the lane, rise, the water boils
 		boss.x = lerpf(boss.x, boss.dive_x, clampf(boss.t / 0.5, 0.0, 1.0))
@@ -7852,7 +7923,7 @@ func _beaver_fight(delta: float) -> void:
 		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.8
 		boss.dive_t -= delta
 		if boss.dive_t <= 0.0:
-			boss.dive_x = clampf(duck_x, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
+			boss.dive_x = clampf(duck_x, bankw + 44.0, VIEW.x - bankw - 44.0)
 			boss.t = 0.0
 			boss.dive_stage = ["throwwarn", "slapwarn", "wallwarn"][randi() % 3]
 			_gerald_say(BEAVER_TAUNTS.pick_random())
@@ -7905,9 +7976,9 @@ func _beaver_hurl(lx: float) -> void:
 	_sfx("thud", 0.9, -3.0); _sfx("fwoosh", 0.7)
 
 func _beaver_wall() -> void:
-	var gap: float = randf_range(BANK_W + 80.0, VIEW.x - BANK_W - 80.0)
-	var x: float = BANK_W + 44.0
-	while x < VIEW.x - BANK_W - 30.0:
+	var gap: float = randf_range(bankw + 80.0, VIEW.x - bankw - 80.0)
+	var x: float = bankw + 44.0
+	while x < VIEW.x - bankw - 30.0:
 		if absf(x - gap) > 66.0:
 			boss_globs.append({"x": x, "y": boss.y + 20.0, "vx": 0.0, "vy": 300.0, "t": 0.0, "log": true})
 		x += 58.0
@@ -7917,7 +7988,7 @@ func _beaver_wall() -> void:
 func _bongo_fight(delta: float) -> void:
 	var st: String = boss.dive_stage
 	if st == "":                                       # squats up top, throat puffing, picking an attack
-		boss.x = lerpf(boss.x, clampf(duck_x, BANK_W + 70.0, VIEW.x - BANK_W - 70.0), clampf(delta * 0.9, 0.0, 1.0))
+		boss.x = lerpf(boss.x, clampf(duck_x, bankw + 70.0, VIEW.x - bankw - 70.0), clampf(delta * 0.9, 0.0, 1.0))
 		boss.y = 150.0
 		boss.yaw = clampf((duck_x - boss.x) / 240.0, -1.0, 1.0) * 0.6
 		boss.dive_t -= delta
@@ -7927,7 +7998,7 @@ func _bongo_fight(delta: float) -> void:
 			_gerald_say(BONGO_TAUNTS.pick_random())
 	# --- TONGUE LASH: locks your lane, then a real tongue SHOOTS out and snaps. dodge sideways. ---
 	elif st == "tonguewarn":
-		boss.tongue_tx = clampf(duck_x, BANK_W + 30.0, VIEW.x - BANK_W - 30.0)   # tracks you until it commits
+		boss.tongue_tx = clampf(duck_x, bankw + 30.0, VIEW.x - bankw - 30.0)   # tracks you until it commits
 		boss.yaw = clampf((boss.tongue_tx - boss.x) / 240.0, -1.0, 1.0) * 0.7
 		if boss.t >= (0.32 if boss.phase2 else 0.42):
 			boss.dive_stage = "tongue"; boss.t = 0.0
@@ -7947,7 +8018,7 @@ func _bongo_fight(delta: float) -> void:
 		boss.y = lerpf(150.0, 120.0, clampf(boss.t / 0.45, 0.0, 1.0))   # crouch
 		if boss.t >= 0.45:
 			boss.hopn = 0
-			boss.hop_from = boss.x; boss.hop_to = clampf(duck_x, BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
+			boss.hop_from = boss.x; boss.hop_to = clampf(duck_x, bankw + 60.0, VIEW.x - bankw - 60.0)
 			boss.dive_stage = "hop"; boss.t = 0.0
 	elif st == "hop":
 		var hp: float = clampf(boss.t / 0.42, 0.0, 1.0)
@@ -7968,7 +8039,7 @@ func _bongo_fight(delta: float) -> void:
 		boss.y = 150.0
 		if boss.t >= 0.7:                                     # a clear beat between waves (was back-to-back = unjumpable)
 			boss.hop_from = boss.x
-			boss.hop_to = clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 60.0, VIEW.x - BANK_W - 60.0)
+			boss.hop_to = clampf(duck_x + randf_range(-60.0, 60.0), bankw + 60.0, VIEW.x - bankw - 60.0)
 			boss.dive_stage = "hop"; boss.t = 0.0
 	# --- GULP-N-BELCH: throat sac inflates, INHALES you toward his maw, then belches a fan of flies. ---
 	elif st == "gulpwarn":
@@ -8028,7 +8099,7 @@ func _megasadie_fight(delta: float) -> void:
 		if boss.get("ult", false):                     # THE POINT: she locks on — then pounces. thrice.
 			boss.ult = false
 			boss.dive_stage = "tele"; boss.t = 0.0
-			boss.dive_x = clampf(duck_x, BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+			boss.dive_x = clampf(duck_x, bankw + 34.0, VIEW.x - bankw - 34.0)
 			boss.pounce_n = 3
 			_gerald_say("found you.\nFOUND YOU!!")
 			_sfx("laugh", 1.2); _sfx("splash_big", 0.4)
@@ -8037,12 +8108,12 @@ func _megasadie_fight(delta: float) -> void:
 		boss.y = 205.0
 		boss.spit_t -= delta
 		if boss.spit_t <= 0.0:                         # idle: she lobs a friendly(?) ball your way
-			_megasadie_ball(clampf(duck_x + randf_range(-60.0, 60.0), BANK_W + 30.0, VIEW.x - BANK_W - 30.0))
+			_megasadie_ball(clampf(duck_x + randf_range(-60.0, 60.0), bankw + 30.0, VIEW.x - bankw - 30.0))
 			boss.spit_t = (2.0 if boss.phase2 else 3.0) * randf_range(0.85, 1.15)
 		boss.dive_t -= delta
 		if boss.dive_t <= 0.0:
 			boss.t = 0.0
-			boss.dive_x = clampf(duck_x, BANK_W + 44.0, VIEW.x - BANK_W - 44.0)
+			boss.dive_x = clampf(duck_x, bankw + 44.0, VIEW.x - bankw - 44.0)
 			boss.dive_stage = ["throwwarn", "skimwarn", "hopwarn"][randi() % 3]
 			_gerald_say(MEGASADIE_TAUNTS[randi() % MEGASADIE_TAUNTS.size()])
 	elif st == "throwwarn":                            # CHUCKIT RAIN wind-up: she rears with an armful
@@ -8051,7 +8122,7 @@ func _megasadie_fight(delta: float) -> void:
 			var nb: int = 4 if boss.phase2 else 3
 			for k in nb:
 				var bxx: float = boss.dive_x + (k - (nb - 1) * 0.5) * 100.0
-				if bxx > BANK_W + 22.0 and bxx < VIEW.x - BANK_W - 22.0:
+				if bxx > bankw + 22.0 and bxx < VIEW.x - bankw - 22.0:
 					_megasadie_ball(bxx)           # out-of-range balls are DROPPED, not clamped —
 					                               # clamping stacked kill zones on the bank column
 			_sfx("fwoosh", 0.8); _sfx("thud", 0.7, -4.0)
@@ -8114,7 +8185,7 @@ func _megasadie_fight(delta: float) -> void:
 			boss.stomped = false
 	elif st == "tele":                                 # THE POINT: frozen bird-dog stance at your lane
 		boss.y = lerpf(boss.y, 205.0, clampf(delta * 3.0, 0.0, 1.0))
-		boss.dive_x = clampf(lerpf(boss.dive_x, duck_x, 0.05), BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+		boss.dive_x = clampf(lerpf(boss.dive_x, duck_x, 0.05), bankw + 34.0, VIEW.x - bankw - 34.0)
 		if boss.t >= (0.5 if boss.phase2 else 0.66):
 			boss.dive_stage = "down"; boss.t = 0.0
 			_sfx("fwoosh", 0.8)
@@ -8132,7 +8203,7 @@ func _megasadie_fight(delta: float) -> void:
 			boss.pounce_n = int(boss.get("pounce_n", 1)) - 1
 			if boss.pounce_n > 0:
 				boss.dive_stage = "tele"; boss.t = 0.0
-				boss.dive_x = clampf(duck_x, BANK_W + 34.0, VIEW.x - BANK_W - 34.0)
+				boss.dive_x = clampf(duck_x, bankw + 34.0, VIEW.x - bankw - 34.0)
 				_gerald_say("AGAIN!")
 			else:                                      # three pounces leave her flopped + delighted
 				boss.dive_stage = "dazed"; boss.t = 0.0
@@ -8191,7 +8262,7 @@ func _snapz_fight(delta: float) -> void:
 				return
 			boss.sub = move_toward(boss.sub, 1.0, delta * 2.5)
 			boss.y = 250.0 + sin(anim_t * 1.4) * 16.0
-			boss.x = move_toward(boss.x, clampf(duck_x, BANK_W + 40.0, VIEW.x - BANK_W - 40.0), 150.0 * delta)
+			boss.x = move_toward(boss.x, clampf(duck_x, bankw + 40.0, VIEW.x - bankw - 40.0), 150.0 * delta)
 			boss.spit_t -= delta
 			if boss.spit_t <= 0.0:
 				if boss.phase2 and randf() < 0.32:
@@ -8247,7 +8318,7 @@ func _snapz_fight(delta: float) -> void:
 			boss.sub = move_toward(boss.sub, 1.0, delta * 2.0)
 			boss.y = move_toward(boss.y, 280.0, 160.0 * delta)
 			if fmod(boss.t, 0.05) < delta:
-				ripples.append({"x": randf_range(BANK_W, VIEW.x - BANK_W), "y": BASE_Y, "t": 0.0, "max": 40.0})
+				ripples.append({"x": randf_range(bankw, VIEW.x - bankw), "y": BASE_Y, "t": 0.0, "max": 40.0})
 			if boss.t >= 1.3:
 				boss.dive_stage = "tidecast"; boss.t = 0.0; boss.spit_t = 0.0; boss.tide_n = 0
 		"tidecast":   # full-width foam WAVES sweep up the lane — HOP each one
@@ -8301,7 +8372,7 @@ func _snapz_fight(delta: float) -> void:
 				var relunge: float = (0.85 if boss.phase2 else 0.5) if not boss.stomped else (0.4 if boss.phase2 else 0.0)
 				if randf() < relunge:
 					boss.dive_stage = "warn"; boss.t = 0.0
-					boss.dive_x = clampf(duck_x + randf_range(-30.0, 30.0), BANK_W + 30.0, VIEW.x - BANK_W - 30.0)
+					boss.dive_x = clampf(duck_x + randf_range(-30.0, 30.0), bankw + 30.0, VIEW.x - bankw - 30.0)
 					_gerald_say("AGAIN!" if not boss.stomped else "GRRAH!")
 				else:
 					boss.dive_stage = "dive"; boss.t = 0.0
@@ -8333,7 +8404,7 @@ func _boss_stomped() -> void:
 # Gerald hawks up a little fan of bog-muck globs toward the duck's lane.
 # THE ETERNAL conjures a lesser heron that dives a random lane — dodge it mid-duel
 func _summon_heron_add() -> void:
-	_summon_heron_add_at(randf_range(BANK_W + 30.0, VIEW.x - BANK_W - 30.0))
+	_summon_heron_add_at(randf_range(bankw + 30.0, VIEW.x - bankw - 30.0))
 
 func _summon_heron_add_at(hx: float) -> void:
 	enemies.append({"x": hx, "y": -70.0, "vy": speed * 0.5 + 300.0, "id": _next_enemy_id()})
@@ -8349,7 +8420,7 @@ func _boss_spit() -> void:
 	var by: float = boss.y
 	for i in n:
 		var spread := (float(i) - (n - 1) * 0.5) * 70.0 + randf_range(-20.0, 20.0)
-		var tx := clampf(duck_x + spread, BANK_W, VIEW.x - BANK_W)
+		var tx := clampf(duck_x + spread, bankw, VIEW.x - bankw)
 		var d := Vector2(tx - bx, BASE_Y - by).normalized() * 240.0
 		boss_globs.append({"x": bx, "y": by + 30.0, "vx": d.x, "vy": d.y})
 
@@ -8410,20 +8481,20 @@ func _boss_hits_player(by_glob := false) -> void:
 # A LOG JAM: a near-full-width WALL of logs you can't paddle through — but a BOOST LOG arrives
 # out front; nail the landing to VAULT the whole thing (or a big enough hop clears it).
 func _spawn_log_jam() -> void:
-	var span: float = VIEW.x - 2.0 * BANK_W
+	var span: float = VIEW.x - 2.0 * bankw
 	var n := 4
 	var lw: float = span / float(n)
 	var wy := -70.0
 	for i in n:
 		logs.append({
-			"x": BANK_W + lw * (i + 0.5), "y": wy, "w": lw + 8.0, "h": 46.0, "missed": false,
+			"x": bankw + lw * (i + 0.5), "y": wy, "w": lw + 8.0, "h": 46.0, "missed": false,
 			"spring": false, "vx": 0.0, "home": false, "phase": randf() * TAU,
 			"frog": false, "frog_gone": false, "thwomp": false, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": 0.0,
 		})
 	# the BOOST LOG out front (larger y -> reaches you first): land on it to launch clean over the wall
 	var gap: float = speed * cur_mega_dur() * 0.5
 	logs.append({
-		"x": clampf(duck_x, BANK_W + 90.0, VIEW.x - BANK_W - 90.0), "y": wy + gap, "w": 150.0, "h": 46.0,
+		"x": clampf(duck_x, bankw + 90.0, VIEW.x - bankw - 90.0), "y": wy + gap, "w": 150.0, "h": 46.0,
 		"missed": false, "spring": true, "vx": 0.0, "home": false, "phase": 0.0,
 		"frog": false, "frog_gone": false, "thwomp": false, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": 0.0,
 	})
@@ -8436,12 +8507,13 @@ func _spawn(delta: float) -> void:
 	if boss != null or (hawk != null and stretch_mod != "rusty"):
 		item_timer -= delta
 		if item_timer <= 0.0:
-			items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
+			items.append({"x": randf_range(bankw + 24.0, VIEW.x - bankw - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
 			item_timer = randf_range(0.5, 1.0)
 		return
 	log_timer -= delta
 	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty" \
-			and (fork.is_empty() or fork.get("picked", true)):   # no logs mid-decision
+			and (fork.is_empty() or fork.get("picked", true)) \
+			and fork_ride.is_empty():                  # no logs mid-decision OR mid-ride (she's on rails)
 		# THE GREAT JAM (ascension): a full-width log WALL with a boost log out front to vault it
 		if ascension >= 6 and randf() < 0.05 + 0.012 * (ascension - 6):
 			_spawn_log_jam()
@@ -8450,7 +8522,7 @@ func _spawn(delta: float) -> void:
 		var w := randf_range(110.0, 230.0)
 		var is_spring := randf() < SPRING_LOG_CHANCE * (2.0 if _up("springy") > 0 else 1.0)
 		# late game: logs drift sideways, slowly at first, up to ±75 px/s
-		var logx := randf_range(w * 0.5 + BANK_W, VIEW.x - w * 0.5 - BANK_W)
+		var logx := randf_range(w * 0.5 + bankw, VIEW.x - w * 0.5 - bankw)
 		var drift := 0.0
 		if distance > DRIFT_START:
 			drift = randf_range(-1.0, 1.0) * 75.0 * clampf((distance - DRIFT_START) / 40000.0, 0.15, 1.0)
@@ -8464,13 +8536,13 @@ func _spawn(delta: float) -> void:
 		# THE RECKONING: a heavy DEADFALL log drops on a TELEGRAPHED spot in your lane
 		var is_thwomp: bool = false   # ON ICE (Scott 2026-06-22, not fun). revive: distance > 6000.0 and not is_spring and not homing and randf() < 0.035 + 0.02 * ascension
 		# locks its slam lane at SPAWN (near you, but fixed) — so it's a fair positional dodge, never a chase
-		var twx: float = clampf(duck_x + randf_range(-70.0, 70.0), BANK_W + w * 0.5, VIEW.x - BANK_W - w * 0.5)
+		var twx: float = clampf(duck_x + randf_range(-70.0, 70.0), bankw + w * 0.5, VIEW.x - bankw - w * 0.5)
 		# CRAZY LOG: a runaway log that TUMBLES end-over-end and weaves wildly across the river
 		var is_crazy: bool = false    # ON ICE (Scott 2026-06-22, not fun). revive: not is_thwomp and not is_spring and not homing and distance > 4500.0 and randf() < 0.035
 		logs.append({
 			"x": twx if is_thwomp else logx,
 			"y": -60.0, "w": w, "h": 46.0, "missed": false, "spring": is_spring, "vx": 0.0 if is_thwomp else drift,
-			"home": homing, "phase": randf() * TAU, "frog": (not is_spring) and not is_thwomp and not is_crazy and randf() < 0.35, "frog_gone": false,
+			"home": homing, "phase": randf() * TAU, "frog": (not is_spring) and not is_thwomp and not is_crazy and randf() < (0.95 if stretch_mod == "snacks" else 0.35), "frog_gone": false,
 			"thwomp": is_thwomp, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": twx,
 			"crazy": is_crazy, "cphase": randf() * TAU, "spin": randf_range(1.4, 2.6) * (1.0 if randf() < 0.5 else -1.0),
 		})
@@ -8478,15 +8550,15 @@ func _spawn(delta: float) -> void:
 
 	item_timer -= delta
 	if item_timer <= 0.0 and stretch_mod != "rusty":   # no snacks on the course — only HIS line pays
-		items.append({"x": randf_range(BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
+		items.append({"x": randf_range(bankw + 24.0, VIEW.x - bankw - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
 	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and not stretch_mod in ["rusty", "calm"]:
-		var hx := clampf(duck_x + randf_range(-140.0, 140.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
+		var hx := clampf(duck_x + randf_range(-140.0, 140.0), bankw + 40.0, VIEW.x - bankw - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
 		if ascension >= 6 and randf() < 0.25 + 0.05 * (ascension - 6):   # RELENTLESS FLOCK: herons hunt in packs
-			var hx2 := clampf(duck_x + randf_range(-190.0, 190.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0)
+			var hx2 := clampf(duck_x + randf_range(-190.0, 190.0), bankw + 40.0, VIEW.x - bankw - 40.0)
 			enemies.append({"x": hx2, "y": -150.0, "vy": speed + 300.0, "id": _next_enemy_id()})
 		_codex_see("heron")
 		# herons get hungrier deep in the run (down to ~60% of the early gap; GLASS CANNON worse)
@@ -8539,9 +8611,9 @@ func _move_world(delta: float) -> void:
 		if lvx != 0.0:
 			l.x += lvx * delta
 			# drifting logs bounce off the banks (homing logs just keep tracking you)
-			if not l.get("home", false) and (l.x < l.w * 0.5 + BANK_W or l.x > VIEW.x - l.w * 0.5 - BANK_W):
+			if not l.get("home", false) and (l.x < l.w * 0.5 + bankw or l.x > VIEW.x - l.w * 0.5 - bankw):
 				l.vx = -lvx
-				l.x = clampf(l.x, l.w * 0.5 + BANK_W, VIEW.x - l.w * 0.5 - BANK_W)
+				l.x = clampf(l.x, l.w * 0.5 + bankw, VIEW.x - l.w * 0.5 - bankw)
 	for it in items:
 		it.y += dy
 	logs = logs.filter(func(l): return l.y < VIEW.y + 80.0)
@@ -8620,7 +8692,7 @@ func _draw_thwomp(l: Dictionary) -> void:
 # LOG BUFFET: ANY log you destroy (laser, MEGA/thunder smash, fire-melt, crumb) coughs up a snack
 func _buffet_drop(x: float, y: float) -> void:
 	if _up("buffet") > 0:
-		items.append({"x": clampf(x, BANK_W + 24.0, VIEW.x - BANK_W - 24.0), "y": y, "got": false, "kind": _pick_kind()})
+		items.append({"x": clampf(x, bankw + 24.0, VIEW.x - bankw - 24.0), "y": y, "got": false, "kind": _pick_kind()})
 		_float_text(x, y - 18.0, "snack!", Color(1.0, 0.86, 0.4))
 
 func _laser_burn() -> void:
@@ -9363,6 +9435,15 @@ func _draw_run_timeline() -> void:
 		else:
 			var km: String = "%dk" % (BOSS_MARKS[i] / 1000)
 			_otext(Vector2(bx - 24, y + 8), km, 13, Color(1, 0.85, 0.4, 0.85), 48, HORIZONTAL_ALIGNMENT_CENTER, 3)
+	# the NEXT SPLIT: a diverging gold Y on the road ahead — you can see the choice coming
+	# and plan for it, instead of the river ambushing you with it
+	if fork.is_empty() and stretch_mod == "":
+		var _fpx: float = fx.call(fork_next / 10.0)
+		if fork_next / 10.0 < span and _fpx > dx + 16.0:
+			var _fca := Color(1.0, 0.85, 0.4, 0.65 + 0.3 * sin(anim_t * 3.0))
+			draw_line(Vector2(_fpx, y + 7.0), Vector2(_fpx, y), _fca, 2.5)
+			draw_line(Vector2(_fpx, y), Vector2(_fpx - 5.0, y - 7.0), _fca, 2.5)
+			draw_line(Vector2(_fpx, y), Vector2(_fpx + 5.0, y - 7.0), _fca, 2.5)
 	# upcoming BOON drafts — a couple of blue pips on the road ahead so the shrine-card moments
 	# never feel abrupt. only the next few (the draft schedule grows, so far-out ones bunch up)
 	# and skip any tucked right under the duck marker.
@@ -11654,7 +11735,7 @@ func _tut_goal() -> int:
 	return int(TUT[mini(tut_step, TUT.size() - 1)].goal)
 
 func _tut_spawn_log(spring: bool) -> void:
-	logs.append({"x": clampf(duck_x, BANK_W + 90.0, VIEW.x - BANK_W - 90.0),
+	logs.append({"x": clampf(duck_x, bankw + 90.0, VIEW.x - bankw - 90.0),
 		"y": -70.0, "w": 150.0, "h": 46.0, "missed": false, "spring": spring,
 		"vx": 0.0, "phase": 0.0, "frog": false, "frog_gone": false})
 
@@ -11718,14 +11799,14 @@ func _tut_tick(delta: float) -> void:
 					tut_spawn_t = 0.5                  # at the moment of the bounce (see hyper_jump), perfectly timed
 			"snack":
 				if items.is_empty():               # one at a time so each grab is a clean rep
-					items.append({"x": clampf(duck_x + randf_range(-70.0, 70.0), BANK_W + 24.0, VIEW.x - BANK_W - 24.0),
+					items.append({"x": clampf(duck_x + randf_range(-70.0, 70.0), bankw + 24.0, VIEW.x - bankw - 24.0),
 						"y": -40.0, "got": false, "kind": 0}); tut_spawn_t = 0.4
 			"loft":
 				if not tut_fired and loft < 1.0:
 					_add_loft(delta * 0.6)         # VISIBLY fill the bar (not an instant snap)
 			"heron":
 				if enemies.is_empty() and not tut_saw_heron:
-					enemies.append({"x": clampf(duck_x + randf_range(-50.0, 50.0), BANK_W + 40.0, VIEW.x - BANK_W - 40.0),
+					enemies.append({"x": clampf(duck_x + randf_range(-50.0, 50.0), bankw + 40.0, VIEW.x - bankw - 40.0),
 						"y": -80.0, "vy": speed + 240.0, "id": _next_enemy_id()})
 					tut_saw_heron = true; tut_heron_clean = true; tut_spawn_t = 0.6
 	# did the player just SUCCEED at this beat's action?
@@ -12079,6 +12160,7 @@ func _draw() -> void:
 		# living-water FX are GAMEPLAY-only (menus don't need streaks/foam — web frame budget)
 		if not (in_menu or in_select or in_shop or in_stats or in_codex or in_shrine or in_jukebox):
 			_draw_living_water(scroll)
+			_draw_branch_water()
 	# reed-lined banks frame the river (they take the theme wash too)
 	if has_art and tex_bank_l != null:
 		var bs := tex_bank_l.get_size()
@@ -12094,6 +12176,15 @@ func _draw() -> void:
 				draw_texture(tex_bank_l, Vector2(0, by), btint)
 				draw_texture(tex_bank_r, Vector2(VIEW.x - bs.x, by), btint)
 				by += bs.y
+		# THE NARROWS: the shore itself closes in — solid ground fill + the reed edge
+		# re-drawn at the NEW waterline (gameplay clamps ride the same bankw, so what
+		# you see is exactly where the river ends)
+		if bankw > BANK_W + 1.0:
+			var _pby := -bs.y + boff
+			draw_rect(Rect2(0.0, 0.0, bankw - bs.x + 2.0, VIEW.y), Color(0.22, 0.35, 0.16) * tint_new)
+			draw_rect(Rect2(VIEW.x - bankw + bs.x - 2.0, 0.0, bankw - bs.x + 2.0, VIEW.y), Color(0.22, 0.35, 0.16) * tint_new)
+			draw_texture_rect(tex_bank_l, Rect2(bankw - bs.x, _pby, bs.x, VIEW.y - _pby), true, tint_new)
+			draw_texture_rect(tex_bank_r, Rect2(VIEW.x - bankw, _pby, bs.x, VIEW.y - _pby), true, tint_new)
 
 	if in_menu:
 		_draw_menu()
@@ -13438,6 +13529,45 @@ func _draw_golden_hour() -> void:
 		draw_polyline(PackedVector2Array([Vector2(rx, -20.0), Vector2(rx + 70.0, VIEW.y + 20.0)]),
 			Color(1.0, 0.9, 0.62, 0.012 * ge), 30.0)
 
+# BRANCH WATERS: the chosen channel is a PLACE, not a multiplier — weather LAYERED on
+# whatever pond you're paddling (never replacing Scott's pond canon; it washes out when
+# the stretch ends). each wager has a face you recognize on sight.
+func _draw_branch_water() -> void:
+	match stretch_mod:
+		"heron":                                   # THE NARROWS: dusk closes in, shadows hunt
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.08, 0.10, 0.26, 0.15))
+			for k in 2:
+				var _shx: float = VIEW.x * (0.30 + 0.4 * float(k)) + sin(anim_t * (0.5 + 0.2 * float(k)) + float(k) * 2.1) * 130.0
+				var _shy: float = fposmod(anim_t * (34.0 + 18.0 * float(k)) + float(k) * 300.0, VIEW.y + 160.0) - 80.0
+				_fill_ellipse(Vector2(_shx, _shy), 30.0, 10.0, Color(0.02, 0.04, 0.10, 0.16))
+				_fill_ellipse(Vector2(_shx - 26.0, _shy - 4.0), 13.0, 5.0, Color(0.02, 0.04, 0.10, 0.13))
+				_fill_ellipse(Vector2(_shx + 26.0, _shy - 4.0), 13.0, 5.0, Color(0.02, 0.04, 0.10, 0.13))
+		"snacks":                                  # THE SHALLOWS: sun on the water, bugs hatching
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(1.0, 0.86, 0.4, 0.06))
+			for k in 8:
+				var _hbx: float = fposmod(float(k) * 173.0 + sin(anim_t * 1.3 + float(k)) * 30.0, VIEW.x - 2.0 * bankw) + bankw
+				var _hby: float = fposmod(float(k) * 217.0 - anim_t * (26.0 + 7.0 * float(k % 3)), VIEW.y)
+				draw_circle(Vector2(_hbx, _hby), 1.6, Color(0.95, 1.0, 0.8, 0.5 + 0.3 * sin(anim_t * 6.0 + float(k))))
+		"junk":                                    # THE BACKWATER: tea-stained, slow, cluttered
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.30, 0.20, 0.08, 0.14))
+		"feathers":                                # EASY MONEY: loose down drifts on the air
+			for k in 5:
+				var _ffx: float = fposmod(float(k) * 127.0 + sin(anim_t * (0.8 + 0.2 * float(k))) * 44.0, VIEW.x)
+				var _ffy: float = fposmod(float(k) * 260.0 + anim_t * 30.0, VIEW.y)
+				draw_circle(Vector2(_ffx, _ffy), 2.6, Color(1.0, 0.98, 0.9, 0.5))
+				draw_circle(Vector2(_ffx + 2.0, _ffy - 2.0), 1.4, Color(1.0, 0.98, 0.9, 0.35))
+		"calm":                                    # THE STILLS: mist and fireflies, muffled world
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.72, 0.80, 0.86, 0.08))
+			for k in 3:
+				var _my: float = fposmod(float(k) * 340.0 + anim_t * 9.0, VIEW.y + 220.0) - 110.0
+				draw_rect(Rect2(0.0, _my, VIEW.x, 64.0), Color(0.85, 0.90, 0.94, 0.05 + 0.02 * sin(anim_t * 0.7 + float(k) * 2.0)))
+			for k in 6:
+				var _flx: float = VIEW.x * 0.5 + sin(anim_t * (0.3 + 0.11 * float(k)) + float(k) * 1.7) * (VIEW.x * 0.36)
+				var _fly: float = fposmod(float(k) * 260.0 + anim_t * 14.0, VIEW.y)
+				var _fla: float = 0.35 + 0.3 * sin(anim_t * (2.0 + 0.37 * float(k)) + float(k))
+				draw_circle(Vector2(_flx, _fly), 5.0, Color(0.85, 1.0, 0.55, maxf(_fla, 0.0) * 0.18))
+				draw_circle(Vector2(_flx, _fly), 1.8, Color(0.92, 1.0, 0.6, maxf(_fla, 0.0)))
+
 # RIVER EVENTS + FORK visuals: the split island + hanging signs, the lost duckling's raft,
 # and squall rain. Drawn with the gameplay layer (they're world objects, not HUD).
 func _draw_river_events() -> void:
@@ -13463,6 +13593,9 @@ func _draw_river_events() -> void:
 			var t2w := font.get_string_size(mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 			draw_string(font, brd.position + Vector2(bw * 0.5 - t2w * 0.5, 36.0), mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
 				Color(1.0, 0.55, 0.5) if String(m.id) == "pike" or String(m.id) == "heron" else Color(0.72, 0.95, 0.72))
+			# HER sign: a warm pulse while she glides in to pass beneath it
+			if not fork_ride.is_empty() and side == int(fork_ride.get("side", -1)):
+				draw_rect(brd.grow(3.0), Color(1.0, 0.85, 0.4, 0.45 + 0.4 * sin(anim_t * 5.0)), false, 2.5)
 	# the LOST DUCKLING drifts by on a scrap of driftwood, peeping
 	if ev_id == "lost_duckling" and not ev_duckling.is_empty():
 		var dpos := Vector2(ev_duckling.x, ev_duckling.y)
@@ -13486,7 +13619,7 @@ func _draw_river_events() -> void:
 	# THE RIDE reads as SPEED: white water-streaks rushing past while the current has her
 	if not fork_ride.is_empty():
 		for _st2 in 12:
-			var _sx: float = BANK_W + fposmod(float(_st2) * 43.7 + float(_st2 * _st2) * 7.3, VIEW.x - BANK_W * 2.0)
+			var _sx: float = bankw + fposmod(float(_st2) * 43.7 + float(_st2 * _st2) * 7.3, VIEW.x - bankw * 2.0)
 			var _sy: float = fposmod(float(_st2) * 173.0 + anim_t * 1500.0, VIEW.y + 120.0) - 60.0
 			var _sl: float = 40.0 + fposmod(float(_st2) * 29.0, 50.0)
 			draw_line(Vector2(_sx, _sy), Vector2(_sx, _sy + _sl), Color(1, 1, 1, 0.16), 2.0)
@@ -13607,8 +13740,8 @@ func _draw_living_water(scroll: float) -> void:
 	for i in 3:
 		var sw := 26.0 - i * 7.0
 		var sa := 0.05 + i * 0.02
-		draw_rect(Rect2(BANK_W, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
-		draw_rect(Rect2(VIEW.x - BANK_W - sw, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
+		draw_rect(Rect2(bankw, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
+		draw_rect(Rect2(VIEW.x - bankw - sw, 0, sw, VIEW.y), Color(0.72, 0.86, 0.72, sa))
 	# deep channel: the middle runs darker (subtle, it's depth not a stripe)
 	var chw := VIEW.x * 0.30
 	draw_rect(Rect2(VIEW.x * 0.5 - chw * 0.5, 0, chw, VIEW.y), Color(0.03, 0.07, 0.16, 0.10))
@@ -13618,7 +13751,7 @@ func _draw_living_water(scroll: float) -> void:
 	# current streaks: thin elongated highlights that slide downstream a touch faster than the
 	# water tile — the river visibly FLOWS even when nothing else is on screen
 	for i in 9:
-		var sx: float = BANK_W + 24.0 + fposmod(i * 197.31, VIEW.x - BANK_W * 2.0 - 48.0)
+		var sx: float = bankw + 24.0 + fposmod(i * 197.31, VIEW.x - bankw * 2.0 - 48.0)
 		var slen: float = 34.0 + fposmod(i * 61.7, 52.0)
 		var sy: float = fposmod(i * 331.7 + scroll * (1.12 + fposmod(i * 0.13, 0.22)), VIEW.y + slen * 2.0) - slen
 		var wob: float = sin(anim_t * 1.4 + i * 2.1) * 2.0
@@ -13626,7 +13759,7 @@ func _draw_living_water(scroll: float) -> void:
 		draw_polyline(PackedVector2Array([Vector2(sx + wob, sy), Vector2(sx, sy + slen * 0.55), Vector2(sx - wob, sy + slen)]), Color(1.0, 1.0, 1.0, sa2), 2.0)
 	# lapping foam line at each bank edge: a gently waving bright seam + the odd bubble
 	for side in 2:
-		var bx: float = BANK_W if side == 0 else VIEW.x - BANK_W
+		var bx: float = bankw if side == 0 else VIEW.x - bankw
 		var pts := PackedVector2Array()
 		var seg := 10
 		for k in seg + 1:
@@ -13660,7 +13793,7 @@ func _draw_bank_decor() -> void:
 		var sy: float = fposmod(k * (span / nslots) + distance, span) - 100.0
 		var wrap_i: int = int((k * (span / nslots) + distance) / span)
 		var left: bool = (k % 2 == 0)
-		var b := Vector2(BANK_W if left else VIEW.x - BANK_W, sy)
+		var b := Vector2(bankw if left else VIEW.x - bankw, sy)
 		var d: float = 1.0 if left else -1.0          # lean into the river
 		if have_tex:
 			var h: int = (k * 31 + wrap_i * 17) % 100
@@ -14184,7 +14317,7 @@ func _draw_menu() -> void:
 				continue
 			var _mt: Texture2D = tex_env[_mn]
 			var _my := fposmod(_mi * 217.0 + anim_t * (9.0 + _mi * 2.5), VIEW.y + 80.0) - 40.0
-			var _mx: float = (BANK_W + 34.0 + (_mi % 3) * 26.0) if _mi % 2 == 0 else (VIEW.x - BANK_W - 34.0 - (_mi % 3) * 22.0)
+			var _mx: float = (bankw + 34.0 + (_mi % 3) * 26.0) if _mi % 2 == 0 else (VIEW.x - bankw - 34.0 - (_mi % 3) * 22.0)
 			draw_set_transform(Vector2(_mx + sin(anim_t * 0.5 + _mi) * 6.0, _my), sin(anim_t * 0.6 + _mi) * 0.08, Vector2(1.5, 1.5))
 			draw_texture_rect(_mt, Rect2(-_mt.get_size() * 0.5, Vector2(_mt.get_size())), false, Color(0.9, 0.95, 0.97, 0.8))
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -15933,8 +16066,8 @@ func _bot_control(delta: float) -> void:
 			sim_donny_react = randf() < _bot_dodge_rate()
 	else:
 		sim_donny_active = false
-	var lo := BANK_W + 30.0
-	var hi := VIEW.x - BANK_W - 30.0
+	var lo := bankw + 30.0
+	var hi := VIEW.x - bankw - 30.0
 	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed", "pbeach"]:   # BOSS VULNERABLE: line up + stomp
 		var bx := clampf(float(boss.x), lo, hi)
 		# ...but never stomp-tunnel through a hazard: if the lineup lane is hot, survive
