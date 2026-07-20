@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.21.54"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.0"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1355,6 +1355,13 @@ const FORK_MODS := [
 	{"id": "golden", "name": "GOLDEN REACH", "desc": "the light! the LIGHT!"},
 	{"id": "rusty",  "name": "RUSTY'S THERMALS", "desc": "no danger — just FLY"},
 ]
+# THE RIVER REMEMBERS: lean into danger and it eventually DARES you; favor quiet water
+# and someone starts humming in a cove. earned branches, not rolled ones.
+const FORK_GAUNTLET := {"id": "gauntlet", "name": "THE GAUNTLET", "desc": "the river's DARE — packs of herons. unhit pays the best"}
+const FORK_COVE := {"id": "cove", "name": "LUCIEN'S COVE", "desc": "nothing hunts. someone hums."}
+var run_fork_hist: Array = []   # branch ids taken this run (the river's memory)
+var cove_active := false
+var cove_gift_at := -1.0
 var slip_pts: Array = []        # RUSTY'S THERMALS 2.0: his slipstream ribbon — {x, y}
 var slip_lead_x := 270.0        # where Rusty flies (he weaves; you shadow)
 var slip_on := 0                # scored ticks ON his line
@@ -1395,6 +1402,14 @@ func _fork_commit(sidei: int) -> void:
 	var side: Dictionary = fork.l if sidei == 0 else fork.r
 	var m: Dictionary = side.mod
 	stretch_mod = String(m.id)
+	run_fork_hist.append(String(m.id))              # the river remembers
+	if side.get("mystery", false):                  # the strange water shows its hand
+		_flash("the strange water was...\n%s!" % String(m.name), 2.6)
+		_sfx("chime", 0.5)
+	if stretch_mod == "cove":                       # LUCIEN'S COVE runs on calm rules + a visitor
+		stretch_mod = "calm"
+		cove_active = true
+		cove_gift_at = distance + THEME_LEN * 0.35
 	stretch_hit = false
 	stretch_snap = {"snacks": int(run_stats.get("snacks", 0)), "trash": run_trash}
 	stretch_until = distance + THEME_LEN * 0.85
@@ -1437,7 +1452,7 @@ func _fork_card_rect(i: int) -> Rect2:
 func _fork_choose(side: int) -> void:
 	fork_choosing = false
 	_sfx("click")
-	if fork_sky == side:                            # THE SKY ROUTE: over the boss, not through it
+	if side == 2:                                   # THE SKY ROUTE: over the boss, not through it
 		_st("forks_taken")
 		fork = {}
 		fork_warned = false
@@ -1458,7 +1473,7 @@ func _ev_heron_mult() -> float:
 	if stretch_mod == "rusty":
 		return 0.0                                   # the Thermals are HIS course — nothing else exists
 	return (1.8 if ev_id == "patrol" else 1.0) \
-		* (2.2 if stretch_mod == "heron" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
+		* (2.2 if stretch_mod == "heron" else 1.0) * (3.0 if stretch_mod == "gauntlet" else 1.0) * (0.7 if stretch_mod == "calm" else 1.0)
 
 func _ev_snack_mult() -> float:
 	return (1.3 if ev_id == "squall" else 1.0) * (2.0 if ev_id == "tailwind" else 1.0) \
@@ -1469,10 +1484,13 @@ func _ev_prop_mult() -> float:
 	return (3.0 if ev_id == "flush" else 1.0) * (2.2 if stretch_mod == "junk" else 1.0)
 
 func _ev_speed_mult() -> float:
-	# the chooser froze the approach; post-choice the current GRABS you and rushes the branch
-	var ride_rush := 1.0                               # sign glide = readable; only the rush surges
+	# THE LIVING FORK: the world never stops — the current EASES for the approach so both
+	# futures are readable, then the ride grabs you (glide = readable, rush = whitewater)
+	var ride_rush := 1.0
 	if not fork_ride.is_empty():
 		ride_rush = 1.15 if str(fork_ride.get("ph", "rush")) == "glide" else 2.4
+	elif not fork.is_empty() and not fork.get("picked", false):
+		ride_rush = 0.55                               # reading speed while the island approaches
 	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * ride_rush
 
 func _update_river_events(delta: float) -> void:
@@ -1523,11 +1541,24 @@ func _update_river_events(delta: float) -> void:
 		for _mi2 in 2:                                 # the Reach + the Thermals are rare — reroll each half the time
 			if String(lmod.id) in ["golden", "rusty"] and randf() < 0.5: lmod = mods[2]
 			if String(rmod.id) in ["golden", "rusty"] and randf() < 0.5: rmod = mods[3]
+		# THE RIVER REMEMBERS: a run's leanings earn special water at later splits
+		var _dlean := 0
+		var _clean := 0
+		for _fid in run_fork_hist:
+			if String(_fid) in ["heron", "junk", "gauntlet"]: _dlean += 1
+			if String(_fid) in ["calm", "golden", "cove"]: _clean += 1
+		if _dlean >= 2 and randf() < 0.7:
+			rmod = FORK_GAUNTLET
+		elif _clean >= 2 and randf() < 0.7:
+			rmod = FORK_COVE
 		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
 		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
 		if rth == lth: rth = (rth + 1) % THEMES.size()
 		fork = {"y": -260.0, "picked": false,
 			"l": {"theme": lth, "mod": lmod}, "r": {"theme": rth, "mod": rmod}}
+		# THE STRANGE WATER: rarely, one channel keeps its secret until you're IN it
+		if randf() < 0.16 and String(lmod.id) != "rusty" and String(rmod.id) != "rusty":
+			(fork.l if randf() < 0.5 else fork.r)["mystery"] = true
 		logs.clear(); enemies.clear()                  # the choice must be CHOOSABLE — clear the lane
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
@@ -1540,13 +1571,13 @@ func _update_river_events(delta: float) -> void:
 			fork_ride.t = float(fork_ride.t) + delta
 			duck_x = move_toward(duck_x, VIEW.x * (0.30 if int(fork_ride.side) == 0 else 0.70), 120.0 * delta)
 			target_x = duck_x; steer_anchor_x = duck_x
-			if not fork.is_empty() and not fork.get("passed", false) and float(fork.y) > BASE_Y - 76.0:
+			if not fork.is_empty() and not fork.get("passed", false) and float(fork.y) > BASE_Y + 92.0:
 				fork.passed = true                     # right under her sign: it swings, the river chimes
 				_sfx("chime", 1.35, -3.0)
 				_sfx("click", 0.6, -6.0)               # the board knocks on its post
 				ripples.append({"x": VIEW.x * (0.24 if int(fork_ride.side) == 0 else 0.76),
 					"y": BASE_Y, "t": 0.0, "max": 90.0, "col": Color(1.0, 0.9, 0.5)})
-			if (not fork.is_empty() and float(fork.y) > BASE_Y + 44.0) or float(fork_ride.t) > 4.0:
+			if (not fork.is_empty() and float(fork.y) > BASE_Y + 160.0) or float(fork_ride.t) > 4.0:
 				fork_ride.ph = "rush"; fork_ride.t = 0.0; fork_ride.x0 = duck_x
 				_sfx("fwoosh", 1.2)
 				# the road not taken drifts away behind the wedge — a last glimpse of it
@@ -1572,21 +1603,22 @@ func _update_river_events(delta: float) -> void:
 				_fork_commit(_rside)
 	if not fork.is_empty():
 		fork.y += speed * delta
-		if fork.get("picked", false) or (not fork_ride.is_empty() and str(fork_ride.get("ph", "")) == "rush"):
-			fork.y += 950.0 * delta                    # signs are BEHIND her now — hustle off stage
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
-			fork.asked = true
-			fork_choosing = true
+			fork.asked = true                          # THE LIVING FORK: no modal — steer to choose
 			fork_ask_t = anim_t
-			pressed = false; moved = false; target_x = duck_x; steer_anchor_x = duck_x
 			fork_sky = -1                              # THE SKY ROUTE: only offered when a boss looms ahead
 			if next_boss_idx < BOSS_MARKS.size() and int(distance / 10.0) < BOSS_MARKS[next_boss_idx] \
 					and BOSS_MARKS[next_boss_idx] - int(distance / 10.0) < 2600 and randf() < 0.5:
 				fork_sky = randi() % 2
 			_sfx("chime", 0.7)
-		if not fork.get("picked", false) and float(fork.y) >= BASE_Y:
-			_fork_commit(0 if duck_x < VIEW.x * 0.5 else 1)   # fallback only — the ride commits first
-		if float(fork.y) > VIEW.y + 260.0:
+		# COMMIT AT THE WEDGE: where you ARE when the island's nose reaches you is your water.
+		# center + a sky route offered = ride the thermal clean over the duel.
+		if not fork.get("picked", false) and fork_ride.is_empty() and float(fork.y) >= BASE_Y - 6.0:
+			if fork_sky >= 0 and absf(duck_x - VIEW.x * 0.5) < 58.0:
+				_fork_choose(2)                        # the updraft over the island itself
+			else:
+				_fork_choose(0 if duck_x < VIEW.x * 0.5 else 1)
+		if float(fork.y) > VIEW.y + 600.0:
 			fork = {}
 			fork_warned = false
 			fork_next = distance + randf_range(105000.0, 135000.0)
@@ -1695,6 +1727,17 @@ func _update_river_events(delta: float) -> void:
 				_flash("%d snacks... the feast wanted 12." % _sg, 2.0)
 		elif stretch_mod == "golden":
 			_wager_payout(25, "the golden hour's blessing: +25 feathers")
+		elif stretch_mod == "gauntlet":
+			if not stretch_hit:
+				shield_charges = mini(shield_charges + 1, 3)
+				loft = 1.0
+				_wager_payout(100, "THE GAUNTLET BOWS.\n+100 feathers · +1 shield · LOFT FILLED", true)
+				_sfx("unlock", 1.3)
+			else:
+				_flash("the gauntlet keeps its trophies.", 2.2)
+		if cove_active:
+			cove_active = false
+			_flash("the cove asks for nothing.\nLucien waves you on.", 2.2)
 		_set_calm_audio(false)
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
@@ -1850,6 +1893,7 @@ var tex_beaver_open := []       # BEAVER gnaw/throw turntable
 var tex_turtle_spin := []       # hazard-turtle turntable — each one faces a different way
 var tex_turtle := []            # the lesser river snapping-turtle hazard (green, smaller)
 var tex_elder: Texture2D        # the ancient bearded duck (shrine)
+var tex_forkisland: Texture2D   # THE LIVING FORK's island — the river divides around it
 var tex_elder_talk: Texture2D   # ...with his beak open, for talking
 var tex_items := {}
 var tex_water: Texture2D
@@ -2023,6 +2067,8 @@ func _ready() -> void:
 				tex_turtle_spin.append(load(_tp))
 	if ResourceLoader.exists("res://art/elder.png"):
 		tex_elder = load("res://art/elder.png")
+		if ResourceLoader.exists("res://art/fork_island.png"):
+			tex_forkisland = load("res://art/fork_island.png")
 	if ResourceLoader.exists("res://art/elder_talk.png"):
 		tex_elder_talk = load("res://art/elder_talk.png")
 	if ResourceLoader.exists("res://art/sadie_0.png"):
@@ -2392,6 +2438,7 @@ func _ready() -> void:
 		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
 		for _sw in [0, 3, 6]:
 			distance = 6000.0; biome_progress = float(_sw) * THEME_LEN + 800.0
+			fork = {}; fork_ride = {}; fork_next = distance + 900000.0; next_draft = distance + 900000.0   # deterministic stage: no fork/draft ambush mid-sweep
 			theme_idx = _sw; theme_prev = _sw; theme_sweep = 1.0
 			await _sweep_grab("river%d" % _sw)
 		_force_boss(2, "megasadie")
@@ -2444,13 +2491,13 @@ func _ready() -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_raw.png")
 		if "--film" in OS.get_cmdline_user_args():     # FILMSTRIP: the full choose->ride->arrive sequence
 			fork_sky = -1
-			fork.asked = false; fork.y = -20.0         # replay the ask cleanly
+			fork.asked = false; fork.y = 210.0         # island already rounding the bend — film the approach
 			for _ff in 26:
 				await get_tree().create_timer(0.12).timeout
 				await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png("/tmp/film_%02d.png" % _ff)
-				if _ff == 8:                           # tap the right card mid-film
-					fork_pick = 1; fork_pick_t = anim_t
+				if _ff == 6:                           # STEER right mid-film — the wedge commits us
+					duck_x = VIEW.x * 0.7; target_x = duck_x; steer_anchor_x = duck_x
 		get_tree().quit()
 	elif "--ponchointro" in OS.get_cmdline_user_args():
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -5516,6 +5563,7 @@ func reset_game() -> void:
 	fork = {}; fork_next = randf_range(36000.0, 42000.0); fork_warned = false; stretch_mod = ""; stretch_until = 0.0   # first split ~3.8k ft: EVERY run tastes one (7.2k was past most deaths — Scott never saw it)
 	_set_calm_audio(false)
 	bankw = BANK_W
+	run_fork_hist.clear(); cove_active = false; cove_gift_at = -1.0
 	sadie = null
 	sadie_timer = 40.0
 	hawk = null
@@ -6379,9 +6427,15 @@ func _process(delta: float) -> void:
 		_pf_prev_d2n = int(float(_now_us - _pf_draw_us) / 1000.0)
 	_pf_proc_us = _now_us
 	anim_t += delta
+	if cove_active and cove_gift_at > 0.0 and distance > cove_gift_at:
+		cove_gift_at = -1.0                            # LUCIEN'S gift, delivered mid-hum
+		run_feathers += 40
+		_float_text(duck_x, BASE_Y - 104.0, "a gift from LUCIEN  +40", Color(0.6, 0.9, 0.95))
+		_say("...nice out here, huh.", 3.0)
+		_sfx("chime", 0.8, -4.0)
 	# THE NARROWS (danger-pays branch water): the banks physically close in — less river,
 	# nowhere to hide. eases in/out so the squeeze reads as the water changing, not a snap.
-	bankw = move_toward(bankw, BANK_W + (62.0 if stretch_mod == "heron" else 0.0), 46.0 * delta)
+	bankw = move_toward(bankw, BANK_W + (62.0 if stretch_mod in ["heron", "gauntlet"] else 0.0), 46.0 * delta)
 	if setting_show_fps:                              # track the worst moment per 3s window
 		fps_worst_dt = maxf(fps_worst_dt, delta)
 		fps_win_t += delta
@@ -13551,6 +13605,14 @@ func _draw_golden_hour() -> void:
 # the stretch ends). each wager has a face you recognize on sight.
 func _draw_branch_water() -> void:
 	match stretch_mod:
+		"gauntlet":                                # THE GAUNTLET: the narrows, but the water's gone red
+			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.20, 0.04, 0.08, 0.18))
+			for k in 3:
+				var _gsx: float = VIEW.x * (0.24 + 0.26 * float(k)) + sin(anim_t * (0.6 + 0.2 * float(k)) + float(k) * 2.0) * 120.0
+				var _gsy: float = fposmod(anim_t * (40.0 + 16.0 * float(k)) + float(k) * 260.0, VIEW.y + 160.0) - 80.0
+				_fill_ellipse(Vector2(_gsx, _gsy), 30.0, 10.0, Color(0.05, 0.02, 0.04, 0.20))
+				_fill_ellipse(Vector2(_gsx - 26.0, _gsy - 4.0), 13.0, 5.0, Color(0.05, 0.02, 0.04, 0.16))
+				_fill_ellipse(Vector2(_gsx + 26.0, _gsy - 4.0), 13.0, 5.0, Color(0.05, 0.02, 0.04, 0.16))
 		"heron":                                   # THE NARROWS: dusk closes in, shadows hunt
 			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.08, 0.10, 0.26, 0.15))
 			for k in 2:
@@ -13575,6 +13637,11 @@ func _draw_branch_water() -> void:
 				draw_circle(Vector2(_ffx + 2.0, _ffy - 2.0), 1.4, Color(1.0, 0.98, 0.9, 0.35))
 		"calm":                                    # THE STILLS: mist and fireflies, muffled world
 			draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.72, 0.80, 0.86, 0.08))
+			if cove_active and tex_loon != null:   # LUCIEN, humming at the water's edge
+				var _lx: float = bankw + 44.0
+				var _ly: float = VIEW.y * 0.36 + sin(anim_t * 1.4) * 6.0
+				var _lsz: Vector2 = tex_loon.get_size() * 2.0
+				draw_texture_rect(tex_loon, Rect2(Vector2(_lx - _lsz.x * 0.5, _ly - _lsz.y * 0.5), _lsz), false)
 			for k in 3:
 				var _my: float = fposmod(float(k) * 340.0 + anim_t * 9.0, VIEW.y + 220.0) - 110.0
 				draw_rect(Rect2(0.0, _my, VIEW.x, 64.0), Color(0.85, 0.90, 0.94, 0.05 + 0.02 * sin(anim_t * 0.7 + float(k) * 2.0)))
@@ -13587,31 +13654,80 @@ func _draw_branch_water() -> void:
 
 # RIVER EVENTS + FORK visuals: the split island + hanging signs, the lost duckling's raft,
 # and squall rain. Drawn with the gameplay layer (they're world objects, not HUD).
+# which color a channel's future paints on the water (mystery = strange violet)
+func _mod_wash(id: String) -> Color:
+	match id:
+		"heron": return Color(0.10, 0.12, 0.34)
+		"gauntlet": return Color(0.32, 0.05, 0.08)
+		"snacks": return Color(1.0, 0.80, 0.35)
+		"junk": return Color(0.36, 0.24, 0.09)
+		"calm", "cove": return Color(0.75, 0.82, 0.88)
+		"golden": return Color(1.0, 0.85, 0.30)
+		"rusty": return Color(1.0, 0.92, 0.60)
+		"feathers": return Color(0.95, 0.95, 0.88)
+	return Color(0.45, 0.32, 0.55)
+
 func _draw_river_events() -> void:
 	if not fork.is_empty():
 		var fy: float = fork.y
-		# (the old giant green island wedge read like a BEAM on the water — gone. the split
-		# is told by the Ancient Duck's chooser + these channel signs, like real pilings.)
-		# two hanging SIGNS naming each channel + its promise
+		var _cx: float = VIEW.x * 0.5
+		var _unpicked: bool = not fork.get("picked", false)
+		# TWO FUTURES, VISIBLE: each channel mouth already wears its branch water
+		if _unpicked:
+			var _wa: float = clampf((fy + 220.0) / 720.0, 0.0, 1.0) * 0.15
+			for side in 2:
+				var _wsd: Dictionary = fork.l if side == 0 else fork.r
+				var wc: Color = _mod_wash("?" if _wsd.get("mystery", false) else String(_wsd.mod.id))
+				var _wtop: float = maxf(0.0, fy - 420.0)
+				draw_rect(Rect2(0.0 if side == 0 else _cx, _wtop, _cx, VIEW.y - _wtop), Color(wc.r, wc.g, wc.b, _wa))
+		# the ISLAND: real geometry — the river genuinely divides around it
+		if tex_forkisland != null:
+			var _isz: Vector2 = tex_forkisland.get_size() * 3.0
+			draw_texture_rect(tex_forkisland, Rect2(_cx - _isz.x * 0.5, fy - _isz.y, _isz.x, _isz.y), false)
+			for fv in 5:                               # foam V peeling off the nose
+				var _fvt: float = float(fv) / 5.0
+				var _fvy: float = fy - 2.0 + _fvt * 26.0
+				draw_circle(Vector2(_cx - 12.0 - _fvt * 30.0, _fvy), 2.6 - _fvt * 1.4, Color(1, 1, 1, 0.55 - _fvt * 0.4))
+				draw_circle(Vector2(_cx + 12.0 + _fvt * 30.0, _fvy), 2.6 - _fvt * 1.4, Color(1, 1, 1, 0.55 - _fvt * 0.4))
+			if tex_elder != null and _unpicked:        # the ANCIENT DUCK presides from her island
+				var _esz: Vector2 = tex_elder.get_size() * 2.2
+				var _ey: float = fy - _isz.y * 0.58 + sin(anim_t * 2.0) * 4.0
+				draw_texture_rect(tex_elder, Rect2(Vector2(_cx - _esz.x * 0.5, _ey - _esz.y), _esz), false)
+				for _gm in 3:
+					var _gmy: float = _ey - 20.0 - fposmod(anim_t * 26.0 + float(_gm) * 40.0, 90.0)
+					draw_circle(Vector2(_cx + sin(anim_t * 1.7 + float(_gm) * 2.1) * 26.0, _gmy), 2.0, Color(1.0, 0.9, 0.5, 0.5))
+		# SKY ROUTE: a golden thermal shimmers straight up off the island's nose
+		if fork_sky >= 0 and _unpicked:
+			for _sk in 4:
+				var _ska: float = 0.16 + 0.10 * sin(anim_t * 3.0 + float(_sk))
+				draw_rect(Rect2(_cx - 34.0 + float(_sk) * 17.0, maxf(0.0, fy - 380.0), 10.0, minf(fy, 380.0)), Color(1.0, 0.9, 0.5, _ska))
+			_otext(Vector2(_cx - 80.0, fy - 190.0), "~ THE SKY ROUTE ~", 14, Color(1.0, 0.92, 0.6, 0.8 + 0.2 * sin(anim_t * 4.0)), 160.0, HORIZONTAL_ALIGNMENT_CENTER, 3)
+		# hanging CHANNEL BANNERS over each mouth: the deal, ON the water
 		for side in 2:
 			var sd: Dictionary = fork.l if side == 0 else fork.r
 			var sx: float = VIEW.x * (0.24 if side == 0 else 0.76)
-			var post := Vector2(sx, fy - 6.0)
-			draw_line(post, post + Vector2(0, -46.0), Color(0.42, 0.30, 0.18), 4.0)
-			var bw := 150.0
-			var brd := Rect2(post + Vector2(-bw * 0.5, -84.0), Vector2(bw, 44.0))
+			var post := Vector2(sx, fy - 96.0)
+			draw_line(post + Vector2(0, 30.0), post + Vector2(0, -34.0), Color(0.42, 0.30, 0.18), 4.0)
+			var bw := 176.0
+			var brd := Rect2(post + Vector2(-bw * 0.5, -78.0), Vector2(bw, 58.0))
 			draw_rect(brd, Color(0.52, 0.38, 0.22))
 			draw_rect(brd, Color(0.30, 0.20, 0.10), false, 2.0)
 			var m: Dictionary = sd.mod
+			var _myst: bool = sd.get("mystery", false)
 			var tname: String = THEMES[int(sd.theme)].name
 			var t1w := font.get_string_size(tname, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 			draw_string(font, brd.position + Vector2(bw * 0.5 - t1w * 0.5, 18.0), tname, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1.0, 0.96, 0.86))
-			var mn: String = String(m.name)
-			var t2w := font.get_string_size(mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-			draw_string(font, brd.position + Vector2(bw * 0.5 - t2w * 0.5, 36.0), mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
-				Color(1.0, 0.55, 0.5) if String(m.id) == "pike" or String(m.id) == "heron" else Color(0.72, 0.95, 0.72))
-			# HER sign: a warm pulse while she glides in to pass beneath it
-			if not fork_ride.is_empty() and side == int(fork_ride.get("side", -1)):
+			var mn: String = "? ? ? ? ?" if _myst else String(m.name)
+			var t2w := font.get_string_size(mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+			draw_string(font, brd.position + Vector2(bw * 0.5 - t2w * 0.5, 37.0), mn, HORIZONTAL_ALIGNMENT_LEFT, -1, 14,
+				Color(0.85, 0.7, 1.0) if _myst else (Color(1.0, 0.55, 0.5) if String(m.id) in ["heron", "gauntlet"] else Color(0.72, 0.95, 0.72)))
+			var tag: String = "strange water" if _myst else String(m.desc)
+			var t3w := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+			draw_string(font, brd.position + Vector2(bw * 0.5 - minf(t3w, bw - 10.0) * 0.5, 52.0), tag, HORIZONTAL_ALIGNMENT_LEFT, minf(t3w, bw - 8.0), 10, Color(1, 1, 1, 0.6))
+			# the banner on YOUR side glows — pre-commit it tracks your steering, post-commit your ride
+			var _mine: bool = (side == int(fork_ride.get("side", -1))) if not fork_ride.is_empty() \
+				else (_unpicked and ((duck_x < _cx) == (side == 0)) and not (fork_sky >= 0 and absf(duck_x - _cx) < 58.0))
+			if _mine:
 				draw_rect(brd.grow(3.0), Color(1.0, 0.85, 0.4, 0.45 + 0.4 * sin(anim_t * 5.0)), false, 2.5)
 	# the LOST DUCKLING drifts by on a scrap of driftwood, peeping
 	if ev_id == "lost_duckling" and not ev_duckling.is_empty():
@@ -16248,11 +16364,13 @@ func _sim_watch(delta: float) -> void:
 		_pick_boon(_bot_pick_weighted(shrine_boons, BOT_BOON_W)); return
 	if drafting and draft_choices.size() > 0:
 		_pick_upgrade(_bot_pick_weighted(draft_choices, BOT_DRAFT_W)); return
-	if fork_choosing:
-		var _fside: int = randi() % 2
-		if fork_sky >= 0 and randf() < 0.75:
-			_fside = 1 - fork_sky                  # bots mostly take the duel (boss coverage)
-		_fork_choose(_fside); return
+	if not fork.is_empty() and not fork.get("picked", false) and fork_ride.is_empty() and fork.get("asked", false):
+		if not fork.has("bot_side"):               # decide once, then STEER to it like a player
+			fork.bot_side = randi() % 2
+			if fork_sky >= 0 and randf() < 0.25:
+				fork.bot_side = 2                  # bots mostly take the duel (boss coverage)
+		target_x = VIEW.x * ([0.30, 0.70, 0.5][int(fork.bot_side)])
+		return
 	if in_shop:
 		in_shop = false; return
 	if boss != null and not sim_saw_boss:

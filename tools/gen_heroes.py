@@ -1128,6 +1128,42 @@ HEROES = [
     ("hero_emerald.png",      build_emeraldrock, dict(yaw=15, pitch=40, target=106)),
 ]
 
+def build_forkisland():
+    """THE LIVING FORK: the river genuinely divides around this — grassy spine, rocky
+    shoreline, one leaning pine, a boulder, a stump. Nose points downstream (-z)."""
+    GRASS = (86, 142, 62); GRASSD = (64, 112, 46); GRASSL = (118, 168, 84)
+    ROCK = (128, 124, 116); ROCKD = (96, 92, 88); DIRT = (112, 86, 56)
+    TRUNK = (94, 66, 40); PINE = (44, 96, 54); PINED = (30, 72, 40)
+    V = {}
+    put, ellip, box = _vox_helpers(V)
+    L = 26
+    for zi in range(-L, L + 1):
+        t = (zi + L) / (2.0 * L)
+        w = 7.5 * math.sin(min(1.0, t * 1.25) * math.pi * 0.62) + 1.2   # teardrop beam
+        wi = int(w)
+        for x in range(-wi, wi + 1):
+            edge = abs(x) >= wi - 1
+            put(x, 1, zi, ROCKD if edge else DIRT)     # rocky shoreline ring
+            put(x, 2, zi, ROCK if edge else GRASSD)
+            if not edge:
+                put(x, 3, zi, GRASS)
+        if zi % 5 == 0 and wi > 3:                     # grass tufts along the spine
+            put(wi - 2, 4, zi, GRASSL, only_empty=True)
+            put(-wi + 2, 4, zi, GRASSL, only_empty=True)
+    px, pz = 2, 10                                     # the leaning pine, upper third
+    for yy in range(4, 12):
+        put(px + (yy - 4) // 3, yy, pz, TRUNK)
+    for i, (r, yy) in enumerate([(4, 9), (3, 11), (2, 13)]):
+        ellip(px + (yy - 4) // 3, yy, pz, r, r * 0.55, r, PINE if i % 2 else PINED)
+    put(px + 3, 14, pz, PINED)
+    ellip(-3, 2, -L + 6, 2.4, 1.8, 2.2, ROCK)          # boulder near the nose
+    put(-3, 4, -L + 6, ROCKD)
+    for yy in (4, 5):                                  # old stump at the tail
+        put(-4, yy, L - 6, TRUNK)
+    put(-4, 6, L - 6, (140, 110, 70))
+    return V
+
+
 def build_jetski(alt=False):
     """WOODBURY: a jetski parked at a little float — big-water toys, nosed up and ready."""
     HULL = (206, 60, 44) if not alt else (44, 150, 172)
@@ -1146,32 +1182,46 @@ def build_jetski(alt=False):
     put(-8, 6, -6, (84, 62, 40))
     for i in range(6):                                   # sagging rope to the bow
         put(-7 + i, max(1, 4 - int(round(1.6 * math.sin(i / 5.0 * math.pi)))), -6 + i, ROPE)
-    for zi in range(-8, 9):                              # hull: wedge nose-up at the bow
-        t = (zi + 8) / 16.0
-        w = 3.4 - 2.2 * max(0.0, t - 0.55) / 0.45        # narrows to the nose
-        lift = 2 + int(round(2.6 * max(0.0, t - 0.5)))   # bow rises
-        for x in range(-int(w), int(w) + 1):
-            put(x, lift, zi, HULLD if abs(x) == int(w) else HULL)
-            put(x, lift + 1, zi, HULL if abs(x) < int(w) else HULLD, only_empty=True)
-    for zi in range(-7, 0):                              # the saddle seat
-        put(0, 4, zi, SEAT); put(-1, 4, zi, SEAT); put(1, 4, zi, SEAT)
-        put(0, 5, zi, SEATL if zi % 2 else SEAT)
-    for x in range(-2, 3):                               # handlebar T at the bow rise
-        put(x, 6, 4, BAR)
-    put(-2, 6, 4, GRIP); put(2, 6, 4, GRIP)
-    put(0, 5, 4, BAR); put(0, 4, 4, BAR)
-    for zi in range(-8, 9, 2):                           # sponson stripe
-        put(int(3.4 - 2.2 * max(0.0, ((zi + 8) / 16.0) - 0.55) / 0.45), 3, zi, HULLL, only_empty=True)
-    for zi in range(-9, 10):                             # waterline lap hugging the hull
-        t = (zi + 8) / 16.0
-        w = int(3.4 - 2.2 * max(0.0, t - 0.55) / 0.45) + 1
+    DECK = (238, 238, 232); DECKD = (202, 204, 198)      # pale top deck — real runabout two-tone
+    for zi in range(-10, 11):                            # HULL: long + sleek, real bow taper
+        t = (zi + 10) / 20.0
+        w = 3.6 if t < 0.55 else 3.6 - 3.0 * (t - 0.55) / 0.45   # holds beam, tapers to a nose
+        wi = max(1, int(round(w)))
+        rise = int(round(2.2 * max(0.0, t - 0.62) / 0.38))       # bow deck sweeps up
+        for x in range(-wi, wi + 1):
+            put(x, 2, zi, HULLD if abs(x) == wi else HULL)       # colored hull band
+            put(x, 3 + rise, zi, DECKD if abs(x) == wi else DECK, only_empty=True)  # pale deck
+        if wi > 1:                                       # colored side panel between hull and deck
+            put(-wi, 3, zi, HULL, only_empty=True); put(wi, 3, zi, HULL, only_empty=True)
+    for zi in range(-9, 11, 2):                          # sponson accent stripe along the beam
+        t = (zi + 10) / 20.0
+        put(int(round(3.6 if t < 0.55 else 3.6 - 3.0 * (t - 0.55) / 0.45)), 2, zi, HULLL)
+    for zi in range(-8, -1):                             # SADDLE: a real stepped seat with piping
+        for x in (-1, 0, 1):
+            put(x, 4, zi, SEAT)
+        put(0, 5, zi, SEATL if zi in (-7, -4) else SEAT)
+        put(-1, 5, zi, SEAT, only_empty=True); put(1, 5, zi, SEAT, only_empty=True)
+    for yy in (4, 5):                                    # CONSOLE rising from deck to the bars
+        put(0, yy, 2, BAR); put(-1, yy, 2, HULL); put(1, yy, 2, HULL)
+    put(0, 6, 3, BAR)                                    # steering column, raked back
+    for x in range(-3, 4):                               # handlebar — wide, with real grips
+        put(x, 7, 3, BAR)
+    put(-3, 7, 3, GRIP); put(3, 7, 3, GRIP)
+    put(-3, 7, 2, GRIP); put(3, 7, 2, GRIP)
+    put(0, 6, 2, (240, 200, 60))                         # gauge glint on the console
+    for x in (-2, -1, 0, 1, 2):                          # stern: boarding step + jet pump
+        put(x, 3, -10, HULLD, only_empty=True)
+    put(0, 2, -11, (60, 60, 66)); put(0, 1, -11, (40, 40, 46))
+    for zi in range(-10, 11):                            # waterline lap hugging the hull
+        t = (zi + 10) / 20.0
+        w = int(round(3.6 if t < 0.55 else 3.6 - 3.0 * (t - 0.55) / 0.45)) + 1
         put(-w, 1, zi, WET, only_empty=True)
         put(w, 1, zi, WET, only_empty=True)
         if zi % 3 == 0:
             put(-w - 1, 1, zi, FOAM, only_empty=True)
             put(w + 1, 1, zi, FOAM, only_empty=True)
-    for x in range(-3, 4):                               # stern wash
-        put(x, 1, -9, WET, only_empty=True)
+    for x in range(-3, 4):                               # stern wash off the pump
+        put(x, 1, -11, WET, only_empty=True)
     return V
 
 
@@ -1303,6 +1353,7 @@ BANKS = [
     ("bank_lizzie.png",       build_lizzie,     dict(yaw=36, pitch=30, target=30)),
     ("bank_jetski_0.png",     build_jetski,     dict(yaw=28, pitch=30, target=42)),
     ("bank_jetski_1.png",     (lambda: build_jetski(True)), dict(yaw=-24, pitch=30, target=42)),
+    ("fork_island.png",       build_forkisland, dict(yaw=180, pitch=46, target=150)),
 ]
 
 
