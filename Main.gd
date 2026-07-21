@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.0"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.1"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1490,7 +1490,7 @@ func _ev_speed_mult() -> float:
 	if not fork_ride.is_empty():
 		ride_rush = 1.15 if str(fork_ride.get("ph", "rush")) == "glide" else 2.4
 	elif not fork.is_empty() and not fork.get("picked", false):
-		ride_rush = 0.55                               # reading speed while the island approaches
+		ride_rush = 0.72                               # reading speed while the island approaches (0.55 was a crawl)
 	return (1.22 if ev_id == "tailwind" else 1.0) * (1.25 if stretch_mod == "rusty" else 1.0) * ride_rush
 
 func _update_river_events(delta: float) -> void:
@@ -1554,12 +1554,13 @@ func _update_river_events(delta: float) -> void:
 		var lth: int = (theme_idx + 1 + randi() % 3) % THEMES.size()
 		var rth: int = (lth + 1 + randi() % 4) % THEMES.size()
 		if rth == lth: rth = (rth + 1) % THEMES.size()
-		fork = {"y": -260.0, "picked": false,
+		fork = {"y": -70.0, "picked": false,           # island rounds the bend NOW — no dead-air crawl
 			"l": {"theme": lth, "mod": lmod}, "r": {"theme": rth, "mod": rmod}}
 		# THE STRANGE WATER: rarely, one channel keeps its secret until you're IN it
 		if randf() < 0.16 and String(lmod.id) != "rusty" and String(rmod.id) != "rusty":
 			(fork.l if randf() < 0.5 else fork.r)["mystery"] = true
 		logs.clear(); enemies.clear()                  # the choice must be CHOOSABLE — clear the lane
+		haz_turtle = null                              # the fork truce covers the snapper too
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
 		_sfx("fwoosh", 0.7)
@@ -1603,6 +1604,18 @@ func _update_river_events(delta: float) -> void:
 				_fork_commit(_rside)
 	if not fork.is_empty():
 		fork.y += speed * delta
+		# THE BRINK: the island HOLDS just above her until the player ACTUALLY chooses —
+		# steer hard to a side (or hover center under an offered sky route) to release the
+		# river. no more "blasted through a split you never picked."
+		if not fork.get("picked", false) and fork_ride.is_empty() and fork.get("asked", false):
+			var _decisive: bool = absf(duck_x - VIEW.x * 0.5) > 86.0 \
+				or (fork_sky >= 0 and absf(duck_x - VIEW.x * 0.5) < 58.0 and float(fork.get("hold_t", 0.0)) > 0.8)
+			if float(fork.y) > BASE_Y - 240.0 and not _decisive and float(fork.get("hold_t", 0.0)) < 6.0:
+				fork.y = BASE_Y - 240.0
+				fork.hold_t = float(fork.get("hold_t", 0.0)) + delta
+				fork.holding = true
+			else:
+				fork.holding = false
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
 			fork.asked = true                          # THE LIVING FORK: no modal — steer to choose
 			fork_ask_t = anim_t
@@ -2491,9 +2504,9 @@ func _ready() -> void:
 		get_viewport().get_texture().get_image().save_png("/tmp/s_fork_raw.png")
 		if "--film" in OS.get_cmdline_user_args():     # FILMSTRIP: the full choose->ride->arrive sequence
 			fork_sky = -1
-			fork.asked = false; fork.y = 210.0         # island already rounding the bend — film the approach
-			for _ff in 26:
-				await get_tree().create_timer(0.12).timeout
+			fork.asked = false; fork.y = -260.0         # island already rounding the bend — film the approach
+			for _ff in 40:
+				await get_tree().create_timer(0.28).timeout
 				await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png("/tmp/film_%02d.png" % _ff)
 				if _ff == 6:                           # STEER right mid-film — the wedge commits us
@@ -2662,7 +2675,7 @@ func _ready() -> void:
 		for _li in 6:
 			items.append({"x": duck_x + randf_range(-26.0, 26.0), "y": 180.0 + _li * 80.0, "got": false, "kind": 1})
 		fire_laser(); laser_t = LASER_DUR * 0.7
-		await get_tree().create_timer(0.12).timeout
+		await get_tree().create_timer(0.28).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_laser.png")
 		get_tree().quit()
@@ -8625,7 +8638,8 @@ func _spawn(delta: float) -> void:
 		item_timer = randf_range(0.55, 1.2) / (1.0 + 0.35 * _up("snacks")) / boon_snack_mult / (1.18 if _meta("basket") else 1.0) / ((1.0 + 0.2 * _wf("chef")) if _wear("chef") else 1.0) * (1.0 + 0.06 * ascension) / _ev_snack_mult()
 
 	heron_timer -= delta
-	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and not stretch_mod in ["rusty", "calm"]:
+	if heron_timer <= 0.0 and distance > HERON_START and enemies.size() < 2 and not stretch_mod in ["rusty", "calm"] \
+			and fork.is_empty() and fork_ride.is_empty():   # the FORK is a truce — no ambushes at the wedge
 		var hx := clampf(duck_x + randf_range(-140.0, 140.0), bankw + 40.0, VIEW.x - bankw - 40.0)
 		enemies.append({"x": hx, "y": -80.0, "vy": speed + 320.0, "id": _next_enemy_id()})
 		if ascension >= 6 and randf() < 0.25 + 0.05 * (ascension - 6):   # RELENTLESS FLOCK: herons hunt in packs
@@ -13696,6 +13710,12 @@ func _draw_river_events() -> void:
 				for _gm in 3:
 					var _gmy: float = _ey - 20.0 - fposmod(anim_t * 26.0 + float(_gm) * 40.0, 90.0)
 					draw_circle(Vector2(_cx + sin(anim_t * 1.7 + float(_gm) * 2.1) * 26.0, _gmy), 2.0, Color(1.0, 0.9, 0.5, 0.5))
+		# THE BRINK prompt: the river is waiting on YOU — say so, unmistakably
+		if fork.get("holding", false):
+			var _pa: float = 0.6 + 0.4 * sin(anim_t * 5.0)
+			_otext(Vector2(0, BASE_Y - 150.0), "STEER to CHOOSE your water", 22, Color(1.0, 0.92, 0.5, _pa), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
+			_otext(Vector2(30.0, BASE_Y + 6.0), "<", 34, Color(1.0, 0.9, 0.4, _pa), 60.0, HORIZONTAL_ALIGNMENT_CENTER, 6)
+			_otext(Vector2(VIEW.x - 90.0, BASE_Y + 6.0), ">", 34, Color(1.0, 0.9, 0.4, _pa), 60.0, HORIZONTAL_ALIGNMENT_CENTER, 6)
 		# SKY ROUTE: a golden thermal shimmers straight up off the island's nose
 		if fork_sky >= 0 and _unpicked:
 			for _sk in 4:
