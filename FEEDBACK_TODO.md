@@ -713,3 +713,6 @@ Worklist (work top-down, ship each when green, add findings):
 
 ## 🔥 HOTFIX (Scott, 2026-07-21, on v1.22.0): "river split is so bad... no clear choice, blasts the duck through"
 - [x] **v1.22.1** — three real failures found by filming from TRUE spawn: (1) the fork TRUCE died with the modal — herons ambushed mid-split (film caught a strike + shield pop + lost duckling); heron/turtle spawns now gated off during fork+ride. (2) dead-air crawl: 8s empty approach at 0.55x — island now spawns at the bend (y=-70) + eases 0.72x. (3) NO CLEAR CHOICE: wedge committed wherever you drifted, then 2.4x blast — THE BRINK: the island HOLDS at the decision line until you steer decisively to a side (pulsing "STEER to CHOOSE your water" + chevrons; 6s timeout commits nearest; center-hover only commits sky when a sky route is offered). Botsim clean. 🟡 re-verdict.
+
+## 🔥 (Scott, 2026-07-22): "needs a physical pause + select a side — mega-jumped in with zero choice"
+- [x] **v1.22.2** — THE RIVER STOPS: full world-freeze at the island (fork_choosing restored — which also resurrected the card chooser OVER the living fork: cards to pick, island world behind, ride after). Tap left/right half (or center column for sky) = pick; mega/hop force-landed before the stop so nothing carries you through; fork.y frozen while choosing; bot taps like a player. 🟡 verdict.

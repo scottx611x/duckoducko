@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.1"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.2"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1603,19 +1603,24 @@ func _update_river_events(delta: float) -> void:
 				fork_ride = {}
 				_fork_commit(_rside)
 	if not fork.is_empty():
-		fork.y += speed * delta
+		if not fork_choosing:
+			fork.y += speed * delta
 		# THE BRINK: the island HOLDS just above her until the player ACTUALLY chooses —
 		# steer hard to a side (or hover center under an offered sky route) to release the
 		# river. no more "blasted through a split you never picked."
-		if not fork.get("picked", false) and fork_ride.is_empty() and fork.get("asked", false):
-			var _decisive: bool = absf(duck_x - VIEW.x * 0.5) > 86.0 \
-				or (fork_sky >= 0 and absf(duck_x - VIEW.x * 0.5) < 58.0 and float(fork.get("hold_t", 0.0)) > 0.8)
-			if float(fork.y) > BASE_Y - 240.0 and not _decisive and float(fork.get("hold_t", 0.0)) < 6.0:
-				fork.y = BASE_Y - 240.0
-				fork.hold_t = float(fork.get("hold_t", 0.0)) + delta
-				fork.holding = true
-			else:
-				fork.holding = false
+		if not fork.get("picked", false) and fork_ride.is_empty() and fork.get("asked", false) \
+				and not fork_choosing and float(fork.y) > BASE_Y - 240.0:
+			# THE RIVER STOPS (Scott: "there needs to be a physical pause" — a mega-jump was
+			# carrying players through the wedge with zero say). Full freeze at the island;
+			# the world resumes the moment you TAP your channel.
+			fork.y = BASE_Y - 240.0
+			fork.holding = true
+			fork_choosing = true
+			fork_ask_t = anim_t
+			fork_pick = -1
+			state = St.GROUNDED; mega_t = 0.0; hop_t = 0.0; cam.zoom = Vector2.ONE   # land her — no committing mid-flight
+			pressed = false; moved = false; target_x = duck_x; steer_anchor_x = duck_x
+			_sfx("chime", 0.9)
 		if not fork.get("asked", false) and float(fork.y) > -30.0:
 			fork.asked = true                          # THE LIVING FORK: no modal — steer to choose
 			fork_ask_t = anim_t
@@ -1626,7 +1631,7 @@ func _update_river_events(delta: float) -> void:
 			_sfx("chime", 0.7)
 		# COMMIT AT THE WEDGE: where you ARE when the island's nose reaches you is your water.
 		# center + a sky route offered = ride the thermal clean over the duel.
-		if not fork.get("picked", false) and fork_ride.is_empty() and float(fork.y) >= BASE_Y - 6.0:
+		if not fork.get("picked", false) and fork_ride.is_empty() and not fork_choosing and float(fork.y) >= BASE_Y - 6.0:
 			if fork_sky >= 0 and absf(duck_x - VIEW.x * 0.5) < 58.0:
 				_fork_choose(2)                        # the updraft over the island itself
 			else:
@@ -5875,13 +5880,14 @@ func _on_press(pos: Vector2) -> void:
 	if fork_choosing:
 		if anim_t - fork_ask_t < 0.55 or fork_pick >= 0:
 			return
-		for _fi in 2:
-			if _fork_card_rect(_fi).has_point(pos):
-				fork_pick = _fi
-				fork_pick_t = anim_t
-				_sfx("click")
-				_sfx("chime", 1.3, -6.0)
-				return
+		# the river WAITS at the island — TAP a channel (or the sky column) to choose
+		if fork_sky >= 0 and absf(pos.x - VIEW.x * 0.5) < 62.0:
+			fork_pick = 2
+		else:
+			fork_pick = 0 if pos.x < VIEW.x * 0.5 else 1
+		fork_pick_t = anim_t
+		_sfx("click")
+		_sfx("chime", 1.3, -6.0)
 		return
 	if drafting:
 		if anim_t - draft_open_t < 0.45:
@@ -13713,7 +13719,7 @@ func _draw_river_events() -> void:
 		# THE BRINK prompt: the river is waiting on YOU — say so, unmistakably
 		if fork.get("holding", false):
 			var _pa: float = 0.6 + 0.4 * sin(anim_t * 5.0)
-			_otext(Vector2(0, BASE_Y - 150.0), "STEER to CHOOSE your water", 22, Color(1.0, 0.92, 0.5, _pa), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
+			_otext(Vector2(0, BASE_Y - 150.0), "the river waits — TAP a channel", 22, Color(1.0, 0.92, 0.5, _pa), VIEW.x, HORIZONTAL_ALIGNMENT_CENTER, 5)
 			_otext(Vector2(30.0, BASE_Y + 6.0), "<", 34, Color(1.0, 0.9, 0.4, _pa), 60.0, HORIZONTAL_ALIGNMENT_CENTER, 6)
 			_otext(Vector2(VIEW.x - 90.0, BASE_Y + 6.0), ">", 34, Color(1.0, 0.9, 0.4, _pa), 60.0, HORIZONTAL_ALIGNMENT_CENTER, 6)
 		# SKY ROUTE: a golden thermal shimmers straight up off the island's nose
@@ -16384,12 +16390,15 @@ func _sim_watch(delta: float) -> void:
 		_pick_boon(_bot_pick_weighted(shrine_boons, BOT_BOON_W)); return
 	if drafting and draft_choices.size() > 0:
 		_pick_upgrade(_bot_pick_weighted(draft_choices, BOT_DRAFT_W)); return
+	if fork_choosing:                              # the river waits — the bot taps like a player
+		var _bside: int = randi() % 2
+		if fork_sky >= 0 and randf() < 0.25:
+			_bside = 2
+		_fork_choose(_bside); return
 	if not fork.is_empty() and not fork.get("picked", false) and fork_ride.is_empty() and fork.get("asked", false):
-		if not fork.has("bot_side"):               # decide once, then STEER to it like a player
+		if not fork.has("bot_side"):               # drift toward a side while the island approaches
 			fork.bot_side = randi() % 2
-			if fork_sky >= 0 and randf() < 0.25:
-				fork.bot_side = 2                  # bots mostly take the duel (boss coverage)
-		target_x = VIEW.x * ([0.30, 0.70, 0.5][int(fork.bot_side)])
+		target_x = VIEW.x * ([0.30, 0.70][int(fork.bot_side)])
 		return
 	if in_shop:
 		in_shop = false; return
