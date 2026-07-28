@@ -716,3 +716,6 @@ Worklist (work top-down, ship each when green, add findings):
 
 ## 🔥 (Scott, 2026-07-22): "needs a physical pause + select a side — mega-jumped in with zero choice"
 - [x] **v1.22.2** — THE RIVER STOPS: full world-freeze at the island (fork_choosing restored — which also resurrected the card chooser OVER the living fork: cards to pick, island world behind, ride after). Tap left/right half (or center column for sky) = pick; mega/hop force-landed before the stop so nothing carries you through; fork.y frozen while choosing; bot taps like a player. 🟡 verdict.
+
+## ➕ PLAYTEST (Scott, 2026-07-28): "frog legs is terrible — maybe two bounces, third near impossible"
+- [x] **v1.22.3** — the chain was mathematically impossible: hop airtime ~0.5s (chained bounces even SHORTER via deeper-start) vs logs arriving every 0.9-1.4s — chain 3 needed two consecutive spawn flukes. Fixed four ways: full arc every bounce (deeper-start killed), chain hops float 1.35x, mid-chain coil window 0.8s (hop+coil now covers the real log cadence; first-bounce grace 0.3s), and the river FEEDS a live chain (next logs sooner + biased to your lane, stops past chain 6). Decay floor + heron threat unchanged — flourish, not flight. Chain-proof harness: aimed chain connects through 5 consecutive worst-case-cadence logs (reached chain 7 incl. a cheeky double-boing). 🟡 feel.

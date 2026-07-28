@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.2"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.3"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -2608,6 +2608,14 @@ func _ready() -> void:
 		state = St.HOPPING; hop_t = cur_hop_dur() * 0.9
 		await get_tree().create_timer(0.25).timeout
 		print("[BOUNCE] frog_chain=", frog_chain, " state=", state, " alive=", alive, " feathers=", run_feathers)
+		# CHAIN PROOF: drop logs at the river's REAL worst cadence (~1.3s apart at the row) —
+		# an aimed chain must connect through all of them
+		for _cb in 5:
+			logs.append({"x": clampf(duck_x + randf_range(-70.0, 70.0), bankw + 90.0, VIEW.x - bankw - 90.0),
+				"y": BASE_Y - 270.0, "w": 150.0, "h": 46.0, "missed": false, "got": false, "vx": 0.0,
+				"spring": false, "phase": 0.0, "frog": false, "frog_gone": true, "crazy": false, "thwomp": false, "hp": 1})
+			await get_tree().create_timer(1.3).timeout
+			print("[BOUNCE] after log %d: chain=%d" % [_cb + 2, frog_chain])
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_bounce.png")
 		get_tree().quit()
@@ -4114,7 +4122,9 @@ func _grant_random_upgrade(rarity: int) -> void:
 
 # per-duck hop/mega timing (floaty ducks hang longer AND rise higher)
 func cur_hop_dur() -> float:
-	return HOP_DUR * duck_hop_mul * _hop_boost()
+	# FROG LEGS chains float: the bounce hangs ~35% longer so the NEXT log can actually
+	# arrive under you (logs come every ~0.9-1.4s; a 0.5s arc made chain-3 a math fluke)
+	return HOP_DUR * duck_hop_mul * _hop_boost() * (1.35 if frog_chain > 0 else 1.0)
 
 func cur_mega_dur() -> float:
 	if hyper:
@@ -7131,7 +7141,11 @@ func is_invincible() -> bool:
 func _land(mega: bool) -> void:
 	air_hops = 0
 	hop_lift_bonus = 1.0
-	land_grace = 0.12                              # FROG LEGS: a log underfoot RIGHT NOW still counts as landing on it
+	# FROG LEGS: quick frog reflexes — a log arriving shortly after touchdown still BOINGs.
+	# mid-chain the window is WIDE (0.8s): hop 0.7s + 0.8s covers the river's real log
+	# cadence (0.9-1.4s at the row), so an aimed chain genuinely connects — she coils,
+	# the next log slides under, BOING. water only claims the ledger after the coil.
+	land_grace = (0.8 if frog_chain > 0 else 0.3) if _up("froglegs") > 0 else 0.12
 	squash = 1.0
 	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 220.0 if mega else 90.0})
 	if mega:
@@ -7202,7 +7216,7 @@ func _frog_bounce(l: Dictionary) -> void:
 	frog_chain += 1
 	land_grace = 0.0
 	state = St.HOPPING
-	hop_t = cur_hop_dur() * minf(0.10 * float(frog_chain), 0.30)
+	hop_t = cur_hop_dur() * 0.06                   # full arc every bounce (deeper starts were eating the window)
 	hop_lift_bonus = maxf(pow(0.86, float(frog_chain)), 0.55)
 	air_hops = 0                                   # a fresh takeoff — DOUBLE HOP recharges
 	squash = 1.3
@@ -8613,6 +8627,8 @@ func _spawn(delta: float) -> void:
 		var is_spring := randf() < SPRING_LOG_CHANCE * (2.0 if _up("springy") > 0 else 1.0)
 		# late game: logs drift sideways, slowly at first, up to ±75 px/s
 		var logx := randf_range(w * 0.5 + bankw, VIEW.x - w * 0.5 - bankw)
+		if _up("froglegs") > 0 and frog_chain > 0 and frog_chain < 6:
+			logx = clampf(duck_x + randf_range(-90.0, 90.0), w * 0.5 + bankw, VIEW.x - w * 0.5 - bankw)
 		var drift := 0.0
 		if distance > DRIFT_START:
 			drift = randf_range(-1.0, 1.0) * 75.0 * clampf((distance - DRIFT_START) / 40000.0, 0.15, 1.0)
@@ -8637,6 +8653,8 @@ func _spawn(delta: float) -> void:
 			"crazy": is_crazy, "cphase": randf() * TAU, "spin": randf_range(1.4, 2.6) * (1.0 if randf() < 0.5 else -1.0),
 		})
 		log_timer = (randf_range(0.65, 1.15) * (BASE_SPEED / speed) + 0.25) / endless_heat
+		if _up("froglegs") > 0 and frog_chain > 0 and frog_chain < 6:
+			log_timer = minf(log_timer, 0.55)      # the river FEEDS a live chain another stepping stone
 
 	item_timer -= delta
 	if item_timer <= 0.0 and stretch_mod != "rusty":   # no snacks on the course — only HIS line pays
@@ -8856,7 +8874,7 @@ func _collide() -> void:
 				smashed = l                      # golden log: it's a trampoline
 				hyper_jump()
 				break
-			elif _up("froglegs") > 0 and ((state == St.HOPPING and hop_t / cur_hop_dur() > 0.5) or land_grace > 0.0):
+			elif _up("froglegs") > 0 and ((state == St.HOPPING and hop_t / cur_hop_dur() > 0.45) or land_grace > 0.0):
 				_frog_bounce(l)                  # FROG LEGS: came DOWN on it — BOING
 				break
 			elif fire_t > 0.0:
