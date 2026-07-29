@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.3"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.4"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1912,6 +1912,8 @@ var tex_turtle_spin := []       # hazard-turtle turntable — each one faces a d
 var tex_turtle := []            # the lesser river snapping-turtle hazard (green, smaller)
 var tex_elder: Texture2D        # the ancient bearded duck (shrine)
 var tex_forkisland: Texture2D   # THE LIVING FORK's island — the river divides around it
+var tex_orb: Array = []         # the DRAFT ORB's 16-frame d12 tumble
+var draft_orb := {}             # the catchable wonder riding the current ({} = none afloat)
 var tex_elder_talk: Texture2D   # ...with his beak open, for talking
 var tex_items := {}
 var tex_water: Texture2D
@@ -2087,6 +2089,9 @@ func _ready() -> void:
 		tex_elder = load("res://art/elder.png")
 		if ResourceLoader.exists("res://art/fork_island.png"):
 			tex_forkisland = load("res://art/fork_island.png")
+		for _oi in 16:
+			if ResourceLoader.exists("res://art/orb_spin_%02d.png" % _oi):
+				tex_orb.append(load("res://art/orb_spin_%02d.png" % _oi))
 	if ResourceLoader.exists("res://art/elder_talk.png"):
 		tex_elder_talk = load("res://art/elder_talk.png")
 	if ResourceLoader.exists("res://art/sadie_0.png"):
@@ -2578,6 +2583,16 @@ func _ready() -> void:
 		await get_tree().create_timer(3.4).timeout       # long enough for a full fps window
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_settings.png")
+		get_tree().quit()
+	elif "--orbshot" in OS.get_cmdline_user_args():      # the DRAFT ORB afloat, mid-tumble
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear()
+		draft_orb = {"x": VIEW.x * 0.55, "y": BASE_Y - 210.0, "phase": 0.7}
+		next_draft = distance + 900000.0
+		await get_tree().create_timer(0.6).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_orb.png")
 		get_tree().quit()
 	elif "--perfshot" in OS.get_cmdline_user_args():     # frame-time + draw-call census during busy gameplay
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -5550,6 +5565,7 @@ func reset_game() -> void:
 	drafting = false
 	boss_draft = false
 	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}; fork_pick = -1
+	draft_orb = {}
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -6915,9 +6931,32 @@ func _update_play(delta: float) -> void:
 
 	# roguelike draft: deal 3 upgrades at widening marks (first ~600m; waits for a grounded duck;
 	# never mid-boss — Gerald does not pause for shopping)
-	if distance >= next_draft and state == St.GROUNDED and laser_t <= 0.0 and boss == null and not tut_mode \
-			and stretch_mod != "rusty":               # NEVER mid-Thermals — the course is sacred
-		_open_draft()
+	# THE DRAFT ORB (Scott: power-ups must be WORKED for): the river no longer hands you
+	# the draft — a spinning d12 wonder rides the current. Catch it, it's yours. Miss it,
+	# the river keeps its gift (another rounds the bend before long).
+	if distance >= next_draft and draft_orb.is_empty() and laser_t <= 0.0 and boss == null and not tut_mode \
+			and stretch_mod != "rusty" and fork.is_empty() and fork_ride.is_empty():
+		draft_orb = {"x": clampf(duck_x + randf_range(-160.0, 160.0), bankw + 70.0, VIEW.x - bankw - 70.0),
+			"y": -50.0, "phase": randf() * TAU}
+		_sfx("chime", 1.6, -4.0); _sfx("chime", 2.0, -9.0)
+	if not draft_orb.is_empty():
+		draft_orb.y += speed * delta * 0.8             # it lags the current — a real chance to line up
+		draft_orb.x += sin(anim_t * 1.6 + float(draft_orb.phase)) * 24.0 * delta
+		if randf() < 0.3:                              # enticing: it SHEDS sparkles
+			parts.append({"x": float(draft_orb.x) + randf_range(-14.0, 14.0), "y": float(draft_orb.y) + randf_range(-14.0, 14.0),
+				"vx": randf_range(-20.0, 20.0), "vy": randf_range(-10.0, 30.0), "t": 0.0, "life": 0.5,
+				"col": Color.from_hsv(fmod(anim_t * 0.4, 1.0), 0.5, 1.0)})
+		if alive and Vector2(float(draft_orb.x) - duck_x, float(draft_orb.y) - BASE_Y).length() < 58.0:
+			draft_orb = {}                             # CAUGHT — the wonder opens
+			_spawn_parts(duck_x, BASE_Y - 30.0, 22, Color(1.0, 0.9, 0.5), 260.0)
+			ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 130.0, "col": Color(1.0, 0.9, 0.5)})
+			_sfx("unlock", 1.15)
+			_open_draft()
+		elif float(draft_orb.y) > VIEW.y + 40.0:       # ...missed. the river keeps its gifts.
+			draft_orb = {}
+			_float_text(duck_x, BASE_Y - 96.0, "the river keeps its gifts...", Color(0.75, 0.8, 0.9))
+			_sfx("bonk", 0.8, -12.0)
+			next_draft = distance + DRAFT_EVERY * 0.45 # another rounds the bend sooner
 
 	# themed stretches: new palette washes down the screen, the duck approves
 	var ti: int = theme_route[int(biome_progress / THEME_LEN) % theme_route.size()]
@@ -13706,6 +13745,20 @@ func _mod_wash(id: String) -> Color:
 	return Color(0.45, 0.32, 0.55)
 
 func _draw_river_events() -> void:
+	# THE DRAFT ORB: a tumbling d12 wonder — halo, sparkle, unmistakably WANTED
+	if not draft_orb.is_empty() and not tex_orb.is_empty():
+		var _op := Vector2(float(draft_orb.x), float(draft_orb.y))
+		var _obr: float = 0.5 + 0.5 * sin(anim_t * 4.0)
+		for _og in range(2, 0, -1):
+			draw_circle(_op, 18.0 + float(_og) * 7.0 + _obr * 4.0, Color.from_hsv(fmod(anim_t * 0.4, 1.0), 0.5, 1.0, 0.05 + 0.02 * _obr))
+		var _ot: Texture2D = tex_orb[int(anim_t * 10.0) % tex_orb.size()]
+		var _osz: Vector2 = _ot.get_size() * 2.0       # 26px art x2 = crisp integer pixels, duck-sized
+		draw_set_transform(_op + Vector2(0.0, sin(anim_t * 2.4 + float(draft_orb.phase)) * 5.0), 0.0, Vector2.ONE)
+		draw_texture_rect(_ot, Rect2(-_osz * 0.5, _osz), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		for _os2 in 2:                                 # orbiting glints
+			var _oa: float = anim_t * 3.2 + float(_os2) * PI
+			draw_circle(_op + Vector2(cos(_oa), sin(_oa) * 0.5) * 28.0, 1.8, Color(1.0, 1.0, 0.9, 0.8))
 	if not fork.is_empty():
 		var fy: float = fork.y
 		var _cx: float = VIEW.x * 0.5
@@ -16269,6 +16322,8 @@ func _bot_control(delta: float) -> void:
 		var cx := lerpf(lo, hi, i / 12.0)
 		var score := -absf(cx - duck_x) * 0.015          # prefer not to thrash across the river
 		score -= _bot_danger_at(cx)
+		if not draft_orb.is_empty() and float(draft_orb.y) < BASE_Y + 20.0:
+			score -= absf(cx - float(draft_orb.x)) * 0.02   # the ORB is worth chasing (drafts = survival)
 		if score > best_score:
 			best_score = score; best_x = cx
 	target_x = clampf(best_x, lo, hi)

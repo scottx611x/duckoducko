@@ -2821,6 +2821,60 @@ def generate_wearables3d(art_dir):
     print("wearables3d generated ->", art_dir)
 
 
+def build_d12():
+    """THE DRAFT ORB: a d12 — voxel sphere faceted by the 12 dodecahedron face normals,
+    each face its own iridescent hue, darker seams between faces, one hot glint on top."""
+    import colorsys
+    phi = (1.0 + 5.0 ** 0.5) / 2.0
+    raw = []
+    for s1 in (-1.0, 1.0):
+        for s2 in (-1.0, 1.0):
+            raw.append((0.0, s1 * 1.0, s2 * phi))
+            raw.append((s1 * 1.0, s2 * phi, 0.0))
+            raw.append((s1 * phi, 0.0, s2 * 1.0))
+    normals = [(x / (1 + phi * phi) ** 0.5, y / (1 + phi * phi) ** 0.5, z / (1 + phi * phi) ** 0.5) for (x, y, z) in raw]
+    faces = []
+    for i, n in enumerate(normals):
+        h = (i / 12.0 + 0.02) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(h, 0.52, 0.97)
+        rd, gd, bd = colorsys.hsv_to_rgb(h, 0.66, 0.60)
+        faces.append(((int(r * 255), int(g * 255), int(b * 255)), (int(rd * 255), int(gd * 255), int(bd * 255))))
+    V = {}
+    R = 12.4                                           # big model -> LANCZOS+palette-snap = crisp facets
+    for x in range(-13, 14):
+        for y in range(-13, 14):
+            for z in range(-13, 14):
+                d = (x * x + y * y + z * z) ** 0.5
+                if d > R or d < R - 3.2 or d < 0.001:
+                    continue
+                nx, ny, nz = x / d, y / d, z / d
+                # FLATTEN to true facets: project each surface voxel onto its face plane
+                dots = sorted(((nx * n[0] + ny * n[1] + nz * n[2], i) for i, n in enumerate(normals)), reverse=True)
+                best, fi = dots[0]
+                second = dots[1][0]
+                if best < 0.795:                       # shave the sphere bumps off the pentagon corners
+                    continue
+                col, cold = faces[fi]
+                V[(x, y, z)] = cold if best - second < 0.07 else col   # seams where two faces contest
+    for gx, gy in [(0, 12), (1, 11), (-1, 11)]:        # the glint
+        if (gx, gy, 2) in V:
+            V[(gx, gy, 2)] = (255, 255, 245)
+    return V
+
+
+def generate_orb(art_dir):
+    """the draft orb's 16-frame tumble — hi-res render crushed through the duck pipeline
+    (LANCZOS + palette snap + outline) so it's CRISP pixel art, not a lumpy beach ball"""
+    import os
+    v = build_d12()
+    sh = shade(v)
+    for i in range(16):
+        hi = render(sh, math.radians(i * 22.5), math.radians(24), out=104, scale=3.8)
+        im = _crisp_outline(hi, 26)
+        im.save(os.path.join(art_dir, "orb_spin_%02d.png" % i))
+    print("draft orb generated -> 16 crisp frames")
+
+
 def generate_icons(art_dir):
     """render every unique boon/power-up voxel icon to boon_<model>.png"""
     models = ["shield", "coin", "bolt", "magnet", "egg", "flame", "arrow", "star",
@@ -2849,6 +2903,8 @@ if __name__ == "__main__":
         generate_wearables3d(art)
     elif "--icons" in sys.argv:
         generate_icons(art)
+    elif "--orb" in sys.argv:
+        generate_orb(art)
     elif "--critters" in sys.argv:
         generate_critters(art)
     else:
