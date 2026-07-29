@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.4"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.5"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1760,13 +1760,13 @@ func _update_river_events(delta: float) -> void:
 		stretch_mod = ""
 const ENV_ROOTED := ["env_lily_0", "env_lily_1", "env_lilyflower", "env_stone_0", "env_stone_1", "env_snag"]
 const ENV_TABLE := [
-	[["env_lily_0", 2.0], ["env_lily_1", 1.6], ["env_lilyflower", 0.5], ["env_duckweed_0", 1.4], ["env_stone_0", 0.8], ["env_snag", 0.5], ["env_sailboat", 0.10], ["env_bottle", 0.08], ["env_raft", 0.06]],
-	[["env_lily_0", 1.5], ["env_lily_1", 1.3], ["env_lilyflower", 0.7], ["env_duckweed_1", 1.2], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
-	[["env_snag", 2.6], ["env_duckweed_0", 2.2], ["env_duckweed_1", 1.8], ["env_stone_0", 1.0], ["env_lily_0", 0.5], ["env_bottle", 0.12]],
-	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_duckweed_0", 0.6], ["env_sailboat", 0.14], ["env_raft", 0.10]],
-	[["env_lily_0", 1.7], ["env_lilyflower", 1.1], ["env_duckweed_0", 2.0], ["env_duckweed_1", 1.7], ["env_snag", 1.0], ["env_raft", 0.10]],
-	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 0.8], ["env_snag", 0.8], ["env_duckweed_1", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
-	[["env_lily_0", 2.2], ["env_lily_1", 1.8], ["env_duckweed_0", 1.2], ["env_stone_0", 0.9], ["env_snag", 0.5], ["env_bottle", 0.08], ["env_raft", 0.06]],
+	[["env_lily_0", 2.0], ["env_lily_1", 1.6], ["env_lilyflower", 0.5], ["env_stone_0", 0.8], ["env_snag", 0.5], ["env_sailboat", 0.10], ["env_bottle", 0.08], ["env_raft", 0.06]],
+	[["env_lily_0", 1.5], ["env_lily_1", 1.3], ["env_lilyflower", 0.7], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
+	[["env_snag", 2.6], ["env_stone_0", 1.0], ["env_lily_0", 0.5], ["env_bottle", 0.12]],
+	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_sailboat", 0.14], ["env_raft", 0.10]],
+	[["env_lily_0", 1.7], ["env_lilyflower", 1.1], ["env_snag", 1.0], ["env_raft", 0.10]],
+	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 0.8], ["env_snag", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
+	[["env_lily_0", 2.2], ["env_lily_1", 1.8], ["env_stone_0", 0.9], ["env_snag", 0.5], ["env_bottle", 0.08], ["env_raft", 0.06]],
 ]
 var golden_t := 0.0              # GOLDEN HOUR: warm sunset wash remaining
 var golden_next := 38.0          # countdown to the next golden hour
@@ -14542,7 +14542,7 @@ func _draw_menu() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.25, 0.4, 0.85, 0.10 * _mcool))
 	if not tex_env.is_empty():
 		for _mi in 5:
-			var _mn: String = ["env_lily_0", "env_lily_1", "env_duckweed_0", "env_lilyflower", "env_stone_0"][_mi]
+			var _mn: String = ["env_lily_0", "env_lily_1", "env_stone_1", "env_lilyflower", "env_stone_0"][_mi]
 			if not tex_env.has(_mn):
 				continue
 			var _mt: Texture2D = tex_env[_mn]
