@@ -230,7 +230,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.5"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.6"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1926,6 +1926,7 @@ var duck_name := ""             # beta tester's duck, for bragging rights
 var name_edit: LineEdit
 var tex_props := []
 var music_player: AudioStreamPlayer
+var music_xfade: AudioStreamPlayer       # the outgoing pond's tune, fading under the new one
 var boss_player: AudioStreamPlayer       # plays the boss-battle theme
 var boss_tracks: Dictionary = {}         # name -> AudioStreamWAV
 var theme_tracks: Dictionary = {}        # name -> AudioStreamWAV (per-biome ambient beds)
@@ -2246,6 +2247,9 @@ func _ready() -> void:
 		music_player.bus = "Music"
 		add_child(music_player)
 		music_player.play()
+		music_xfade = AudioStreamPlayer.new()
+		music_xfade.bus = "Music"
+		add_child(music_xfade)
 		theme_tracks["music_default"] = ms         # the iconic DUCKODUCKO theme — never lost
 		cur_theme_music = "music_default"          # ...and it's what we start on
 	# per-biome ambient beds — swapped in as the river changes scenery, PLUS the JUKEBOX spares
@@ -11266,12 +11270,32 @@ func _swap_theme_music() -> void:
 	if nm != "" and theme_tracks.has(nm):
 		cur_theme_music = nm
 		var vol: float = music_player.volume_db
-		# biome tints share a length so we keep the position; the boombox beat is its own track -> from 0
+		if music_xfade != null and music_xfade.playing:
+			music_xfade.stop()                     # mid-fade re-swap: drop the oldest layer
 		var pos: float = 0.0 if boom else (music_player.get_playback_position() if music_player.playing else 0.0)
-		music_player.stream = theme_tracks[nm]
-		music_player.volume_db = vol
-		if boss == null:
+		# tracks do NOT all share a length (later ponds run 29-32s vs the 51s tints) —
+		# play(pos) past a shorter track's end was the "super jank" pond arrival. wrap it.
+		var _nlen: float = theme_tracks[nm].get_length()
+		if _nlen > 0.01:
+			pos = fmod(pos, _nlen)
+		if boss == null and music_xfade != null and music_player.playing:
+			# real CROSSFADE: the old pond lingers on a second player while the new fades in
+			music_xfade.stream = music_player.stream
+			music_xfade.volume_db = vol
+			music_xfade.play(music_player.get_playback_position())
+			music_player.stream = theme_tracks[nm]
+			music_player.volume_db = -34.0
 			music_player.play(pos)
+			var _tw := create_tween()
+			_tw.set_parallel(true)
+			_tw.tween_property(music_player, "volume_db", vol, 1.6)
+			_tw.tween_property(music_xfade, "volume_db", -42.0, 1.6)
+			_tw.chain().tween_callback(music_xfade.stop)
+		else:
+			music_player.stream = theme_tracks[nm]
+			music_player.volume_db = vol
+			if boss == null:
+				music_player.play(pos)
 
 # a labelled −/bar/+ stepper row; appends its hit targets to settings_hits
 func _settings_slider(y: float, label: String, val: float, lo: float, hi: float, act: String) -> void:
