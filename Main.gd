@@ -228,7 +228,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.7"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.23.0"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -1905,6 +1905,14 @@ var tex_elder: Texture2D        # the ancient bearded duck (shrine)
 var tex_forkisland: Texture2D   # THE LIVING FORK's island — the river divides around it
 var tex_orb: Array = []         # the DRAFT ORB's 16-frame d12 tumble
 var draft_orb := {}             # the catchable wonder riding the current ({} = none afloat)
+# THE RIVER'S MOODS: quiet stretches breathe through named micro-moods so the run
+# alternates VERBS (hop / don't-hop / thread / feast) instead of repeating one
+var mood := "drift"             # drift | jam | glass | skimmers | stones
+var mood_t := 0.0               # seconds left in the current mood
+var skims: Array = []           # LOW-SKIM herons crossing the river: {x, y, dir, warned_t} — DON'T hop
+var stone_combo := 0            # consecutive stepping-stone clears
+var stone_t := 0.0              # combo window
+var stone_next := 0.0           # next stepping-run spawn (stones mood)
 var tex_elder_talk: Texture2D   # ...with his beak open, for talking
 var tex_items := {}
 var tex_water: Texture2D
@@ -2578,6 +2586,19 @@ func _ready() -> void:
 		await get_tree().create_timer(3.4).timeout       # long enough for a full fps window
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_settings.png")
+		get_tree().quit()
+	elif "--moodshot" in OS.get_cmdline_user_args():     # RIVER MOODS: a crossing skim + a stone run
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 900000.0
+		distance = 9000.0
+		skims.append({"x": VIEW.x * 0.3, "y": BASE_Y - 150.0, "dir": 1.0, "t": 1.6})
+		_spawn_stone_run()
+		for l in logs:
+			l.y = float(l.y) + 320.0                   # pull the run on-screen
+		await get_tree().create_timer(0.5).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/s_mood.png")
 		get_tree().quit()
 	elif "--orbshot" in OS.get_cmdline_user_args():      # the DRAFT ORB afloat, mid-tumble
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -5561,6 +5582,7 @@ func reset_game() -> void:
 	boss_draft = false
 	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}; fork_pick = -1
 	draft_orb = {}
+	skims.clear(); mood = "drift"; mood_t = 0.0; stone_combo = 0; stone_t = 0.0
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -7031,6 +7053,11 @@ func _update_play(delta: float) -> void:
 	_update_hop(delta)
 	_update_wake(delta)
 	_update_enemies(delta * sm)
+	_update_skims(delta * sm)
+	if stone_t > 0.0:
+		stone_t -= delta
+		if stone_t <= 0.0:
+			stone_combo = 0
 	# GERALD descends at each boss mark (once the duck is grounded and the lane's clear-ish)
 	# a boss politely holds back while RUSTY is on screen having his moment
 	if boss == null and hawk == null and next_boss_idx < BOSS_MARKS.size() and not tut_mode \
@@ -7242,6 +7269,45 @@ func _stomp_critter(x: float, y: float, who: String) -> void:
 	ripples.append({"x": x, "y": y, "t": 0.0, "max": 62.0, "col": Color(1.0, 0.95, 0.75)})
 	_float_text(x, y - 36.0, "STOMP!  +3", Color(1.0, 0.85, 0.4))
 
+# LOW SKIM: a heron crossing the river AT hop height — the ANTI-hop. grounded ducks pass
+# clean underneath (a little bow of respect); an airborne duck rises straight into it.
+# telegraph: its long shadow sweeps the row first, with a skree from the bank.
+func _spawn_skim() -> void:
+	var dir: float = 1.0 if randf() < 0.5 else -1.0
+	skims.append({"x": (bankw - 90.0) if dir > 0.0 else (VIEW.x - bankw + 90.0),
+		"y": randf_range(BASE_Y - 260.0, BASE_Y - 60.0), "dir": dir, "t": 0.0})
+	_sfx("screech", 0.7, -10.0)
+
+func _update_skims(delta: float) -> void:
+	for s in skims:
+		s.t = float(s.t) + delta
+		if float(s.t) > 1.1:                           # the warn beat, then she CROSSES
+			s.x = float(s.x) + float(s.dir) * 340.0 * delta
+		s.y = float(s.y) + speed * delta * 0.22        # drifts gently downriver as it flies
+	skims = skims.filter(func(s): return float(s.x) > -160.0 and float(s.x) < VIEW.x + 160.0 and float(s.y) < VIEW.y + 60.0)
+
+# STEPPING-STONE RUN: 3-4 logs laid in a deliberate arc — hop them back-to-back for a
+# rising combo (logs become an OPPORTUNITY, not just a wall; a frog-legs feast too)
+func _spawn_stone_run() -> void:
+	var n: int = 3 + randi() % 2
+	var cx: float = randf_range(bankw + 130.0, VIEW.x - bankw - 130.0)
+	var arc: float = randf_range(-90.0, 90.0)
+	for i in n:
+		logs.append({"x": clampf(cx + arc * (float(i) / float(n - 1) - 0.5) * 2.0, bankw + 80.0, VIEW.x - bankw - 80.0),
+			"y": -40.0 - float(i) * 150.0, "w": 132.0, "h": 44.0, "missed": false, "got": false, "vx": 0.0,
+			"spring": false, "phase": randf() * TAU, "frog": i == n - 1, "frog_gone": false,
+			"crazy": false, "thwomp": false, "hp": 1, "stone": true})
+
+func _stone_cleared(l: Dictionary) -> void:
+	if not l.get("stone", false):
+		return
+	stone_combo = (stone_combo + 1) if stone_t > 0.0 else 1
+	stone_t = 2.4
+	if stone_combo >= 2:
+		run_feathers += stone_combo
+		_float_text(l.x, l.y - 30.0, "%d stones! +%d" % [stone_combo, stone_combo], Color(0.75, 0.92, 1.0))
+		_sfx("chime", 1.0 + 0.12 * minf(float(stone_combo), 6.0), -4.0)
+
 # FROG LEGS: descending onto a log is a LAUNCH, not a bonk — the frogs taught her well.
 # each chained bounce starts deeper into the arc AND lifts a little less, so a chain is a
 # flourish through a dense field (3-5 boings), never a flight mode; water resets the chain.
@@ -7263,6 +7329,7 @@ func _frog_bounce(l: Dictionary) -> void:
 	hop_events.append(anim_t)                      # the brood boings along
 	_sfx("mega", 1.5 + 0.08 * minf(float(frog_chain), 6.0), -6.0)
 	_sfx("ribbit", 1.05 + 0.07 * minf(float(frog_chain), 6.0), -4.0)
+	_stone_cleared(l)                              # a bounced stone still counts up the run
 	_float_text(l.x, l.y - 30.0, "BOING! +%d" % pay, Color(0.65, 0.9, 0.55))
 	_spawn_parts(l.x, l.y, 10, Color(0.6, 0.45, 0.3), 190.0)     # woodchips off the springboard
 	ripples.append({"x": l.x, "y": l.y, "t": 0.0, "max": 70.0, "col": Color(0.65, 0.9, 0.55)})
@@ -8648,6 +8715,29 @@ func _spawn(delta: float) -> void:
 			items.append({"x": randf_range(bankw + 24.0, VIEW.x - bankw - 24.0), "y": -40.0, "got": false, "kind": _pick_kind()})
 			item_timer = randf_range(0.5, 1.0)
 		return
+	# THE RIVER'S MOODS: while nothing bigger owns the stage, the quiet water cycles
+	# micro-moods (~14-22s) — denser jams, glassy breathers, low skimmers, stone runs.
+	var _quiet: bool = boss == null and fork.is_empty() and fork_ride.is_empty() and stretch_mod == "" \
+		and ev_id == "" and not tut_mode and distance > 2200.0 and hawk == null
+	if _quiet:
+		mood_t -= delta
+		if mood_t <= 0.0:
+			var _pool: Array = ["drift", "jam", "glass", "skimmers", "stones", "drift"]
+			_pool.erase(mood)                          # never the same mood twice running
+			mood = _pool[randi() % _pool.size()]
+			mood_t = randf_range(14.0, 22.0)
+			stone_next = 0.0
+			if mood == "skimmers" and distance < HERON_START:
+				mood = "glass"                         # no skims before herons exist
+		if mood == "skimmers" and skims.size() < 2 and randf() < 0.35 * delta * 10.0 * 0.1:
+			_spawn_skim()
+		if mood == "stones":
+			stone_next -= delta
+			if stone_next <= 0.0:
+				_spawn_stone_run()
+				stone_next = randf_range(4.5, 6.5)
+	else:
+		mood = "drift"; mood_t = 0.0
 	log_timer -= delta
 	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty" \
 			and (fork.is_empty() or fork.get("picked", true)) \
@@ -8687,6 +8777,10 @@ func _spawn(delta: float) -> void:
 			"crazy": is_crazy, "cphase": randf() * TAU, "spin": randf_range(1.4, 2.6) * (1.0 if randf() < 0.5 else -1.0),
 		})
 		log_timer = (randf_range(0.65, 1.15) * (BASE_SPEED / speed) + 0.25) / endless_heat
+		if mood == "jam":
+			log_timer *= 0.68                          # the JAM: the river crowds up
+		elif mood == "glass":
+			log_timer *= 1.7                           # GLASS WATER: a breather — open, fast, snack-rich
 		if _up("froglegs") > 0 and frog_chain > 0 and frog_chain < 6:
 			log_timer = minf(log_timer, 0.55)      # the river FEEDS a live chain another stepping stone
 
@@ -8863,6 +8957,34 @@ func _collide() -> void:
 		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < reach:
 			_collect(it)
 
+	# LOW SKIMS: grounded = she bows, it passes clean over (+loft salute). airborne = you
+	# rose into a crossing heron. the ONLY threat in the game you beat by NOT hopping.
+	for s in skims:
+		if float(s.t) <= 1.1:
+			continue
+		var _sdx: float = absf(float(s.x) - duck_x)
+		var _sdy: float = absf(float(s.y) - BASE_Y)
+		if _sdx < 52.0 and _sdy < 46.0:
+			if is_invincible():
+				continue
+			if is_airborne() or hop_height() > 0.1:
+				if shield_charges > 0 or ducklings_n > 0:
+					if shield_charges > 0:
+						shield_charges -= 1
+						_ouch(); _sfx("bonk", 1.3, -6.0); _flash("POOF.")
+					else:
+						_lose_duckling()
+					duck_shake = 0.3
+					skims.erase(s)
+					break
+				die("rose straight into a crossing heron.\nshe was flying LOW for a reason.", "heron", "the low skim")
+				return
+			elif not s.get("ducked", false):
+				s.ducked = true                        # passed clean underneath — style
+				_add_loft(0.10)
+				_near_miss_fx(duck_x)
+				_float_text(duck_x, BASE_Y - 70.0, "ducked under!", Color(0.7, 0.95, 1.0))
+
 	var smashed = null
 	for l in logs:
 		if l.get("thwomp", false):                 # DEADFALL logs run their own slam-collision in _update_thwomp
@@ -8893,6 +9015,7 @@ func _collide() -> void:
 					_add_loft(0.06)
 					_add_heat(0.12)                  # ON FIRE: clean clears stoke the streak
 					_float_text(duck_x, BASE_Y - 72.0, "+loft", Color(0.5, 0.85, 1.0))
+					_stone_cleared(l)                # stepping-run combo credit
 					# a skim over a log = a NEAR MISS. generous window so it actually happens —
 					# any clear that isn't a soaring max-height arc counts as "threading it"
 					if not is_invincible() and hop_height() < 0.82 and not l.get("frog", false) and nearmiss_cd <= 0.0:
@@ -12538,6 +12661,21 @@ func _draw() -> void:
 			var prox: float = clampf(1.0 - (BASE_Y - e.y) / 520.0, 0.08, 1.0)
 			var hs := tex_shadow.get_size() * DUCK_DRAW * (0.6 + prox)
 			draw_texture_rect(tex_shadow, Rect2(Vector2(e.x, BASE_Y) - hs * 0.5, hs), false, Color(1, 1, 1, prox))
+	# LOW SKIMS: warn = her long shadow sweeps the row; then she crosses, low and level
+	for s in skims:
+		var _sy: float = float(s.y)
+		if float(s.t) <= 1.1:
+			var _wa: float = clampf(float(s.t) / 1.1, 0.0, 1.0)
+			draw_line(Vector2(bankw, _sy + 16.0), Vector2(VIEW.x - bankw, _sy + 16.0),
+				Color(0.05, 0.08, 0.12, 0.10 + 0.14 * _wa * (0.5 + 0.5 * sin(anim_t * 8.0))), 20.0)
+			continue
+		_fill_ellipse(Vector2(float(s.x), _sy + 18.0), 34.0, 9.0, Color(0.02, 0.05, 0.08, 0.30))
+		var hf2: Texture2D = tex_heron[[1, 0, 2, 0][int(anim_t * 5.0) % 4]] if tex_heron.size() >= 3 else (tex_heron[0] if tex_heron.size() > 0 else null)
+		if hf2 != null:
+			var hsz: Vector2 = hf2.get_size() * DUCK_DRAW
+			draw_set_transform(Vector2(float(s.x), _sy), float(s.dir) * PI * 0.5, Vector2(1.0, float(s.dir)))
+			draw_texture_rect(hf2, Rect2(-hsz * 0.5, hsz), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	for e in enemies:
 		# the REAL top-down strike-dive (wings out, legs trailing) — flap alternates as it drops;
 		# falls back to the old side-view frames if the swoop set isn't generated
@@ -16324,6 +16462,9 @@ func _bot_control(delta: float) -> void:
 		hop(); sim_hop_cd = 0.22
 
 func _bot_should_hop() -> bool:
+	for s in skims:                   # a LOW SKIM near our row: stay DOWN — the anti-hop
+		if absf(float(s.y) - BASE_Y) < 130.0:
+			return false
 	for l in logs:                    # vault an imminent log in our column (lead scales with current speed)
 		if absf(float(l.x) - duck_x) < float(l.w) * 0.5 + 16.0:
 			var dy: float = BASE_Y - float(l.y)
