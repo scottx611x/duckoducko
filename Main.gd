@@ -196,7 +196,6 @@ const THEMES := [
 	{"name": "Woodbury Pond",  "tint": Color(1.08, 1.04, 0.82),   "line": "the big water. all of it."},
 	{"name": "Purgatory Pond", "tint": Color(0.66, 0.72, 0.62),   "line": "shallow, weedy, hard to reach. worth it."},
 	{"name": "Sand Pond",      "tint": Color(1.16, 1.02, 0.74),   "line": "camp. you know the way."},
-	{"name": "Emerald Lake",   "tint": Color(0.62, 1.04, 0.80),   "line": "the one out west. (she's right about it.)"},
 	{"name": "Lake Cochichewick", "tint": Color(0.54, 0.68, 0.94), "line": "binoculars up. the hawk holds Weir Hill."},
 	{"name": "Jimmy Pond",     "tint": Color(0.98, 1.02, 1.0),    "line": "good fishin'. the quiet kind."},
 ]
@@ -206,7 +205,6 @@ const LOG_TINT := [
 	Color(1.08, 0.97, 0.74),   # Woodbury — sun-bleached, warm
 	Color(0.60, 0.72, 0.52),   # Little Purgatory — mossy, sickly, dead
 	Color(1.12, 0.96, 0.66),   # Sand — pale, sun-baked sandy driftwood
-	Color(0.66, 0.92, 0.70),   # Emerald — lush mossy green
 	Color(0.80, 0.88, 1.08),   # Cochichewick — frost-rimed, icy blue
 	Color(0.96, 1.00, 1.02),   # Jimmy — quiet, clean, cool
 ]
@@ -230,7 +228,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.22.6"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.22.7"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -897,7 +895,7 @@ var squash := 0.0               # landing squash-and-stretch (1 -> 0)
 
 var theme_idx := 0
 var theme_prev := 0
-var theme_route: Array = [0, 1, 2, 3, 4, 5, 6]  # per-run pond ORDER (Buker opens; rest shuffled)
+var theme_route: Array = [0, 1, 2, 3, 4, 5]  # per-run pond ORDER (Buker opens; rest shuffled)
 var theme_sweep := 1.0          # 0..1: the wash line's progress down the screen
 var region_t := -9.0            # anim_t when a new scenery region began (for its arrival banner)
 
@@ -1023,31 +1021,27 @@ const TUT := [
 	{"id": "heron",   "goal": 1, "say": "Heads up — a HERON! Steer clear, or STOMP it by landing from ABOVE."},
 	{"id": "done",    "goal": 0, "say": "You're a natural, kid! That's the lot — now get out there and make a splash."},
 ]
-# RUSTY's repertoire: half tips, half over-the-top cheers from a dramatic know-it-all
-# RUSTY (canon, Scott 2026-07-12): the wise sage of the mountain — and a lil kooky.
-# warm mystical hawk wisdom, delivered earnestly, slightly unglued. he makes folks HAPPY.
-# not a cheerleader, not a drill instructor, not a comedian: a beloved odd guru.
+# RUSTY: a kind old hawk who's glad to see you. PLAIN warm sincerity — grandpa-on-the-
+# porch, not a guru, not a bit. simple words, real warmth, a small smile at most.
+# (voice history: jerk/cheerleader/comedian/drill-pilot/mystic-kook all rejected — when
+# in doubt, say the KIND SIMPLE thing.)
 const HAWK_LINES := [
-	"the wind remembers every wing.\nit told me it likes yours.",
-	"i once meditated a whole winter\non one updraft. worth it.",
-	"ah, the river. my old rival.\nwe're very close.",
-	"a wise bird asks the storm questions.\na wiser bird just enjoys the ride.",
-	"i dreamed of a duck last night.\nit was you. you were magnificent.",
-	"secret of the mountain:\nthere is no mountain. only UP.",
-	"herons fear what they don't understand.\nbe confusing.",
-	"i asked the moon about you.\nshe's rooting for you. we all are.",
-	"feathers grow back.\ndignity too. mostly.",
-	"i have seen one thousand sunrises.\nthis one's top ten. feel it?",
-	"float like you know a secret.\n(you do. i just told you.)",
-	"the log is your teacher.\na terrible one. hop the teacher.",
-	"when in doubt, spiral.\nworks for hawks. works for galaxies.",
-	"i keep my wisdom in my tail feathers.\nthe red ones. that's why.",
-	"listen to the water... hear that?\nit's cheering. quietly.",
-	"an old updraft once told me: 'rise.'\nthat's it. best advice i ever got.",
-	"you smell like adventure\nand a little like pondweed. perfect.",
-	"somewhere, a mountain\nis proud of you. i checked.",
-	"every ripple you make\nreaches somewhere wonderful.",
-	"the sun sets, the sun rises.\nbetween the two: SNACKS.",
+	"ah, my favorite duck.\nyes, i mean you.",
+	"you're doing better than you think.\nyou usually are.",
+	"nice day for it.\nsun's out, water's easy. go on.",
+	"rest when you need to.\nthe river will keep.",
+	"i've flown a long time.\ngood company is still the best part.",
+	"eat well. sleep dry. hop big.\nthat's the whole sermon.",
+	"every duck goes under sometimes.\nthe good ones come up paddling.",
+	"an old wing's secret:\nnobody knows what they're doing. fly anyway.",
+	"take the long way once in a while.\nthe snacks are better over there.",
+	"you remind me of me,\nback before all the gray feathers.",
+	"strong wake today.\ni notice these things.",
+	"somewhere out there's a pond\nyou haven't met yet. lucky pond.",
+	"herons are just tall worries.\nhop when it counts and keep going.",
+	"i saved you the good updraft.\ndon't tell the geese.",
+	"proud of you, kid.\nthat's all. carry on.",
+	"go easy on yourself.\nyou're the only duck like you i've got.",
 ]
 # RUSTY's patter while he minds the shop counter (keep 'em SHORT — small bubble)
 const SHOP_GREETS := [
@@ -1261,7 +1255,7 @@ var env_scenery: Array = []
 var env_timer := 0.0
 var hero_next := 8000.0         # HERO LANDMARKS: one memorable set-piece per pond, rare (~800ft)
 
-const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "hero_emerald", "", "hero_pleasant"]   # Jimmy inherits the anchored skiff (file name is historical); Cochichewick stays wild
+const HERO_NAMES := ["hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand", "", "hero_pleasant"]   # Jimmy inherits the anchored skiff (file name is historical); Cochichewick stays wild
 # THE SHORELINE codex: every bank fixture + landmark is a record you EARN by visiting its water
 const SHORE_LORE := {
 	"bank_cattail_0": ["CATTAILS", "The river's picket fence. Red-winged blackbirds hold territory in them all summer, and every pond worth its name grows a stand."],
@@ -1273,7 +1267,6 @@ const SHORE_LORE := {
 	"bank_bonfire": ["THE CAMP FIRE RING", "Stones stacked by many summers of hands. If you listen past the crackle: grilling, laughing, a dog shaking off lakewater."],
 	"bank_barredowl": ["BARRED OWL", "Who cooks for you? Who cooks for you-all? At camp, the answer drifts down from the pines every dusk."],
 	"bank_pine": ["SHORE PINES", "Western-tall and unbothered. They smell like a different altitude entirely."],
-	"bank_fern": ["FERN BREAK", "Green on green on green. The shady understory where the moose SHOULD be, statistically."],
 	"bank_shroom": ["GLOW-CAPS", "Little teal lanterns at the waterline. Almost certainly magic. Definitely not for eating."],
 	"bank_snowduck": ["THE SNOWDUCK", "Somebody built a snowman shaped like a duck, with a carrot bill and a red scarf. That somebody understood things."],
 	"bank_lizzie": ["LIZZIE", "The beagle of the birding hill. Sits like a good girl, watches the water, has never once flushed the bird you were photographing. A professional."],
@@ -1282,7 +1275,6 @@ const SHORE_LORE := {
 	"hero_woodbury": ["THE TURTLE LOG", "Three painted turtles, necks to the sun, arranged by seniority. The middle of the big water belongs to them."],
 	"hero_purgatory": ["THE DEAD TREE", "It rises out of the shallows like a question nobody answers. The crow is always there. The crow was always there."],
 	"hero_sand": ["THE PONTOON", "Deck chairs, a towel over the rail, an outboard that starts on the second pull. Summer's flagship, moored just off camp."],
-	"hero_emerald": ["THE GREAT BOULDER", "Granite shouldered up through clear green water, ferns in its cracks, glow-caps at its feet. A mountain lake showing off."],
 	"hero_pleasant": ["THE ANCHORED SKIFF", "Rod arced, bobber set, nobody aboard. The boat fishes alone, patiently, and honestly seems to be doing fine."],
 	"bank_angler_0": ["THE CASTING ANGLER", "Mid-cast since dawn, probably. The good spots on Jimmy are earned, not found."],
 	"bank_angler_1": ["THE BUCKET ANGLER", "Sits on an overturned bucket with the patience of geology. Has caught more than anyone. Tells no one where."],
@@ -1712,7 +1704,7 @@ func _update_river_events(delta: float) -> void:
 				draft_choices = _deal_rusty_draft(false)  # EPIC ceiling — the legendary is for 90%+
 				_sfx("chime", 1.2)
 			else:
-				_gl = "%d%%. the wind is a fussy teacher.\nwe'll charm her yet. again!" % int(_gr * 100)
+				_gl = "%d%%. that's alright, kid.\nwe'll get it next time. i'm patient." % int(_gr * 100)
 				run_feathers += 10
 			_flash("RUSTY'S GRADE: %d%%" % int(_gr * 100), 2.2)
 			if hawk != null:                            # he wheels around to face you for the grade
@@ -1764,7 +1756,6 @@ const ENV_TABLE := [
 	[["env_lily_0", 1.5], ["env_lily_1", 1.3], ["env_lilyflower", 0.7], ["env_stone_1", 0.9], ["env_snag", 0.6], ["env_bottle", 0.10], ["env_flipflop", 0.08], ["env_raft", 0.06]],
 	[["env_snag", 2.6], ["env_stone_0", 1.0], ["env_lily_0", 0.5], ["env_bottle", 0.12]],
 	[["env_stone_0", 2.4], ["env_stone_1", 2.2], ["env_flipflop", 0.5], ["env_sailboat", 0.14], ["env_raft", 0.10]],
-	[["env_lily_0", 1.7], ["env_lilyflower", 1.1], ["env_snag", 1.0], ["env_raft", 0.10]],
 	[["env_stone_0", 2.0], ["env_stone_1", 1.8], ["env_lily_1", 0.8], ["env_snag", 0.8], ["env_sailboat", 0.10], ["env_bottle", 0.10]],
 	[["env_lily_0", 2.2], ["env_lily_1", 1.8], ["env_stone_0", 0.9], ["env_snag", 0.5], ["env_bottle", 0.08], ["env_raft", 0.06]],
 ]
@@ -1945,7 +1936,7 @@ var jukebox_sel := 0                           # which JUKEBOX entry the shop ro
 var jukebox_hits := []                         # the jukebox row's tap targets (in the shop)
 # each scenery THEME picks an ambient bed (by theme_idx; "" keeps the default music.wav)
 # same tune, gently tinted per region (warmer / hushed / brisk / shimmery)
-const THEME_MUSIC := ["music_default", "music_warm", "music_hush", "music_brisk", "music_warm", "music_default", "music_calm"]
+const THEME_MUSIC := ["music_default", "music_warm", "music_hush", "music_brisk", "music_default", "music_calm"]   # RETIRED: ponds no longer swap music (kept for the jukebox track list)
 
 # menu easter egg: the big drake likes being tapped
 var menu_spin_vel := 0.0
@@ -2162,7 +2153,7 @@ func _ready() -> void:
 			"bank_bonfire", "bank_barredowl", "bank_lizzie", "bank_jetski_0", "bank_jetski_1", "bank_osprey",
 			"bank_angler_0", "bank_angler_1",
 			"hero_buker", "hero_woodbury", "hero_purgatory", "hero_sand",
-			"hero_pleasant", "hero_emerald", "hero_cochichewick"]:
+			"hero_pleasant", "hero_cochichewick"]:
 		if ResourceLoader.exists("res://art/%s.png" % bn):
 			tex_env[bn] = load("res://art/%s.png" % bn)
 	for kind in ITEM_DEFS:
@@ -2463,7 +2454,7 @@ func _ready() -> void:
 		in_wardrobe = false; in_select = false
 		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
 		drafting = false; draft_choices.clear(); next_draft = distance + 100000.0
-		for _sw in [0, 3, 6]:
+		for _sw in [0, 3, 5]:
 			distance = 6000.0; biome_progress = float(_sw) * THEME_LEN + 800.0
 			fork = {}; fork_ride = {}; fork_next = distance + 900000.0; next_draft = distance + 900000.0   # deterministic stage: no fork/draft ambush mid-sweep
 			theme_idx = _sw; theme_prev = _sw; theme_sweep = 1.0
@@ -2967,7 +2958,7 @@ func _load_save() -> void:
 		asc_breads = int(cfg.get_value("save", "asc_breads", 0))
 		runs_started = cfg.get_value("save", "runs_started", 0)
 		hawk_tips_seen = cfg.get_value("save", "hawk_tips_seen", [])
-		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 4:
+		if int(cfg.get_value("save", "hawk_pool_v", 1)) < 5:
 			hawk_tips_seen = []                        # the pool was rewritten — deal the new lines fresh
 		music_vol = cfg.get_value("save", "music_vol", -17.0)
 		sfx_vol = cfg.get_value("save", "sfx_vol", -8.0)
@@ -3059,7 +3050,7 @@ func _save() -> void:
 	cfg.set_value("save", "asc_breads", asc_breads)
 	cfg.set_value("save", "runs_started", runs_started)
 	cfg.set_value("save", "hawk_tips_seen", hawk_tips_seen)
-	cfg.set_value("save", "hawk_pool_v", 4)
+	cfg.set_value("save", "hawk_pool_v", 5)
 	cfg.set_value("save", "music_vol", music_vol)
 	cfg.set_value("save", "sfx_vol", sfx_vol)
 	cfg.set_value("save", "broodwear", ducklings_wear)
@@ -4572,7 +4563,7 @@ func _rusty_advice_raw() -> String:
 	if int(run_stats.get("snacks", 0)) < int(distance / 4000.0) and distance > 8000.0:
 		return "you're paddling PAST the snacks.\neat, duckling. loft doesn't fill itself."
 	if combo_n >= 5:
-		return "i felt that snack chain\nin my tail feathers. the red ones."
+		return "now THAT'S how you eat a river.\ngood work, kid."
 	return ""
 
 func _spawn_hawk() -> void:
@@ -5521,7 +5512,7 @@ func reset_game() -> void:
 	next_boss_idx = 0
 	_bigday_reseed(1)                                  # Big Day: everyone faces the same lineup today
 	theme_route = [0]
-	var _rest := [1, 2, 3, 4, 5, 6]
+	var _rest := [1, 2, 3, 4, 5]
 	_rest.shuffle()
 	theme_route.append_array(_rest)                    # every trip starts at the launch; the chain reshuffles
 	boss_kinds = [["gerald", "bongo"][randi() % 2], ["snapz", "beaver"][randi() % 2], ["gerald", "megasadie"][randi() % 2]]   # boss 1 = GERALD/BONGO, boss 2 = SNAPZ/BARRY, boss 3 = the ETERNAL or SADIE THE BOUNDLESS
@@ -6144,7 +6135,7 @@ func _pick_hop_style() -> void:
 	fancy = hop_style != "" and hop_style not in ["wobble", "boing"]
 	# LAKE COCHICHEWICK (the finale water) is enchanted: every hop chimes a note up a
 	# pentatonic scale — WHIMSY §6's "pretty payoff theme", finally sung
-	if theme_idx == 5 and boss == null:
+	if theme_idx == 4 and boss == null:
 		var _pent := [1.0, 1.125, 1.266, 1.5, 1.688, 2.0]
 		_sfx("combo", _pent[hop_count % 6], -10.0)
 	match hop_style:
@@ -8723,7 +8714,7 @@ func _pick_kind() -> int:
 	var r := randi() % total
 	for i in ITEM_DEFS.size():
 		var w: int = ITEM_DEFS[i].weight
-		if theme_idx == 6 and ITEM_DEFS[i].name == "minnow":
+		if theme_idx == 5 and ITEM_DEFS[i].name == "minnow":
 			w *= 3                                   # JIMMY POND: good fishin'
 		r -= w
 		if r < 0:
@@ -11261,7 +11252,9 @@ func _swap_theme_music() -> void:
 	# each region gets a SUBTLE tint of the same tune. all tints share one length/structure,
 	# so we swap the stream while PRESERVING playback position — the melody plays on unbroken,
 	# only the timbre shifts. (bosses still cut to their own tense theme.)
-	var nm: String = THEME_MUSIC[theme_idx] if theme_idx < THEME_MUSIC.size() else "music_default"
+	# ONE RIVER, ONE SONG (Scott 2026-07-30: "i don't want ponds to have different music
+	# at all") — the iconic theme plays everywhere; only bosses and the BOOMBOX interrupt.
+	var nm := "music_default"
 	var boom: bool = boss == null and _wear("boombox") and theme_tracks.has("music_boombox")
 	if boom:
 		nm = "music_boombox"                       # the BOOMBOX blasts its own heavy beat over the river
@@ -12327,7 +12320,7 @@ func _draw() -> void:
 
 	# PER-BIOME WATER: a colour WASH so each pond differs (the variety), + GENTLE caustics (calm, non-distracting)
 	if has_art:
-		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.11, 0.55, 0.36, 0.28), Color(0.09, 0.17, 0.45, 0.32), Color(0.20, 0.44, 0.55, 0.14)][theme_idx]
+		var _wash: Color = [Color(0.18, 0.40, 0.60, 0.16), Color(0.24, 0.52, 0.50, 0.18), Color(0.13, 0.30, 0.18, 0.34), Color(0.18, 0.62, 0.58, 0.22), Color(0.09, 0.17, 0.45, 0.32), Color(0.20, 0.44, 0.55, 0.14)][theme_idx]
 		draw_rect(Rect2(Vector2.ZERO, VIEW), _wash)
 		# living-water FX are GAMEPLAY-only (menus don't need streaks/foam — web frame budget)
 		if not (in_menu or in_select or in_shop or in_stats or in_codex or in_shrine or in_jukebox):
@@ -14031,7 +14024,6 @@ const BANK_PROPS := [
 	["bank_jetski_0", "bank_jetski_1"],    # WOODBURY: big-water toys, parked + ready (picnic gear NUKED)
 	["bank_deadtree", "bank_osprey"],      # PURGATORY: the snag + the fish-hawk roosting (graves evicted)
 	["bank_bonfire", "bank_barredowl"],    # SAND POND is camp: the fire ring + the barred owls
-	["bank_pine", "bank_fern"],            # EMERALD LAKE is Colorado: pines over ferns
 	["bank_pine", "bank_lizzie"],          # COCHICHEWICK: Lizzie the beagle watches the water
 	["bank_angler_0", "bank_angler_1"],    # JIMMY: good fishin' — the shore regulars set up here
 ]
@@ -14090,15 +14082,7 @@ func _draw_bank_decor() -> void:
 				draw_rect(Rect2(b.x - 4.0, b.y - 17.0, 8.0, 8.0), Color(0.92, 0.80, 0.52))
 				draw_line(b + Vector2(0, -17.0), b + Vector2(0, -26.0), Color(0.6, 0.5, 0.3), 1.0)
 				draw_colored_polygon(PackedVector2Array([b + Vector2(0, -26), b + Vector2(0, -21), b + Vector2(d * 7, -23.5)]), Color(0.9, 0.3, 0.3))
-			4:                                        # City Fountain — lamppost
-				draw_line(b, b + Vector2(0, -34.0), Color(0.34, 0.36, 0.40), 2.0)
-				draw_circle(b + Vector2(0, -34.0), 4.0, Color(1.0, 0.92, 0.6, 0.45))
-				draw_circle(b + Vector2(0, -34.0), 2.0, Color(1.0, 0.95, 0.75))
-			5:                                        # Emerald Lake — lush fern
-				for f in 4:
-					var fa := -1.3 + f * 0.45
-					draw_line(b, b + Vector2(d * sin(fa) * 15.0 + d * 4.0, -22.0 + absf(cos(fa)) * 6.0), Color(0.30, 0.62, 0.32), 2.0)
-			6:                                        # Aurora Lake — snowy pine
+			4:                                        # Cochichewick — snowy pine
 				draw_colored_polygon(PackedVector2Array([b + Vector2(-9, 0), b + Vector2(9, 0), b + Vector2(0, -30)]), Color(0.16, 0.34, 0.26))
 				draw_colored_polygon(PackedVector2Array([b + Vector2(-6, -13), b + Vector2(6, -13), b + Vector2(0, -30)]), Color(0.92, 0.96, 1.0, 0.92))
 
@@ -14127,14 +14111,7 @@ func _draw_atmosphere() -> void:
 				var sx := fposmod(i * 74.0 + anim_t * (46.0 + i * 9.0), VIEW.x + 40.0) - 20.0
 				var sy := 90.0 + i * 100.0 + sin(anim_t * 0.9 + i) * 14.0
 				draw_circle(Vector2(sx, sy), 1.5, Color(0.96, 0.82, 0.5, 0.28))
-		4:                                          # Emerald Lake — fireflies
-			for i in 9:
-				var fx := fposmod(i * 67.0 + sin(anim_t * 0.6 + i * 1.3) * 52.0, VIEW.x)
-				var fy := fposmod(i * 103.0 + sin(anim_t * 0.5 + i) * 40.0 + anim_t * 5.0, VIEW.y)
-				var blink := maxf(0.0, sin(anim_t * 3.0 + i * 2.0))
-				draw_circle(Vector2(fx, fy), 7.0, Color(0.7, 1.0, 0.4, 0.16 * blink))
-				draw_circle(Vector2(fx, fy), 2.6, Color(0.9, 1.0, 0.55, 0.3 + 0.65 * blink))
-		5:                                          # Cochichewick — aurora ribbons + falling snow
+		4:                                          # Cochichewick — aurora ribbons + falling snow
 			for b in 3:
 				var pts := PackedVector2Array()
 				for i in 25:
@@ -16009,15 +15986,7 @@ func _log_biome_accents(l: Dictionary) -> void:
 				var sx := fposmod(cos(seed + k * 1.7) * 0.5 + 0.5, 1.0) * (hw * 1.7) - hw * 0.85
 				draw_circle(Vector2(sx, sin(seed + k) * hh * 0.4), 1.6, Color(1.0, 0.94, 0.72, 0.45))
 			draw_line(Vector2(-hw * 0.6, 0.0), Vector2(hw * 0.7, hh * 0.2), Color(0.7, 0.6, 0.4, 0.3), 1.0)
-		4:                                          # City Fountain — cold waterline streak + grey slime
-			draw_line(Vector2(-hw * 0.8, hh * 0.3), Vector2(hw * 0.8, hh * 0.3), Color(0.0, 0.0, 0.0, 0.2), 2.0)
-			draw_circle(Vector2(hw * 0.2, -hh * 0.1), 2.4, Color(0.4, 0.5, 0.46, 0.4))
-		5:                                          # Emerald Lake — lush moss + a sprout
-			for k in 5:
-				var ex := fposmod(sin(seed + k * 2.1) * 0.5 + 0.5, 1.0) * (hw * 1.7) - hw * 0.85
-				draw_circle(Vector2(ex, cos(seed + k) * hh * 0.5), 2.2, Color(0.30, 0.70, 0.34, 0.7))
-			draw_line(Vector2(0.0, -hh * 0.3), Vector2(0.0, -hh * 0.3 - 6.0), Color(0.35, 0.70, 0.35, 0.7), 1.5)
-		6:                                          # Aurora Lake — frost + an icy glint
+		4:                                          # Cochichewick — frost + an icy glint
 			for k in 4:
 				var fx := fposmod(cos(seed + k * 1.9) * 0.5 + 0.5, 1.0) * (hw * 1.7) - hw * 0.85
 				draw_circle(Vector2(fx, cos(seed * 1.3 + k) * hh * 0.5), 1.8, Color(0.85, 0.95, 1.0, 0.7))
