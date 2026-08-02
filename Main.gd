@@ -228,7 +228,7 @@ const ITEM_DEFS := [
 	{"name": "goldegg", "score": 250.0, "loft": 0.24, "weight": 1, "tier": 3},      # the LEGENDARY river prize
 ]
 
-const GAME_VERSION := "1.23.0"   # release.sh stamps this at every release — never hand-bump again
+const GAME_VERSION := "1.23.1"   # release.sh stamps this at every release — never hand-bump again
 var update_avail := ""          # web only: a newer build is live — the menu says so
 
 # the meta shop: permanent unlocks bought with feathers (the reason to come back)
@@ -12729,6 +12729,7 @@ func _draw() -> void:
 	if boss != null:
 		_draw_boss_arena()           # the fight owns the frame: mood tint + vignette + arena motes
 		_draw_boss_ground()          # telegraph + shockwaves, on the water under everyone
+	_draw_draft_orb()                   # ABOVE logs + flotsam: a wonder outranks driftwood
 	_draw_ducklings()
 	_draw_duck()
 	if _up("scrapshell") > 0 and not trash_queue.is_empty():
@@ -13900,7 +13901,11 @@ func _mod_wash(id: String) -> Color:
 	return Color(0.45, 0.32, 0.55)
 
 func _draw_river_events() -> void:
-	# THE DRAFT ORB: a tumbling d12 wonder — halo, sparkle, unmistakably WANTED
+	_draw_fork_and_events()
+
+# THE DRAFT ORB rides ABOVE the river's furniture (it flew UNDER logs when it lived in
+# the events layer — a wonder should never be upstaged by driftwood)
+func _draw_draft_orb() -> void:
 	if not draft_orb.is_empty() and not tex_orb.is_empty():
 		var _op := Vector2(float(draft_orb.x), float(draft_orb.y))
 		var _obr: float = 0.5 + 0.5 * sin(anim_t * 4.0)
@@ -13914,6 +13919,8 @@ func _draw_river_events() -> void:
 		for _os2 in 2:                                 # orbiting glints
 			var _oa: float = anim_t * 3.2 + float(_os2) * PI
 			draw_circle(_op + Vector2(cos(_oa), sin(_oa) * 0.5) * 28.0, 1.8, Color(1.0, 1.0, 0.9, 0.8))
+
+func _draw_fork_and_events() -> void:
 	if not fork.is_empty():
 		var fy: float = fork.y
 		var _cx: float = VIEW.x * 0.5
