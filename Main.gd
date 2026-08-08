@@ -1921,6 +1921,8 @@ var draft_orb := {}             # the catchable wonder riding the current ({} = 
 var mood := "drift"             # drift | jam | glass | skimmers | stones
 var mood_t := 0.0               # seconds left in the current mood
 var skims: Array = []           # LOW-SKIM herons crossing the river: {x, y, dir, warned_t} — DON'T hop
+var whirls: Array = []          # WHIRLPOOLS: the river's own teeth {x, y, r, ph, caught, dived}
+var rapids_i := 0.0             # RAPIDS intensity 0..1 — eases in/out with the mood
 var stone_combo := 0            # consecutive stepping-stone clears
 var stone_t := 0.0              # combo window
 var stone_next := 0.0           # next stepping-run spawn (stones mood)
@@ -2604,6 +2606,8 @@ func _ready() -> void:
 		drafting = false; draft_choices.clear(); next_draft = distance + 900000.0
 		distance = 9000.0
 		skims.append({"x": VIEW.x * 0.3, "y": BASE_Y - 150.0, "dir": 1.0, "t": 1.6})
+		mood = "rapids"; mood_t = 30.0; rapids_i = 1.0   # WHITEWATER + a whirlpool in one stage
+		whirls.append({"x": VIEW.x * 0.62, "y": BASE_Y - 190.0, "r": 48.0, "ph": 0.9, "caught": false, "dived": false})
 		_spawn_stone_run()
 		for l in logs:
 			l.y = float(l.y) + 320.0                   # pull the run on-screen
@@ -4767,6 +4771,7 @@ const DONNY_LINES := ["VROOOM!", "eat my WAKE!", "she's all WOOD, baby!",
 func _roamer_truce() -> void:
 	haz_turtle = null
 	skims.clear()
+	whirls.clear()                                 # the arena is nobody's washing machine
 	if donny != null and donny.phase != "depart":
 		donny.phase = "depart"
 		donny.cool = 99.0                        # she's leaving, not hunting — hull can't clip you
@@ -5636,6 +5641,7 @@ func reset_game() -> void:
 	fork_choosing = false; fork_auto = 0.0; fork_sky = -1; fork_ride = {}; fork_pick = -1
 	draft_orb = {}
 	skims.clear(); mood = "drift"; mood_t = 0.0; stone_combo = 0; stone_t = 0.0
+	whirls.clear(); rapids_i = 0.0; dive_cd = 0.0; dive_nag_cd = 0.0; state = St.GROUNDED
 	draft_choices.clear()
 	next_draft = DRAFT_EVERY
 	draft_count = 0
@@ -6814,7 +6820,8 @@ func _update_play(delta: float) -> void:
 				_sfx("fwoosh", 1.15, -3.0)
 				duck_shake = maxf(duck_shake, 0.15)
 		speed = (BASE_SPEED + SPEED_MAX_BONUS * (1.0 - exp(-distance / 42000.0)) * pow(0.75, _up("zen"))) \
-			* duck_pace_mul * (1.0 + 0.03 * speed_step) * asc_pace * _ev_speed_mult()
+			* duck_pace_mul * (1.0 + 0.03 * speed_step) * asc_pace * _ev_speed_mult() \
+			* (1.0 + 0.30 * rapids_i)              # WHITEWATER: the river surges under you
 	# ENDLESS gets RELENTLESS: hazard density climbs the further you push past the bread (no plateau)
 	endless_heat = clampf(1.0 + maxf(0.0, distance - endless_start_dist) / 36000.0, 1.0, 5.0) if endless else 1.0
 	# ZEN MODE: bullet-time slows the whole river (scroll, hazards, spawns) — not the duck
@@ -7156,6 +7163,10 @@ func _update_play(delta: float) -> void:
 	if state == St.DIVING:
 		duck_x = clampf(duck_x + sin(anim_t * 1.6 + dive_t * 2.1) * 26.0 * delta,
 			bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
+	# RAPIDS: whitewater shoulders you around — lean against it (dives duck under the chop)
+	if rapids_i > 0.01 and alive and state != St.MEGA and not is_under():
+		duck_x = clampf(duck_x + (sin(anim_t * 7.3) + 0.5 * sin(anim_t * 11.7)) * 34.0 * rapids_i * delta,
+			bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
 	# TEMPEST (ascension 10+): crosswinds — TELEGRAPHED first, then a push you can lean AGAINST
 	if ascension >= 10 and not tut_mode and boss == null and not ascending:
 		gust_cd -= delta
@@ -7208,6 +7219,7 @@ func _update_play(delta: float) -> void:
 	_update_wake(delta)
 	_update_enemies(delta * sm)
 	_update_skims(delta * sm)
+	_update_whirls(delta * sm)
 	if stone_t > 0.0:
 		stone_t -= delta
 		if stone_t <= 0.0:
@@ -7442,6 +7454,45 @@ func _spawn_skim() -> void:
 	skims.append({"x": (bankw - 90.0) if dir > 0.0 else (VIEW.x - bankw + 90.0),
 		"y": randf_range(BASE_Y - 260.0, BASE_Y - 60.0), "dir": dir, "t": 0.0})
 	_sfx("screech", 0.7, -10.0)
+
+# WHIRLPOOLS: the river's own teeth. On the surface the throat GRABS you — hauled toward
+# center, loft draining, steering useless — until you HOP free (or it drifts past). DIVE
+# and you slide beneath the whole spinning mess. The water itself became the enemy.
+func _update_whirls(delta: float) -> void:
+	if whirls.is_empty():
+		return
+	for w in whirls:
+		w.y = float(w.y) + speed * delta * 0.92        # lags the current a touch — it's rooted in the river
+		w.x = clampf(float(w.x) + sin(anim_t * 0.7 + float(w.ph)) * 14.0 * delta, bankw + 60.0, VIEW.x - bankw - 60.0)
+		w.ph = float(w.ph) + delta * 4.2
+		var dv := Vector2(float(w.x) - duck_x, float(w.y) - BASE_Y)
+		if not alive or dv.length() >= float(w.r):
+			continue
+		if is_under():
+			if not w.get("dived", false):
+				w.dived = true                         # slipped beneath the throat — the dive's answer
+				_add_loft(0.08)
+				_float_text(duck_x, BASE_Y - 66.0, "under the throat!", Color(0.6, 0.92, 1.0))
+				_sfx("fwoosh", 1.3, -8.0)
+			continue
+		if is_airborne() or is_invincible():
+			continue
+		# CAUGHT: the spiral owns your paddle. Hop out, dive out, or ride it till it passes.
+		if not w.get("caught", false):
+			w.caught = true
+			_float_text(duck_x, BASE_Y - 70.0, "the river has you!", Color(0.75, 0.88, 1.0))
+			_say(["not the SPIN!", "whoa-- WHOA--", "round and round we--"][randi() % 3], 1.4)
+			_sfx("splash_big", 0.7, -4.0)
+		var pull: float = 340.0 * delta
+		duck_x = clampf(duck_x + clampf(dv.x, -pull, pull), bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
+		target_x = duck_x                              # your drag anchor is forfeit while it holds you
+		loft = maxf(0.0, loft - 0.10 * delta)          # the throat drinks your charge
+		duck_shake = maxf(duck_shake, 0.12)
+		if randf() < delta * 14.0:                     # churned spray orbiting the rim
+			var wa := randf() * TAU
+			parts.append({"x": float(w.x) + cos(wa) * float(w.r) * 0.8, "y": float(w.y) + sin(wa) * float(w.r) * 0.45,
+				"vx": -sin(wa) * 60.0, "vy": cos(wa) * 30.0, "t": 0.0, "life": 0.4, "col": Color(0.85, 0.95, 1.0, 0.8)})
+	whirls = whirls.filter(func(w): return float(w.y) < VIEW.y + 90.0)
 
 func _update_skims(delta: float) -> void:
 	for s in skims:
@@ -8888,13 +8939,21 @@ func _spawn(delta: float) -> void:
 	if _quiet:
 		mood_t -= delta
 		if mood_t <= 0.0:
-			var _pool: Array = ["drift", "jam", "glass", "skimmers", "stones", "drift"]
+			var _pool: Array = ["drift", "jam", "glass", "skimmers", "stones", "drift", "rapids", "whirlpools"]
 			_pool.erase(mood)                          # never the same mood twice running
 			mood = _pool[randi() % _pool.size()]
 			mood_t = randf_range(14.0, 22.0)
 			stone_next = 0.0
 			if mood == "skimmers" and distance < HERON_START:
 				mood = "glass"                         # no skims before herons exist
+			if mood in ["rapids", "whirlpools"] and distance < 30000.0:
+				mood = "drift"                         # the river doesn't bare its teeth till ~3km
+			if mood == "rapids":
+				_flash("WHITEWATER!", 1.4)             # handling changes — that gets an announcement
+				_sfx("fwoosh", 0.85, -2.0)
+		if mood == "whirlpools" and whirls.size() < 2 and randf() < 0.045 * delta * 10.0:
+			whirls.append({"x": randf_range(bankw + 70.0, VIEW.x - bankw - 70.0), "y": -90.0,
+				"r": randf_range(40.0, 52.0), "ph": randf() * TAU, "caught": false, "dived": false})
 		if mood == "skimmers" and skims.size() < 2 and randf() < 0.35 * delta * 10.0 * 0.1:
 			_spawn_skim()
 		if mood == "stones":
@@ -8904,6 +8963,8 @@ func _spawn(delta: float) -> void:
 				stone_next = randf_range(4.5, 6.5)
 	else:
 		mood = "drift"; mood_t = 0.0
+	# rapids breathe in and out with the mood (and die fast for bosses/forks/events)
+	rapids_i = move_toward(rapids_i, 1.0 if (mood == "rapids" and _quiet) else 0.0, delta * (0.8 if _quiet else 1.8))
 	log_timer -= delta
 	if log_timer <= 0.0 and distance > LOG_START_DIST and stretch_mod != "rusty" \
 			and (fork.is_empty() or fork.get("picked", true)) \
@@ -8947,6 +9008,8 @@ func _spawn(delta: float) -> void:
 			log_timer *= 0.68                          # the JAM: the river crowds up
 		elif mood == "glass":
 			log_timer *= 1.7                           # GLASS WATER: a breather — open, fast, snack-rich
+		elif mood == "rapids":
+			log_timer *= 0.85                          # WHITEWATER: debris rides the surge
 		if _up("froglegs") > 0 and frog_chain > 0 and frog_chain < 6:
 			log_timer = minf(log_timer, 0.55)      # the river FEEDS a live chain another stepping stone
 
@@ -12726,6 +12789,8 @@ func _draw() -> void:
 			draw_texture_rect(ptex, Rect2(-psz * 0.5, psz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	_draw_rapids()                                 # WHITEWATER first: it's the water itself
+	_draw_whirls()                                 # whirlpools sit IN the surface — under logs, over water
 	_draw_duck_submerged()                         # THE DIVE: she passes UNDER everything — so she draws under it too
 
 	# logs (bob + sway) with frog passenger; golden spring logs pulse + glow
@@ -14591,6 +14656,50 @@ func _propblade_now() -> Dictionary:
 	if propblades.is_empty():
 		return {}
 	return propblades[int(anim_t * 14.0) % propblades.size()]
+
+# WHITEWATER: racing foam streaks + chop flecks, all scaled by rapids_i — the surge you feel
+# in the handling is the surge you see on the water.
+func _draw_rapids() -> void:
+	if rapids_i <= 0.02:
+		return
+	for i in 14:
+		var sx: float = bankw + fposmod(float(i) * 73.7 + sin(float(i) * 3.1) * 40.0, VIEW.x - 2.0 * bankw)
+		var sy: float = fposmod(distance * 1.35 + float(i) * 217.0, VIEW.y + 120.0) - 60.0
+		var ln: float = 60.0 + 40.0 * sin(float(i) * 1.7)
+		draw_line(Vector2(sx, sy), Vector2(sx + sin(float(i)) * 6.0, sy + ln),
+			Color(1, 1, 1, (0.20 + 0.10 * sin(anim_t * 6.0 + float(i))) * rapids_i), 3.0)
+	for i in 14:
+		var fx: float = bankw + fposmod(float(i) * 111.3, VIEW.x - 2.0 * bankw)
+		var fy: float = fposmod(distance * 1.5 + float(i) * 331.0, VIEW.y)
+		draw_circle(Vector2(fx, fy), 2.4, Color(1, 1, 1, 0.26 * rapids_i))
+	# the banks churn hardest — standing foam seams where water fights the shore
+	for side in 2:
+		var bx: float = (bankw + 7.0) if side == 0 else (VIEW.x - bankw - 7.0)
+		for k in 7:
+			var ky: float = fposmod(distance * 1.2 + float(k) * 151.0 + side * 77.0, VIEW.y + 60.0) - 30.0
+			draw_circle(Vector2(bx + sin(anim_t * 8.0 + float(k)) * 3.0, ky), 3.2,
+				Color(1, 1, 1, 0.30 * rapids_i))
+
+# a WHIRLPOOL: sunken depression, three spiral arms wheeling into a dark eye, foam rim.
+# perspective-squished so it sits IN the water, not on it.
+func _draw_whirls() -> void:
+	for w in whirls:
+		var c := Vector2(float(w.x), float(w.y))
+		var r := float(w.r)
+		_fill_ellipse(c, r * 1.2, r * 0.78, Color(0.05, 0.15, 0.23, 0.38))
+		draw_set_transform(c, 0.0, Vector2(1.0, 0.66))
+		for arm in 3:
+			var pts := PackedVector2Array()
+			for seg in 12:
+				var s := seg / 11.0
+				var a := float(w.ph) + arm * TAU / 3.0 + s * 4.4
+				pts.append(Vector2(cos(a), sin(a)) * r * (0.14 + 0.86 * s))
+			for i in pts.size() - 1:
+				draw_line(pts[i], pts[i + 1],
+					Color(0.85, 0.95, 1.0, 0.26 + 0.30 * (1.0 - float(i) / float(pts.size()))), 2.0)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 26, Color(0.8, 0.94, 1.0, 0.30 + 0.08 * sin(anim_t * 5.0)), 1.6)
+		draw_circle(Vector2.ZERO, r * 0.14, Color(0.03, 0.10, 0.16, 0.8))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # THE DIVE, from above: a teal shade of HERSELF wavering beneath the surface — refraction
 # ghosts, pearls of breath, and (late in the breath) the golden PROMISE ring tightening on
@@ -16617,6 +16726,9 @@ func _bot_danger_at(cx: float) -> float:
 		var ey: float = e.y
 		if ey > BASE_Y - 190.0 and ey < BASE_Y + 40.0 and absf(float(e.x) - cx) < 52.0:
 			d += 70.0 * (1.0 - clampf(absf(ey - BASE_Y) / 190.0, 0.0, 1.0))
+	for w in whirls:                  # the spiral costs control + loft — steer around the rim
+		if absf(float(w.x) - cx) < float(w.r) + 26.0 and float(w.y) > -40.0 and float(w.y) < BASE_Y + 50.0:
+			d += 55.0
 	if boss != null:
 		var st := String(boss.get("dive_stage", ""))
 		# lane telegraphs: Gerald's dive, Snapz's chomp, Barry's log hurl — the tell marks the lane
@@ -16714,6 +16826,10 @@ func _bot_should_dive() -> bool:
 		return false
 	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed", "pbeach"]:
 		return false                   # stomp window — stay up top and take it
+	for w in whirls:                   # a throat about to swallow our lane — go UNDER it
+		if absf(float(w.x) - duck_x) < float(w.r) and BASE_Y - float(w.y) > 0.0 \
+				and BASE_Y - float(w.y) < speed * 0.7:
+			return true
 	var soon := 0
 	for l in logs:
 		if l.get("spring", false) or l.get("thwomp", false):
