@@ -16,6 +16,9 @@ const BASE_SPEED := 215.0       # px/s scroll
 const SPEED_MAX_BONUS := 520.0  # asymptotic ramp: top speed ~735 px/s, never unplayable
 const DRIFT_START := 12000.0    # past 1200m, logs start drifting sideways instead
 const STEER_LERP := 14.0
+const DIVE_DUR := 1.5           # THE DIVE is a COMMITMENT: you're under this long, no take-backs
+const DIVE_CD := 3.5            # wet wings — the river only lets you cheat it so often
+const DIVE_STEER := 0.16        # underwater steering is a suggestion, not a promise
 const LOG_START_DIST := 160.0   # logs start soon after launch
 const HERON_START := 900.0      # the heron shows up once you're warmed up
 
@@ -339,7 +342,7 @@ const QUACK_PITCH := {
 }
 
 # ---- state -------------------------------------------------------------------
-enum St { GROUNDED, HOPPING, MEGA }
+enum St { GROUNDED, HOPPING, MEGA, DIVING }
 var in_menu := true
 var in_select := false
 var in_picker := false           # the SPECIAL picker modal (over duck-select)
@@ -892,6 +895,13 @@ var dead_m := 0                 # frozen stats for the death screen
 var dead_t := -9.0              # anim_t the run ended — a brief tap-lockout so frantic taps can't skip it
 var dead_record := false
 var squash := 0.0               # landing squash-and-stretch (1 -> 0)
+var dive_t := 0.0               # progress through the committed dive (0 -> DIVE_DUR)
+var dive_cd := 0.0              # wet wings: recharge before the next dive
+var dive_ready_glint := true    # announce "wings dry!" once when the cooldown ends
+var dive_nag_cd := 0.0          # rate-limits the "wings still wet" nudge
+var dive_slipped := 0           # logs slipped under THIS dive (style credit + tutorial rep)
+var dive_gestured := false      # one dive per touch — a swipe isn't a machine gun
+var tut_dive_slip := false      # tutorial: a genuine dive-under-a-log rep landed
 
 var theme_idx := 0
 var theme_prev := 0
@@ -1013,6 +1023,7 @@ const TUT := [
 	{"id": "steer",   "goal": 3, "say": "Lovely! Now DRAG to STEER — swish back and forth across the river a few times."},
 	{"id": "log",     "goal": 2, "say": "Here come LOGS — you can't paddle through 'em. TAP to HOP clean over each one!"},
 	{"id": "nearmiss","goal": 2, "say": "Pro move: don't hop — STEER so you SKIM right past a log's edge. That's a NEAR MISS, and it charges your LOFT! Thread two."},
+	{"id": "dive",    "goal": 2, "say": "Now the deep stuff: SWIPE DOWN to DIVE. Underwater, NOTHING can touch you — but you come up where the river says, so mind what's overhead! Slip under two logs."},
 	{"id": "spring",  "goal": 1, "say": "A glowing BOOST LOG with the rushing arrows! Land on it to LAUNCH sky-high — then CRUSH the log it flings you down onto!"},
 	{"id": "snack",   "goal": 3, "say": "Snacks ahead! Steer over the treats to gobble 'em up — grab a few!"},
 	{"id": "mega",    "goal": 0, "say": "That LOFT meter (top-left) is your SPECIAL gauge. Your starter is the MEGA HOP — a giant INVINCIBLE leap that crushes whatever you land on."},
@@ -2599,6 +2610,35 @@ func _ready() -> void:
 		await get_tree().create_timer(0.5).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("/tmp/s_mood.png")
+		get_tree().quit()
+	elif "--diveshot" in OS.get_cmdline_user_args():     # THE DIVE: film the submerge -> under-log -> surface beat
+		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
+		start_game(); tut_mode = false; in_shrine = false; shrine_boons = []
+		drafting = false; draft_choices.clear(); next_draft = distance + 900000.0
+		distance = 9000.0
+		enemies.clear()
+		await get_tree().create_timer(0.4).timeout
+		logs.clear(); haz_turtle = null; turtle_timer = 900.0   # a clean stage: just her, one log, the wager
+		logs.append({"x": duck_x, "y": BASE_Y - 260.0, "w": 120.0, "h": 46.0, "missed": false,
+			"spring": false, "vx": 0.0, "home": false, "phase": 0.3,
+			"frog": false, "frog_gone": false, "thwomp": false, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": 0.0})
+		dive()
+		var _dvf := 0
+		while state == St.DIVING or _dvf == 0:      # ~one frame per 0.12s across the whole breath
+			await get_tree().create_timer(0.12).timeout
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("/tmp/dive_%02d.png" % _dvf)
+			_dvf += 1
+			if _dvf == 8 and "--clonk" in OS.get_cmdline_user_args():
+				logs.clear()               # THE WAGER LOST: park a log square on the surfacing spot
+				logs.append({"x": duck_x, "y": BASE_Y - speed * (DIVE_DUR - dive_t), "w": 130.0, "h": 46.0, "missed": false,
+					"spring": false, "vx": 0.0, "home": false, "phase": 0.1,
+					"frog": false, "frog_gone": false, "thwomp": false, "tstage": "fall", "thwomp_t": 0.0, "thwomp_x": 0.0})
+			if _dvf > 24:
+				break
+		await get_tree().create_timer(0.25).timeout  # the settle after surfacing
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("/tmp/dive_%02d.png" % _dvf)
 		get_tree().quit()
 	elif "--orbshot" in OS.get_cmdline_user_args():      # the DRAFT ORB afloat, mid-tumble
 		booting = false; cheat_unlock = true; tutorial_seen = true; tut_done = true
@@ -4798,7 +4838,7 @@ func _update_donny(delta: float) -> void:
 	# COLLISION: that hull will bowl you over — and her CHURNING WAKE is dangerous too, so you
 	# have to clear her by a real margin, not just graze past.
 	var donny_hop: float = sin(clampf(d.hop_t / 0.42, 0.0, 1.0) * PI)   # she clears YOU when she hops driftwood
-	if alive and d.cool <= 0.0 and donny_hop < 0.4 and not is_airborne() and not is_invincible() \
+	if alive and d.cool <= 0.0 and donny_hop < 0.4 and not is_airborne() and not is_invincible() and not is_under() \
 			and absf(d.x - duck_x) < 26.0 and absf(d.y - BASE_Y) < 44.0:
 		d.cool = 1.2
 		_donny_hit_player()
@@ -5096,7 +5136,7 @@ func _update_turtle(delta: float) -> void:
 				duck_shake = maxf(duck_shake, 0.3)
 				_water_burst(tt.snap_x, BASE_Y, 1.1)     # erupts in a splash
 				# the BITE: caught on the water at the strike point = it gets you
-				if absf(duck_x - tt.snap_x) < 46.0 and not is_airborne() and not is_invincible():
+				if absf(duck_x - tt.snap_x) < 46.0 and not is_airborne() and not is_invincible() and not is_under():
 					if shield_charges > 0:
 						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0); _ouch()
 					elif ducklings_n > 0:
@@ -5723,6 +5763,8 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_SPACE:
 			if in_menu: start_game()
 			elif not paused: hop()
+		elif event.keycode in [KEY_S, KEY_DOWN]:
+			if not paused: dive()              # keyboard testers get the verb too
 		elif event.keycode == KEY_M:
 			mega_hop()
 		elif event.keycode == KEY_L:
@@ -5958,6 +6000,7 @@ func _on_press(pos: Vector2) -> void:
 		return
 	pressed = true
 	moved = false
+	dive_gestured = false                      # each touch may carry ONE dive flick
 	press_pos = pos
 	steer_anchor_x = duck_x                    # relative steering: drag deltas move the
 	target_x = duck_x                          # duck FROM HERE — never jump to the finger
@@ -5994,6 +6037,13 @@ func _on_drag(pos: Vector2) -> void:
 		return
 	if (pos - press_pos).length() > 18.0:
 		moved = true
+	# SWIPE DOWN = THE DIVE: a deliberate downward flick from touch-down (mostly vertical,
+	# quick) — steering is horizontal and slow, so the two never collide
+	var _sw_dy := pos.y - press_pos.y
+	if not dive_gestured and _sw_dy > 84.0 and _sw_dy > 1.35 * absf(pos.x - press_pos.x) \
+			and Time.get_ticks_msec() / 1000.0 - press_time < 0.45:
+		dive_gestured = true
+		dive()
 	# relative steering: finger delta moves the duck from where it was at touch-down.
 	# (absolute pos.x made the duck lurch hard toward wherever you touched.)
 	target_x = clampf(steer_anchor_x + (pos.x - press_pos.x) * 1.25,
@@ -6119,6 +6169,85 @@ func _on_release() -> void:
 		hop()
 
 # ---- actions -----------------------------------------------------------------
+# THE DIVE — the second verb. Swipe DOWN and she tucks under the whole river: logs,
+# herons, hulls, boss strikes, all of it passes over. But it's a WAGER, not a dodge:
+# she's under for the full breath, steering barely answers, and whatever's parked
+# overhead when she comes up is HER clonk. (Scott, 2026-08-08: risk/reward, seamless.)
+func dive() -> void:
+	idle_timer = 0.0
+	if not alive or in_menu or drafting or paused or fork_choosing or in_sky or not fork_ride.is_empty():
+		return
+	if state == St.MEGA or state == St.DIVING:
+		return
+	if tut_mode and (tut_step >= TUT.size() or TUT[tut_step].id in ["hop", "steer", "log", "nearmiss"]):
+		return                                     # Rusty teaches it in order — no skipping ahead
+	if dive_cd > 0.0:
+		if dive_nag_cd <= 0.0 and state == St.GROUNDED:
+			dive_nag_cd = 1.2
+			_float_text(duck_x, BASE_Y - 54.0, "wings still wet...", Color(0.72, 0.86, 0.95))
+			_sfx("squeak", 0.8, -10.0)
+		return
+	state = St.DIVING
+	dive_t = 0.0
+	dive_slipped = 0
+	hop_t = 0.0; hop_style = ""; fancy = false; air_hops = 0
+	_st("dives")
+	_sfx("splash_big", 1.25)
+	_sfx("fwoosh", 0.7, -3.0)
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 140.0})
+	_spawn_parts(duck_x, BASE_Y - 6.0, 16, Color(0.75, 0.92, 1.0), 250.0)
+	_spawn_parts(duck_x, BASE_Y - 2.0, 7, Color(1, 1, 1, 0.9), 150.0)
+	squash = 1.25
+
+# the breath runs out — the wager settles. Whatever floats overhead RIGHT NOW is yours.
+func _surface() -> void:
+	state = St.GROUNDED
+	dive_cd = DIVE_CD * (1.0 - 0.08 * float(_up("loft")))   # LOFT ENGINE dries you a touch faster
+	dive_ready_glint = true
+	squash = 1.0
+	ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 115.0})
+	var clonk = null
+	var r := DUCK_R * _size_mul()
+	for l in logs:
+		if l.get("thwomp", false):
+			continue
+		if absf(l.x - duck_x) < l.w * 0.5 + r * 0.52 and absf(l.y - BASE_Y) < l.h * 0.5 + r * 0.52:
+			clonk = l
+			break
+	var hull: bool = donny != null and donny.phase != "depart" \
+		and absf(float(donny.x) - duck_x) < 30.0 and absf(float(donny.y) - BASE_Y) < 46.0
+	if clonk == null and not hull:
+		_spawn_parts(duck_x, BASE_Y - 10.0, 14, Color(0.8, 0.94, 1.0), 230.0)
+		_sfx("splash", 1.1)
+		_sfx("quack", 1.2, -6.0)
+		if tut_mode and tut_step < TUT.size() and TUT[tut_step].id == "dive" and dive_slipped == 0:
+			_say("good form! now TIME it — go under as a log arrives.", 1.8)
+		if dive_slipped > 0:
+			_float_text(duck_x, BASE_Y - 70.0, "clean dive!", Color(0.6, 0.95, 1.0))
+			_add_heat(0.12 * dive_slipped)         # a slick dive stokes the streak like clean clears do
+		return
+	# CLONK. you surfaced under something solid. the river warned you it keeps its gifts.
+	duck_shake = maxf(duck_shake, 0.55)
+	_sfx("thud", 0.9); _sfx("bonk", 0.8)
+	_spawn_parts(duck_x, BASE_Y - 16.0, 12, Color(0.72, 0.52, 0.3), 210.0)
+	heat = 0.0; heat_warned = false                # a clonk breaks the ON FIRE streak like any bonk
+	if shield_charges > 0:
+		shield_charges -= 1
+		_ouch()
+		_flash("CLONK.")
+	elif ducklings_n > 0:
+		_lose_duckling()
+		_flash("CLONK.")
+	else:
+		if hull:
+			die("surfaced under CHRISSY'S HULL.\nshe didn't even slow down.", "donny", "the surfacing clonk")
+		else:
+			die("surfaced square under a log.\nthe river chooses where you come up.", "log", "the surfacing clonk")
+		return
+	if clonk != null:                              # the log you headbutted breaks apart
+		ripples.append({"x": clonk.x, "y": clonk.y, "t": 0.0, "max": 110.0})
+		logs.erase(clonk)
+
 func hop() -> void:
 	idle_timer = 0.0
 	if not alive or in_menu or drafting:
@@ -6197,7 +6326,7 @@ func _pick_hop_style() -> void:
 			_spawn_parts(duck_x, BASE_Y - 60.0, 6, Color(1, 1, 0.7, 0.9), 120.0)
 
 func mega_hop() -> void:
-	if not alive or in_menu or not loft_ready or state == St.MEGA or laser_t > 0.0 or boss != null:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or state == St.DIVING or laser_t > 0.0 or boss != null:
 		return
 	state = St.MEGA
 	mega_t = 0.0
@@ -6211,7 +6340,7 @@ func mega_hop() -> void:
 		_hit_boss(1)
 
 func fire_laser() -> void:
-	if not alive or in_menu or not loft_ready or state == St.MEGA or boss != null:
+	if not alive or in_menu or not loft_ready or state == St.MEGA or state == St.DIVING or boss != null:
 		return
 	loft = 0.0
 	loft_ready = false
@@ -6954,7 +7083,7 @@ func _update_play(delta: float) -> void:
 	# fires fast when grounded, but ALSO force-fires after a moment if you're hop-spamming
 	# so the meter never just sits there full. SUPPRESSED during a boss — bosses are a
 	# pure dodge->stomp skill check, and your charge is held for after.
-	if loft_ready and laser_t <= 0.0 and state != St.MEGA and boss == null:
+	if loft_ready and laser_t <= 0.0 and state != St.MEGA and state != St.DIVING and boss == null:   # held till she surfaces
 		var el := anim_t - loft_ready_t
 		if (el > 1.2 and state == St.GROUNDED) or el > 2.6:
 			_fire_special()
@@ -6976,7 +7105,7 @@ func _update_play(delta: float) -> void:
 			parts.append({"x": float(draft_orb.x) + randf_range(-14.0, 14.0), "y": float(draft_orb.y) + randf_range(-14.0, 14.0),
 				"vx": randf_range(-20.0, 20.0), "vy": randf_range(-10.0, 30.0), "t": 0.0, "life": 0.5,
 				"col": Color.from_hsv(fmod(anim_t * 0.4, 1.0), 0.5, 1.0)})
-		if alive and Vector2(float(draft_orb.x) - duck_x, float(draft_orb.y) - BASE_Y).length() < 58.0:
+		if alive and not is_under() and Vector2(float(draft_orb.x) - duck_x, float(draft_orb.y) - BASE_Y).length() < 58.0:   # the wonder rides the SURFACE
 			draft_orb = {}                             # CAUGHT — the wonder opens
 			_spawn_parts(duck_x, BASE_Y - 30.0, 22, Color(1.0, 0.9, 0.5), 260.0)
 			ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 130.0, "col": Color(1.0, 0.9, 0.5)})
@@ -7014,7 +7143,19 @@ func _update_play(delta: float) -> void:
 			_say(_duck_quip(species), 2.6)
 
 	squash = maxf(0.0, squash - delta * 5.5)
-	duck_x = lerpf(duck_x, target_x, clampf(delta * STEER_LERP * duck_steer_mul, 0.0, 1.0))
+	dive_nag_cd = maxf(0.0, dive_nag_cd - delta)
+	if dive_cd > 0.0:
+		dive_cd = maxf(0.0, dive_cd - delta)
+		if dive_cd <= 0.0 and dive_ready_glint and alive and not tut_mode:
+			dive_ready_glint = false               # one quiet tell: the wings are dry again
+			_float_text(duck_x, BASE_Y - 58.0, "wings dry!", Color(0.65, 0.9, 1.0))
+			_sfx("peep", 1.4, -12.0)
+	# underwater: your paddle is a rumor — the CURRENT owns the line (that's the wager)
+	var _steer_m: float = DIVE_STEER if state == St.DIVING else 1.0
+	duck_x = lerpf(duck_x, target_x, clampf(delta * STEER_LERP * duck_steer_mul * _steer_m, 0.0, 1.0))
+	if state == St.DIVING:
+		duck_x = clampf(duck_x + sin(anim_t * 1.6 + dive_t * 2.1) * 26.0 * delta,
+			bankw + DUCK_R, VIEW.x - bankw - DUCK_R)
 	# TEMPEST (ascension 10+): crosswinds — TELEGRAPHED first, then a push you can lean AGAINST
 	if ascension >= 10 and not tut_mode and boss == null and not ascending:
 		gust_cd -= delta
@@ -7172,6 +7313,14 @@ func _update_hop(delta: float) -> void:
 				fancy = false
 				hop_style = ""
 				_land(false)
+		St.DIVING:
+			dive_t += delta
+			if randf() < delta * 24.0:             # pearls of breath the whole way down
+				parts.append({"x": duck_x + randf_range(-10.0, 10.0), "y": BASE_Y + randf_range(-4.0, 10.0),
+					"vx": randf_range(-8.0, 8.0), "vy": randf_range(-48.0, -26.0),
+					"t": 0.0, "life": randf_range(0.4, 0.8), "col": Color(0.82, 0.95, 1.0, 0.85)})
+			if dive_t >= DIVE_DUR:
+				_surface()
 		St.MEGA:
 			mega_t += delta
 			var z := 1.0 - (0.12 if hyper else 0.26) * hop_height()
@@ -7205,6 +7354,9 @@ func hop_height() -> float:
 
 func is_airborne() -> bool:
 	return state == St.MEGA or (state == St.HOPPING and hop_height() > AIR_THRESHOLD)
+
+func is_under() -> bool:
+	return state == St.DIVING                     # beneath it ALL — the surface world can't touch her
 
 func is_invincible() -> bool:
 	# fork_ride: she's ON RAILS gliding under her sign / riding the current — a cinematic
@@ -7241,7 +7393,7 @@ func _land(mega: bool) -> void:
 
 func _update_wake(delta: float) -> void:
 	wake_timer -= delta
-	if wake_timer <= 0.0 and state != St.MEGA:
+	if wake_timer <= 0.0 and state != St.MEGA and state != St.DIVING:   # no paddle wake from UNDER the water
 		wake.append({"x": duck_x, "y": BASE_Y + 10.0, "t": 0.0, "side": -1.0})
 		wake.append({"x": duck_x, "y": BASE_Y + 10.0, "t": 0.0, "side": 1.0})
 		wake_timer = 0.045
@@ -7804,7 +7956,7 @@ func _update_boss(delta: float) -> void:
 				td["hit"] = true
 				duck_shake = maxf(duck_shake, 0.4)
 				ripples.append({"x": duck_x, "y": BASE_Y, "t": 0.0, "max": 160.0})
-				if alive and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				if alive and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 					boss.hit_cool = 1.0
 					_boss_hits_player(true)
 		boss_tides = boss_tides.filter(func(td): return td.y < VIEW.y + 30.0)
@@ -7963,7 +8115,7 @@ func _boss_fight(delta: float) -> void:
 			ripples.append({"x": boss.dive_x, "y": BASE_Y, "t": 0.0, "max": 150.0})
 			_sfx("splash_big", 0.8)
 			duck_shake = maxf(duck_shake, 0.4)
-			if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+			if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 				boss.hit_cool = 1.0
 				_boss_hits_player()
 			# THE ETERNAL chains a SECOND slam at your NEW spot before he's vulnerable — and at high
@@ -8008,7 +8160,7 @@ func _boss_fight(delta: float) -> void:
 		var p := clampf(boss.t / 0.52, 0.0, 1.0)
 		boss.x = lerpf(VIEW.x * 0.5 - sd * (VIEW.x * 0.5 + 40.0), VIEW.x * 0.5 + sd * (VIEW.x * 0.5 + 40.0), p)
 		boss.y = BASE_Y - 48.0 - sin(p * PI) * 30.0   # a real SWOOP arc (flying, not sliding flat)
-		if not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 48.0:
+		if not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 48.0:
 			boss.hit_cool = 1.0
 			_boss_hits_player()
 		if p >= 1.0:
@@ -8112,7 +8264,7 @@ func _pike_fight(delta: float) -> void:
 		var p: float = clampf(boss.t / 0.62, 0.0, 1.0)
 		boss.x = boss.dive_x
 		boss.y = BASE_Y + 30.0 - sin(p * PI) * 235.0
-		if boss.y > BASE_Y - 64.0 and absf(duck_x - boss.dive_x) < 48.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+		if boss.y > BASE_Y - 64.0 and absf(duck_x - boss.dive_x) < 48.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 			boss.hit_cool = 1.0
 			_boss_hits_player()
 		if p >= 1.0:
@@ -8227,7 +8379,7 @@ func _bongo_fight(delta: float) -> void:
 		boss.tongue_len = clampf(boss.t / 0.16, 0.0, 1.0) if boss.t < 0.16 else clampf(1.0 - (boss.t - 0.16) / 0.34, 0.0, 1.0)
 		if not boss.get("tongue_hit_done", false) and boss.t >= 0.14:   # snaps at full reach
 			boss.tongue_hit_done = true
-			if absf(duck_x - boss.tongue_tx) < 34.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+			if absf(duck_x - boss.tongue_tx) < 34.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 				boss.hit_cool = 0.8; _boss_hits_player()
 		if boss.t >= 0.5:
 			boss.tongue_hit_done = false
@@ -8366,7 +8518,7 @@ func _megasadie_fight(delta: float) -> void:
 		boss.y = BASE_Y - 40.0 - absf(sin(p2 * PI * 3.0)) * 30.0   # three BOUNDS across the water
 		if fmod(boss.t, 0.06) < delta:
 			ripples.append({"x": boss.x - sd3 * 40.0, "y": BASE_Y, "t": 0.0, "max": 60.0})
-		if not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 56.0:
+		if not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0 and absf(boss.x - duck_x) < 56.0:
 			boss.hit_cool = 1.0
 			_boss_hits_player()
 		if p2 >= 1.0:
@@ -8395,7 +8547,7 @@ func _megasadie_fight(delta: float) -> void:
 			                                                # spawning it AT the waterline was an unreactable hit
 			_water_burst(boss.x, BASE_Y, 1.8)
 			_sfx("splash_big", 1.0); duck_shake = maxf(duck_shake, 0.6)
-			if absf(duck_x - boss.x) < 62.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+			if absf(duck_x - boss.x) < 62.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 				boss.hit_cool = 1.0
 				_boss_hits_player()
 			boss.dive_stage = "dazed"; boss.t = 0.0    # winded + SO proud of that one
@@ -8416,7 +8568,7 @@ func _megasadie_fight(delta: float) -> void:
 			boss_waves.append({"x": boss.dive_x, "r": 18.0})
 			_water_burst(boss.dive_x, BASE_Y, 1.2)
 			_sfx("splash_big", 0.8); duck_shake = maxf(duck_shake, 0.5)
-			if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+			if absf(duck_x - boss.dive_x) < 52.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 				boss.hit_cool = 1.0
 				_boss_hits_player()
 			boss.pounce_n = int(boss.get("pounce_n", 1)) - 1
@@ -8567,7 +8719,7 @@ func _snapz_fight(delta: float) -> void:
 				_water_burst(boss.dive_x, BASE_Y, 1.5)   # he BREACHES with a huge splash
 				_sfx("crunch", 0.85)
 				duck_shake = maxf(duck_shake, 0.45)
-				if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				if absf(duck_x - boss.dive_x) < 50.0 and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 					boss.hit_cool = 1.0
 					_boss_hits_player()
 				if int(boss.get("chomp_combo", 0)) > 0:   # FRENZY: chain another chomp in a NEW lane
@@ -8662,7 +8814,7 @@ func _update_boss_globs(delta: float) -> void:
 		if boss.phase == "fight" and f.y > BASE_Y - 46.0 and float(f.get("vy", 1.0)) > 0.0 \
 				and float(f.get("vy", 1.0)) > (120.0 if f.get("ball", false) else 0.0) \
 				and absf(f.x - duck_x) < (44.0 if f.get("log", false) else (30.0 if f.get("ball", false) else 30.0)) \
-				and not is_airborne() and not is_invincible() and boss.hit_cool <= 0.0:
+				and not is_airborne() and not is_invincible() and not is_under() and boss.hit_cool <= 0.0:
 			boss.hit_cool = 0.8
 			f.y = 9999.0
 			_spawn_parts(duck_x, BASE_Y - 20.0, 8, Color(0.36, 0.3, 0.18), 140.0)
@@ -8896,7 +9048,7 @@ func _update_thwomp(l: Dictionary, delta: float) -> void:
 				_spawn_parts(l.x, BASE_Y, 26, Color(0.55, 0.58, 0.64), 340.0)   # grey stone dust + chips
 				_spawn_parts(l.x, BASE_Y, 8, Color(0.4, 0.6, 0.4), 200.0)       # bits of moss
 				_sfx("crunch", 0.8); _sfx("mega", 0.55); _sfx("bonk", 0.6, -4.0)
-				if alive and not is_airborne() and not is_invincible() and absf(l.x - duck_x) < l.w * 0.5 + 18.0:
+				if alive and not is_airborne() and not is_invincible() and not is_under() and absf(l.x - duck_x) < l.w * 0.5 + 18.0:
 					if shield_charges > 0:
 						shield_charges -= 1; _flash("POOF."); _sfx("bonk", 1.3, -6.0); _ouch()
 					elif ducklings_n > 0:
@@ -8968,7 +9120,9 @@ func _collide() -> void:
 	var r := DUCK_R * _size_mul()
 	var reach := (r + 18.0) * (1.0 + 0.45 * _up("magnet"))
 	for it in items:
-		if not it.got and Vector2(it.x - duck_x, it.y - BASE_Y).length() < reach:
+		# snacks HOVER above the water — a submerged duck paddles right under the buffet.
+		# that's the dive's honest price: safe from everything, fed by nothing.
+		if not it.got and not is_under() and Vector2(it.x - duck_x, it.y - BASE_Y).length() < reach:
 			_collect(it)
 
 	# LOW SKIMS: grounded = she bows, it passes clean over (+loft salute). airborne = you
@@ -9005,7 +9159,7 @@ func _collide() -> void:
 			continue
 		# SIDEWAYS NEAR MISS: a log sweeping past your row that you JUST steer clear of —
 		# barely outside the bonk zone, on the ground, threading the gap. the classic squeak-by.
-		if not l.missed and nearmiss_cd <= 0.0 and not is_airborne() and not is_invincible() \
+		if not l.missed and nearmiss_cd <= 0.0 and not is_airborne() and not is_invincible() and not is_under() \
 				and not l.get("spring", false) \
 				and absf(l.y - BASE_Y) < l.h * 0.5 + r * 0.55:
 			var gap_x: float = absf(l.x - duck_x) - (l.w * 0.5 + r * 0.52)
@@ -9013,6 +9167,17 @@ func _collide() -> void:
 				l.missed = true
 				_near_miss_fx(duck_x)
 		if absf(l.x - duck_x) < l.w * 0.5 + r * 0.52 and absf(l.y - BASE_Y) < l.h * 0.5 + r * 0.52:
+			# THE DIVE: she's beneath it — the log slides over her shadow. Style credit, once per log.
+			if is_under():
+				if not l.get("dived", false):
+					l["dived"] = true
+					dive_slipped += 1
+					if tut_mode:
+						tut_dive_slip = true
+					_add_loft(0.08)
+					_float_text(duck_x, BASE_Y - 66.0, "slipped under!", Color(0.6, 0.92, 1.0))
+					_sfx("fwoosh", 1.35, -9.0)
+				continue
 			# a BOOST LOG launches you whenever you're ON THE WATER over it — even mid-special or in the
 			# post-draft grace (that's the bug: "waltzing over" one at a stage change / after a boon).
 			# only a real HOP OVER it (airborne) clears it without a launch.
@@ -9075,7 +9240,7 @@ func _collide() -> void:
 			else:
 				die(WELL_DECK[randi() % WELL_DECK.size()], "log", _log_death_sub(l))
 				return
-		elif not is_airborne() and not is_invincible() and nearmiss_cd <= 0.0 \
+		elif not is_airborne() and not is_invincible() and not is_under() and nearmiss_cd <= 0.0 \
 				and not l.get("nm", false) and not l.get("frog", false) \
 				and absf(l.y - BASE_Y) < l.h * 0.4:           # the log is RIGHT at your row, sliding past
 			var dx: float = absf(l.x - duck_x)
@@ -9099,7 +9264,7 @@ func _collide() -> void:
 				ek.append(e)
 		enemies = ek
 	# a HOP now STOMPS the regular heron dead (same as bopping the boss Gerald)
-	if not is_invincible():
+	if not is_invincible() and not is_under():      # a heron can't spear what the river hides
 		for e in enemies:
 			# a NEAR MISS: a heron sweeps through your row but you squeak past / hop over
 			if absf(e.y - BASE_Y) < 38.0 and absf(e.x - duck_x) < 82.0 and not e.get("nm", false):
@@ -9149,7 +9314,7 @@ func _collide() -> void:
 
 	# Sadie: 70 pounds of wet, single-minded chocolate lab. No fire, shield, or brave
 	# duckling changes the physics of paddling into her — hop over or steer clear.
-	if sadie != null and not is_airborne() and not is_invincible():
+	if sadie != null and not is_airborne() and not is_invincible() and not is_under():
 		if absf(sadie.x - duck_x) < 52.0 + r * 0.4 and absf(sadie.y - BASE_Y) < 38.0 + r * 0.4:
 			ripples.append({"x": sadie.x, "y": sadie.y, "t": 0.0, "max": 130.0})
 			_float_text(sadie.x, sadie.y - 60.0, "BOOF?!", Color(0.85, 0.62, 0.4))
@@ -12092,7 +12257,7 @@ func _tut_tick(delta: float) -> void:
 	# drop this beat's prop when the lane's clear and we still owe reps
 	if tut_t > 0.6 and tut_spawn_t <= 0.0 and tut_reps < goal:
 		match id:
-			"log", "nearmiss":
+			"log", "nearmiss", "dive":
 				if logs.is_empty():
 					_tut_spawn_log(false); tut_spawn_t = 0.5
 			"spring":
@@ -12128,6 +12293,9 @@ func _tut_tick(delta: float) -> void:
 		"nearmiss":
 			if tut_nearmiss: tut_nearmiss = false; scored = true
 			elif tut_cleared: tut_cleared = false; _say("that's a clean hop — try SKIMMING past instead!", 1.4)
+		"dive":
+			if tut_dive_slip: tut_dive_slip = false; scored = true
+			elif tut_cleared: tut_cleared = false; _say("hopping works — but try SWIPING DOWN and going UNDER it!", 1.6)
 		"spring":
 			if tut_smashed: tut_smashed = false; scored = true   # the WHOLE loop: bounce, then CRUSH
 		"snack":
@@ -12557,6 +12725,8 @@ func _draw() -> void:
 			var psz: Vector2 = ptex.get_size() * 2.0
 			draw_texture_rect(ptex, Rect2(-psz * 0.5, psz), false)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	_draw_duck_submerged()                         # THE DIVE: she passes UNDER everything — so she draws under it too
 
 	# logs (bob + sway) with frog passenger; golden spring logs pulse + glow
 	for l in logs:
@@ -14422,7 +14592,59 @@ func _propblade_now() -> Dictionary:
 		return {}
 	return propblades[int(anim_t * 14.0) % propblades.size()]
 
+# THE DIVE, from above: a teal shade of HERSELF wavering beneath the surface — refraction
+# ghosts, pearls of breath, and (late in the breath) the golden PROMISE ring tightening on
+# the exact spot the river will hand her back. Drawn BEFORE the log pass so every log,
+# heron shadow and hull genuinely slides OVER her.
+func _draw_duck_submerged() -> void:
+	if state != St.DIVING:
+		return
+	var p := clampf(dive_t / DIVE_DUR, 0.0, 1.0)
+	# depth envelope: knife in fast, hold deep, ease back toward the light
+	var depth := minf(clampf(p / 0.14, 0.0, 1.0), clampf((1.0 - p) / 0.20, 0.0, 1.0))
+	var wob := Vector2(sin(anim_t * 5.2) * 3.4, sin(anim_t * 3.9 + 1.7) * 2.2) * depth
+	var pos := Vector2(duck_x, BASE_Y + 10.0 * depth) + wob
+	var fr := _duck_frame(0.0)
+	var ds := fr.get_size() * DUCK_DRAW * (1.0 - 0.30 * depth) * pow(0.8, float(_up("tiny"))) * duck_size_mul
+	var rot := sin(anim_t * 2.6) * 0.10 * depth
+	# refraction ghosts: the water can't decide where she is
+	for g in 2:
+		var gp := pos + Vector2(sin(anim_t * 7.0 + g * 2.6) * 5.0, cos(anim_t * 6.1 + g * 1.9) * 3.2) * depth
+		draw_set_transform(gp, rot, Vector2.ONE)
+		draw_texture_rect(fr, Rect2(-ds * 0.5, ds), false, Color(0.30, 0.62, 0.68, 0.10 + 0.05 * depth))
+	# the body — and her worn gear stays ON her, just drowned in the same teal
+	var shade := Color(0.34, 0.60, 0.66, 0.40 + 0.22 * (1.0 - depth))
+	draw_set_transform(pos, rot, Vector2.ONE)
+	draw_texture_rect(fr, Rect2(-ds * 0.5, ds), false, shade)
+	for wid in _worn_list():
+		var hf3 = _pick_wear3d(wid, 0.0)
+		if hf3 != null:
+			draw_texture_rect(hf3, Rect2(Vector2(-ds.x * 0.5, -ds.y * 0.5 + ds.y * _wear_fit_frac()), ds), false, shade)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# the surface remembers her: a soft sheen + a breathing ripple where she went down
+	_fill_ellipse(pos + Vector2(0.0, -2.0), ds.x * 0.60, ds.y * 0.30, Color(0.75, 0.95, 1.0, 0.07))
+	draw_arc(Vector2(duck_x, BASE_Y), 16.0 + 5.0 * sin(anim_t * 4.0), 0.0, TAU, 20,
+		Color(0.85, 0.97, 1.0, 0.16 * depth), 1.5)
+	# THE PROMISE: where she'll come up — a golden ring tightening as the breath runs out.
+	# read it against the logs: that's the whole wager, drawn on the water.
+	if p > 0.58:
+		var q := (p - 0.58) / 0.42
+		var rr := 66.0 - 42.0 * q
+		draw_arc(Vector2(duck_x, BASE_Y), rr, 0.0, TAU, 26, Color(1.0, 0.95, 0.6, 0.14 + 0.5 * q), 2.0 + 1.6 * q)
+		if q > 0.62 and int(anim_t * 14.0) % 2 == 0:
+			draw_circle(Vector2(duck_x, BASE_Y), 5.0, Color(1.0, 0.97, 0.75, 0.55))
+
 func _draw_duck() -> void:
+	if state == St.DIVING:
+		# the body lives in the SUBMERGED pass (under the logs); up here only her voice + friends
+		duck_render_pos = Vector2(duck_x, BASE_Y)
+		if say_txt != "" and anim_t - say_t < say_dur:
+			var _dage := anim_t - say_t
+			var _dpop := clampf(_dage / 0.12, 0.0, 1.0) * clampf((say_dur - _dage) / 0.3, 0.0, 1.0)
+			_say_bubble(Vector2(duck_x, maxf(82.0, BASE_Y - 46.0)), say_txt, _dpop)
+		_draw_hawk()
+		_draw_donny()
+		return
 	var h := hop_height()
 	var shake_x := (randf() - 0.5) * 14.0 if (duck_shake > 0.0 and setting_shake) else 0.0
 	var lift: float = (HOP_LIFT * _hop_boost() * hop_lift_bonus if state != St.MEGA else (400.0 if hyper else MEGA_LIFT)) * duck_hop_mul
@@ -16479,8 +16701,28 @@ func _bot_control(delta: float) -> void:
 		if score > best_score:
 			best_score = score; best_x = cx
 	target_x = clampf(best_x, lo, hi)
-	if sim_hop_cd <= 0.0 and not is_airborne() and _bot_should_hop():
+	if sim_hop_cd <= 0.0 and state == St.GROUNDED and dive_cd <= 0.0 and _bot_should_dive():
+		dive(); sim_hop_cd = 0.4
+	elif sim_hop_cd <= 0.0 and not is_airborne() and _bot_should_hop():
 		hop(); sim_hop_cd = 0.22
+
+# DIVE when the river hands you a JAM: two or more logs converging on our lane inside
+# one breath — a single dive slips the whole cluster (and eats the surfacing wager,
+# same as a player would). Never while an orb rides the surface: drafts are survival.
+func _bot_should_dive() -> bool:
+	if tut_mode or not draft_orb.is_empty():
+		return false
+	if boss != null and String(boss.get("dive_stage", "")) in ["stuck", "dazed", "pbeach"]:
+		return false                   # stomp window — stay up top and take it
+	var soon := 0
+	for l in logs:
+		if l.get("spring", false) or l.get("thwomp", false):
+			continue
+		if absf(float(l.x) - duck_x) < float(l.w) * 0.5 + 18.0:
+			var dy: float = BASE_Y - float(l.y)
+			if dy > -10.0 and dy < clampf(speed * 0.5, 170.0, 340.0):
+				soon += 1
+	return soon >= 2
 
 func _bot_should_hop() -> bool:
 	for s in skims:                   # a LOW SKIM near our row: stay DOWN — the anti-hop
@@ -16600,6 +16842,7 @@ func _sim_record_run(stalled := false) -> void:
 		"sub": String(dead_sub), "won": run_won,
 		"feathers": run_feathers, "trash": run_trash, "snacks": run_snack_count,
 		"bosses": next_boss_idx, "hits": sim_hits,
+		"dives": int(run_stats.get("dives", 0)),   # is the bot using the second verb?
 		"ups": picked.duplicate(), "boons": run_boons.size(),
 		"ts": int(Time.get_unix_time_from_system() * 1000.0),
 		"species_icon": _sim_duck_icon(),
