@@ -1552,7 +1552,7 @@ func _update_river_events(delta: float) -> void:
 		if randf() < 0.16 and String(lmod.id) != "rusty" and String(rmod.id) != "rusty":
 			(fork.l if randf() < 0.5 else fork.r)["mystery"] = true
 		logs.clear(); enemies.clear()                  # the choice must be CHOOSABLE — clear the lane
-		haz_turtle = null                              # the fork truce covers the snapper too
+		_roamer_truce()                                # the fork truce covers the snapper, Chrissy + skimmers too
 		_flash("THE RIVER SPLITS", 2.0)
 		_say("left or right? pick a channel!", 2.6)
 		_sfx("fwoosh", 0.7)
@@ -4721,6 +4721,19 @@ func _draw_hawk() -> void:
 const DONNY_LINES := ["VROOOM!", "eat my WAKE!", "she's all WOOD, baby!",
 	"can't catch DONNI!", "BRAAAP brap brap!", "outta the wake, featherbrain!",
 	"top of the mornin', QUACKER!", "this is a NO-WAKE zone? since when!"]
+# THE ROAMER TRUCE: bosses and forks clear the lane (logs/enemies) but CHRISSY and low-skim
+# herons roamed right through — 3 of 8 botsim runs died to her hull AT the 5000ft boss mark.
+# She wants no part of a duel: throttle open, collision off, gone. Skimmers just clear.
+func _roamer_truce() -> void:
+	haz_turtle = null
+	skims.clear()
+	if donny != null and donny.phase != "depart":
+		donny.phase = "depart"
+		donny.cool = 99.0                        # she's leaving, not hunting — hull can't clip you
+		donny.target_x = donny.x
+		donny.say = "y'all got WEIRD water."
+		donny.say_t = donny.t
+
 func _spawn_donny() -> void:
 	_codex_see("donny")
 	donny = {
@@ -7482,6 +7495,7 @@ func _start_boss(force_kind := "") -> void:
 	logs.clear()
 	boss_waves.clear()
 	boss_globs.clear()
+	_roamer_truce()                              # Chrissy + skimmers + snapper vacate the arena
 	var kind: String = force_kind if force_kind != "" else (boss_kinds[idx] if idx < boss_kinds.size() else "gerald")   # shuffled per run (all 3 slots)
 	if kind == "megasadie" and species == "sadiedog":
 		kind = "gerald"                             # you ARE the good girl — the Eternal steps in
